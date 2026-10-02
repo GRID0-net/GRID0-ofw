@@ -132,7 +132,7 @@ Window::Window(bool preview) : previewMode(preview) {
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
     }
-    auto *dnsNotice = text("Put the closest one as primary DNS on your Switch.");
+    auto *dnsNotice = text("Put the closest one as primary DNS.");
     form->addWidget(dnsNotice, 3, 2, 1, 2);
     auto *copy = new QPushButton("Copy Switch settings");
     auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();
