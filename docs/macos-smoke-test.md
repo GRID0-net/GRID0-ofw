@@ -5,7 +5,7 @@ This is a packet-path smoke test, not a claim that a particular game has been va
 1. Build the program, then list capture interfaces:
 
    ```sh
-   ./build/src/grid0-relay --list-if
+   ./build/src/GRID0-ofw --list-if
    ```
 
    Choose the Wi-Fi interface used by the stock Switch (commonly `en0`) and the Ethernet-like ZeroTier adapter. The interface list includes IPv4 addresses, which makes the ZeroTier adapter identifiable when it owns an address in the selected game subnet.
@@ -15,7 +15,7 @@ This is a packet-path smoke test, not a claim that a particular game has been va
 3. Start the relay with both capture interfaces named:
 
    ```sh
-   sudo ./build/src/grid0-relay --netif en0 --zerotier-if ZEROTIER_INTERFACE
+   sudo ./build/src/GRID0-ofw --netif en0 --zerotier-if ZEROTIER_INTERFACE
    ```
 
    The capture permission is the reason for `sudo`. This command does not enable Internet Sharing, modify routes, create a bridge, or change ZeroTier's Ethernet-bridging authorization.

@@ -3,7 +3,7 @@
 Run from the project directory:
 
 ```sh
-sudo ./build/src/grid0-relay --netif en0 --zerotier-if feth1082 --diagnostics --capture-prefix ./lobby-test-01
+sudo ./build/src/GRID0-ofw --netif en0 --zerotier-if feth1082 --diagnostics --capture-prefix ./lobby-test-01
 ```
 
 Replace adapter names with the selected local interfaces. Use a new capture prefix for each run; existing files are never overwritten. The parent directory must exist. Ctrl-C flushes and closes the captures.
@@ -68,6 +68,6 @@ Build the project first. An alternate CMake build directory can be supplied as t
 
 The first captured test was contaminated by an older GUI-launched relay that had remained running as root since the previous day. Closing a terminal or rebuilding the executable does not stop such a detached process. Both instances used the same adapters and sent different versions of received packets onto Wi-Fi.
 
-On macOS, the CLI now refuses startup if another executable named `grid0-relay` is running, including legacy versions, and new instances also hold a process-lifetime lock at `/var/run/grid0-relay.lock`. The lock file is retained after exit; its presence alone does not mean a relay is running. Do not delete the file to bypass the lock. The current implementation permits one native relay per Mac.
+On macOS, the CLI now refuses startup if another executable named `GRID0-ofw` is running, including legacy versions, and new instances also hold a process-lifetime lock at `/var/run/GRID0-ofw.lock`. The lock file is retained after exit; its presence alone does not mean a relay is running. Do not delete the file to bypass the lock. The current implementation permits one native relay per Mac.
 
 The current Qt launcher waits for `Relay started (PID ...)` after full initialization and reports early startup errors. Its supervisor sends SIGINT and reaps its relay child on Stop or app disconnection. The older SwiftUI prototype could leave a detached process; the CLI's existing-process message identifies that PID if it blocks a new test.

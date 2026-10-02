@@ -466,7 +466,7 @@ void Window::exportReport() {
     QString source = relay.reportDirectory();
     if (source.isEmpty()) { QMessageBox::information(this, "No session report yet", "Start a relay session first. Earlier reports are available in the reports folder."); return; }
     QString parent = QFileDialog::getExistingDirectory(this, "Export report to folder"); if (parent.isEmpty()) return;
-    QString dest = parent + "/Grid0-Relay-report-" + QFileInfo(source).fileName();
+    QString dest = parent + "/GRID0-ofw-report-" + QFileInfo(source).fileName();
     if (QFileInfo::exists(dest) || !QDir().mkdir(dest)) { QMessageBox::warning(this, "Cannot export", "Choose a folder without an existing copy of this report."); return; }
     for (const auto &name : QDir(source).entryList(QDir::Files)) {
         if (!QFile::copy(source + "/" + name, dest + "/" + name)) {

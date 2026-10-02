@@ -113,9 +113,9 @@ static QString nativeWindowsGuid(const QString &name) {
 
 QString bundledRelayPath() {
 #ifdef Q_OS_WIN
-    return QCoreApplication::applicationDirPath() + "/grid0-relay.exe";
+    return QCoreApplication::applicationDirPath() + "/GRID0-ofw.exe";
 #else
-    return QCoreApplication::applicationDirPath() + "/grid0-relay";
+    return QCoreApplication::applicationDirPath() + "/GRID0-ofw";
 #endif
 }
 QString windowsCaptureName(const QString &name, const std::function<QString(const QString &)> &resolveGuid) {

@@ -30,7 +30,7 @@ The visible log retains 2,000 lines; the on-disk text log is capped around 16 Mi
 
 ## macOS and Linux launch boundary
 
-The app runs as the logged-in user. A quoted `osascript` command on macOS, or `pkexec` on Linux, requests authorization for the bundled `grid0-relay-supervisor`, which connects to the app's private Unix socket and starts one relay child with explicit arguments. Only the authorized root peer is accepted by the app: macOS reads it with `getpeereid`, Linux with `SO_PEERCRED`. The supervisor verifies the GUI peer's UID, forwards child output, and accepts only a stop message. It executes no commands from that connection and never handles a password. Linux passes the arguments to `pkexec` directly rather than through a shell.
+The app runs as the logged-in user. A quoted `osascript` command on macOS, or `pkexec` on Linux, requests authorization for the bundled `GRID0-ofw-supervisor`, which connects to the app's private Unix socket and starts one relay child with explicit arguments. Only the authorized root peer is accepted by the app: macOS reads it with `getpeereid`, Linux with `SO_PEERCRED`. The supervisor verifies the GUI peer's UID, forwards child output, and accepts only a stop message. It executes no commands from that connection and never handles a password. Linux passes the arguments to `pkexec` directly rather than through a shell.
 
 Where there is no polkit agent to ask, Start reports that and prints the equivalent `sudo` command instead of failing silently.
 
@@ -54,7 +54,7 @@ Use a fresh output folder; the script refuses to replace an existing app. It cop
 
 ```sh
 ctest --test-dir build/desktop --output-on-failure
-python3 tests/test_desktop_supervisor.py build/desktop/grid0-relay-supervisor
+python3 tests/test_desktop_supervisor.py build/desktop/GRID0-ofw-supervisor
 python3 tests/run_native_tests.py
 ```
 

@@ -62,7 +62,7 @@ for line in subprocess.check_output(['otool', '-L', str(executable)], text=True)
 # macdeployqt handles the Qt executable; our bundled helper and relay use system libraries.
 subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(destination)], check=True)
 subprocess.run(['codesign', '--verify', '--deep', '--strict', str(destination)], check=True)
-archive = args.output.resolve() / 'GRID0-Relay-macOS.zip'
+archive = args.output.resolve() / 'GRID0-ofw-macOS.zip'
 subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(destination), str(archive)], check=True)
 print(destination)
 print(archive)

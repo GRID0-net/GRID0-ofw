@@ -2,7 +2,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_RELEASE:=1
 PKG_VERSION:=0.6.10
-PKG_NAME:=grid0-relay
+PKG_NAME:=GRID0-ofw
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
@@ -30,7 +30,7 @@ endef
 
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/build-openwrt/src/grid0-relay $(1)/usr/bin
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/build-openwrt/src/GRID0-ofw $(1)/usr/bin
 endef
 
 define Package/$(PKG_NAME)/postinst

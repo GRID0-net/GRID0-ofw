@@ -14,20 +14,20 @@ set_target_properties(Grid0Relay PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.grid0.relay"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
-add_dependencies(Grid0Relay grid0-relay)
+add_dependencies(Grid0Relay GRID0-ofw)
 if(UNIX)
     # macOS and Linux both start the relay through this helper: one authorized
     # launch, one child, owned by the GUI's private socket.
     add_executable(zll-supervisor posix-supervisor.cpp)
     target_compile_features(zll-supervisor PRIVATE cxx_std_17)
-    set_target_properties(zll-supervisor PROPERTIES OUTPUT_NAME grid0-relay-supervisor AUTOMOC OFF)
+    set_target_properties(zll-supervisor PROPERTIES OUTPUT_NAME GRID0-ofw-supervisor AUTOMOC OFF)
     if(ZLL_STATIC_RUNTIME)
         target_link_options(zll-supervisor PRIVATE -static-libstdc++ -static-libgcc)
     endif()
     add_dependencies(Grid0Relay zll-supervisor)
     add_custom_command(TARGET Grid0Relay POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:grid0-relay>" "$<TARGET_FILE_DIR:Grid0Relay>/grid0-relay"
-        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:zll-supervisor>" "$<TARGET_FILE_DIR:Grid0Relay>/grid0-relay-supervisor")
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:Grid0Relay>/GRID0-ofw"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:zll-supervisor>" "$<TARGET_FILE_DIR:Grid0Relay>/GRID0-ofw-supervisor")
 endif()
 if(APPLE)
     # Native macOS 26 glass for a few contained surfaces. The library is a
@@ -50,7 +50,7 @@ if(WIN32)
         target_link_options(Grid0Relay PRIVATE /MANIFEST:NO)
     endif()
     add_custom_command(TARGET Grid0Relay POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:grid0-relay>" "$<TARGET_FILE_DIR:Grid0Relay>/grid0-relay.exe")
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:Grid0Relay>/GRID0-ofw.exe")
 endif()
 
 enable_testing()

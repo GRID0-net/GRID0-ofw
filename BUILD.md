@@ -21,8 +21,8 @@ app: an Intel Mac needs a build made on an Intel Mac.
 2. Clone the repo with submodules, then enter it:
 
    ```bash
-   git clone --recurse-submodules https://github.com/redluigi323/GRID0-relay.git
-   cd GRID0-relay
+   git clone --recurse-submodules https://github.com/GRID0-net/ofw-GRID0.git
+   cd GRID0-ofw
    ```
 
 3. Configure and build the Qt GUI and relay:
@@ -49,8 +49,8 @@ their Mac. macOS already includes libpcap, so Npcap is not needed here.
 
 Both Macs are built in CI: the Apple Silicon app on `macos-latest` and the
 Intel app on `macos-15-intel`, on every push and again for a release, where
-they are attached as `GRID0-Relay-macOS-arm64.zip` and
-`GRID0-Relay-macOS-x64.zip`. GitHub retired the older `macos-13` Intel image in
+they are attached as `GRID0-ofw-macOS-arm64.zip` and
+`GRID0-ofw-macOS-x64.zip`. GitHub retired the older `macos-13` Intel image in
 December 2025, so that label no longer works.
 
 ## Windows
@@ -80,8 +80,8 @@ compiler too.
 3. Clone GRID0 Relay with its submodules:
 
    ```bash
-   git clone --recurse-submodules https://github.com/redluigi323/GRID0-relay.git
-   cd GRID0-relay
+   git clone --recurse-submodules https://github.com/GRID0-net/ofw-GRID0.git
+   cd GRID0-ofw
    ```
 
    The submodules are not optional. GitHub's "Download ZIP" button leaves
@@ -151,12 +151,12 @@ sudo apt install build-essential cmake ninja-build python3 qt6-base-dev \
 Then clone with submodules and build:
 
 ```bash
-git clone --recurse-submodules https://github.com/redluigi323/GRID0-relay.git
-cd GRID0-relay
+git clone --recurse-submodules https://github.com/GRID0-net/ofw-GRID0.git
+cd GRID0-ofw
 python3 scripts/build-linux.py --native
 ```
 
-Your AppImage will be at `dist/linux-x64/GRID0-Relay-x86_64.AppImage`. Mark it
+Your AppImage will be at `dist/linux-x64/GRID0-ofw-x86_64.AppImage`. Mark it
 executable and run it; the app asks for the relay's capture privileges through
 `pkexec` when you press Start. Without a polkit agent it tells you the `sudo`
 command to run instead.
@@ -206,7 +206,7 @@ python3 tests/run_native_tests.py
 On Linux, also check the launcher and its helper:
 
 ```bash
-python3 tests/test_desktop_supervisor.py build-linux/desktop/grid0-relay-supervisor
+python3 tests/test_desktop_supervisor.py build-linux/desktop/GRID0-ofw-supervisor
 ```
 
 GitHub Actions runs these same tests for every push: the CLI on Linux and

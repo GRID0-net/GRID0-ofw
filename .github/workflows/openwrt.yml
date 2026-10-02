@@ -31,7 +31,7 @@ jobs:
             sdk_name: -sdk-24.10.0-x86-64_
 
     env:
-      PACKAGE_NAME: grid0-relay
+      PACKAGE_NAME: GRID0-ofw
       SDK_URL_PATH: ${{ matrix.sdk_url_path }}
       SDK_NAME: ${{ matrix.sdk_name }}
       ARCH: ${{ matrix.arch }}
