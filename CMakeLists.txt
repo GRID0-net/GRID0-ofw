@@ -48,7 +48,7 @@ add_subdirectory(src)
 # build machine's.
 option(ZLL_STATIC_RUNTIME "Link libstdc++/libgcc statically into the relay and launcher" OFF)
 if(ZLL_STATIC_RUNTIME)
-    target_link_options(GRID0-ofw PRIVATE -static-libstdc++ -static-libgcc)
+    target_link_options(GRID0-ofw-cli PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 option(ZLL_BUILD_GUI "Build the Qt desktop application" OFF)
