@@ -38,7 +38,7 @@ private:
     QCheckBox *diagnostics, *capture, *discovery;
     QRadioButton *manualMode, *autoMode;
     QGroupBox *switchSettingsGroup;
-    QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *validation, *settingsHint, *dhcpHint;
+    QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsPrimary, *dnsSecondary, *validation, *settingsHint, *dhcpHint;
     QLabel *hotspotStatus = nullptr;
     QPushButton *hotspotSetup = nullptr;
     QLabel *requirements = nullptr;
