@@ -43,8 +43,8 @@ def main():
                      ', '.join(str(directory) for directory in search[:-1]))
     app = args.output / 'GRID0-ofw'
     app.mkdir(parents=True)
-    for name in ['GRID0-ofw.exe', 'GRID0-ofw.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
-        packaged = 'GRID0-ofw.exe' if name == 'GRID0-ofw.exe' else name
+    for name in ['GRID0-ofw.exe', 'GRID0-ofw-cli.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
+        packaged = name
         shutil.copy2(args.build / 'desktop' / name, app / packaged)
     for name in ['platforms/qwindows.dll', 'styles/qmodernwindowsstyle.dll'] + (['platforms/qoffscreen.dll'] if args.include_tests else []):
         dest = app / 'plugins' / name

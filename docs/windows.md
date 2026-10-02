@@ -26,10 +26,10 @@ This preview uses the existing local-network method. It does not configure Mobil
 
 Reports stay under the current Windows account's local application data, normally `%LOCALAPPDATA%\GRID0-ofw\GRID0-ofw\reports`. Use **Open reports folder** to find the exact path, then stop the relay and **Export report**. No reports are uploaded automatically.
 
-The CLI is included as `GRID0-ofw.exe`. From an administrator PowerShell in the extracted folder:
+The CLI is included as `GRID0-ofw-cli.exe`. From an administrator PowerShell in the extracted folder:
 
 ```powershell
-.\GRID0-ofw.exe --list-if
+.\GRID0-ofw-cli.exe --list-if
 .\GRID0-ofw.exe --netif '\Device\NPF_{LOCAL-GUID}' --zerotier-if '\Device\NPF_{ZEROTIER-GUID}' --diagnostics
 ```
 

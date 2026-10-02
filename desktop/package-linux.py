@@ -123,7 +123,7 @@ def main():
     parser.add_argument('--qt-plugins', type=Path, help='Qt plugin directory; asked of qtpaths6 when omitted')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    binaries = {name: args.build / 'desktop' / name for name in ('GRID0-ofw', 'GRID0-ofw', 'GRID0-ofw-supervisor')}
+    binaries = {name: args.build / 'desktop' / name for name in ('GRID0-ofw', 'GRID0-ofw-cli', 'GRID0-ofw-supervisor')}
     for name, path in binaries.items():
         if not path.is_file():
             parser.error(f'{path} is missing. Build with -DZLL_BUILD_GUI=ON first.')

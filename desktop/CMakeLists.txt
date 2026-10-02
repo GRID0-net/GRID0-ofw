@@ -14,7 +14,7 @@ set_target_properties(GRID0-ofw PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.grid0.relay"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
-add_dependencies(GRID0-ofw GRID0-ofw)
+add_dependencies(GRID0-ofw GRID0-ofw-cli)
 if(UNIX)
     # macOS and Linux both start the relay through this helper: one authorized
     # launch, one child, owned by the GUI's private socket.
@@ -26,7 +26,7 @@ if(UNIX)
     endif()
     add_dependencies(GRID0-ofw zll-supervisor)
     add_custom_command(TARGET GRID0-ofw POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GRID0-ofw-cli>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw-cli"
         COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:zll-supervisor>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw-supervisor")
 endif()
 if(APPLE)
@@ -50,7 +50,7 @@ if(WIN32)
         target_link_options(GRID0-ofw PRIVATE /MANIFEST:NO)
     endif()
     add_custom_command(TARGET GRID0-ofw POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw.exe")
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GRID0-ofw-cli>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw-cli.exe")
 endif()
 
 enable_testing()
