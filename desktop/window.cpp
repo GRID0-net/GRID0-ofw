@@ -138,7 +138,7 @@ Window::Window(bool preview) : previewMode(preview) {
     }
     auto *dnsNotice1 = text("Set closest one as Primary DNS");
     form->addWidget(dnsNotice1, 3, 2, 1, 2);
-    auto *dnsNotice2 = text("Set the other as Secondary DNS.");
+    auto *dnsNotice2 = text("Set the other as Secondary DNS");
     form->addWidget(dnsNotice2, 4, 2, 1, 2);
     auto *copy = new QPushButton("Copy Switch settings");
     auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();

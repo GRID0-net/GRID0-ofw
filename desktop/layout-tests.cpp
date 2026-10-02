@@ -25,7 +25,7 @@ private slots:
         }
         QTest::qWait(50);
         for (auto *label : group->findChildren<QLabel *>()) {
-            // Rich text labels carry HTML markup; measure what is rendered.
+            // rich text labels carry html, measure what shows
             QString shown = label->text();
             if (label->textFormat() == Qt::RichText) {
                 QTextDocument doc;
