@@ -22,43 +22,43 @@ set(src
     rpc/rpc-ws-server.cpp
 )
 
-add_executable(GRID0-ofw ${src})
+add_executable(GRID0-ofw-cli ${src})
 
 target_compile_options(
-    GRID0-ofw
+    GRID0-ofw-cli
     PRIVATE "-DLANPLAY_VERSION=\"${LANPLAY_VERSION}\""
 )
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
     target_compile_options(
-        GRID0-ofw
+        GRID0-ofw-cli
         PRIVATE "-Wall"
         PRIVATE "-Wno-unused-function"
     )
 endif()
 
-set_target_properties(GRID0-ofw PROPERTIES CXX_STANDARD 17)
+set_target_properties(GRID0-ofw-cli PROPERTIES CXX_STANDARD 17)
 
 if(NOT ((CMAKE_SYSTEM_NAME STREQUAL "Darwin") OR MSVC))
-    target_link_libraries(GRID0-ofw atomic)
+    target_link_libraries(GRID0-ofw-cli atomic)
 endif()
-target_link_libraries(GRID0-ofw base)
-target_link_libraries(GRID0-ofw uv_lwip)
-target_link_libraries(GRID0-ofw uv_a)
+target_link_libraries(GRID0-ofw-cli base)
+target_link_libraries(GRID0-ofw-cli uv_lwip)
+target_link_libraries(GRID0-ofw-cli uv_a)
 
 find_package(PCAP REQUIRED)
 if(NOT WIN32)
-    target_link_libraries(GRID0-ofw ${PCAP_LIBRARY})
+    target_link_libraries(GRID0-ofw-cli ${PCAP_LIBRARY})
 endif()
-target_include_directories(GRID0-ofw PRIVATE ${PCAP_INCLUDE_DIR})
+target_include_directories(GRID0-ofw-cli PRIVATE ${PCAP_INCLUDE_DIR})
 
 if (WIN32)
-    target_sources(GRID0-ofw PRIVATE npcap-loader.c win-firewall.c)
-    target_link_libraries(GRID0-ofw ws2_32 iphlpapi psapi userenv shell32)
-    target_compile_definitions(GRID0-ofw PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
+    target_sources(GRID0-ofw-cli PRIVATE npcap-loader.c win-firewall.c)
+    target_link_libraries(GRID0-ofw-cli ws2_32 iphlpapi psapi userenv shell32)
+    target_compile_definitions(GRID0-ofw-cli PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX _WIN32_WINNT=0x0A00)
 else()
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Android")
-        target_link_libraries(GRID0-ofw pthread)
+        target_link_libraries(GRID0-ofw-cli pthread)
     endif()
 endif()
 
-INSTALL(TARGETS GRID0-ofw RUNTIME DESTINATION bin)
+INSTALL(TARGETS GRID0-ofw-cli RUNTIME DESTINATION bin)
