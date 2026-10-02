@@ -121,7 +121,7 @@ Window::Window(bool preview) : previewMode(preview) {
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, row, 0); form->addWidget(pair.second, row++, 1);
     }
-    auto *dnsHeader = text("DNS (optional, for safety)");
+    auto *dnsHeader = text("DNS (90dns, optional)");
     title(dnsHeader, 10);
     form->addWidget(dnsHeader, 0, 2, 1, 2);
     int dnsLine = 1;
@@ -133,7 +133,7 @@ Window::Window(bool preview) : previewMode(preview) {
         form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
     }
     auto *dnsNotice = text("Put the closest one as primary DNS on your Switch.");
-    form->addWidget(dnsNotice, 3, 0, 1, 4);
+    form->addWidget(dnsNotice, 3, 2, 1, 2);
     auto *copy = new QPushButton("Copy Switch settings");
     auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();
     form->addLayout(copyRow, 4, 0, 1, 4); playLayout->addWidget(group);
