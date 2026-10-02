@@ -35,7 +35,7 @@ endif()
 # add external libraries
 include(external/external.cmake)
 
-set(LANPLAY_VERSION "grid0-relay-${PROJECT_VERSION}")
+set(LANPLAY_VERSION "GRID0-ofw-${PROJECT_VERSION}")
 
 add_subdirectory(base)
 add_subdirectory(lwip)
@@ -48,7 +48,7 @@ add_subdirectory(src)
 # build machine's.
 option(ZLL_STATIC_RUNTIME "Link libstdc++/libgcc statically into the relay and launcher" OFF)
 if(ZLL_STATIC_RUNTIME)
-    target_link_options(grid0-relay PRIVATE -static-libstdc++ -static-libgcc)
+    target_link_options(GRID0-ofw PRIVATE -static-libstdc++ -static-libgcc)
 endif()
 
 option(ZLL_BUILD_GUI "Build the Qt desktop application" OFF)

@@ -135,7 +135,7 @@ void RelayController::start(const Preferences &p, const QList<Adapter> &adapters
     return;
 #else
 #if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
-    QString helper = QCoreApplication::applicationDirPath() + "/grid0-relay-supervisor";
+    QString helper = QCoreApplication::applicationDirPath() + "/GRID0-ofw-supervisor";
     QString relay = p.relayPath;
     if (!QFileInfo(helper).isExecutable()) { emit message("The bundled launcher is missing. Rebuild the desktop app."); return; }
 #endif

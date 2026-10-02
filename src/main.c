@@ -30,7 +30,7 @@ static int report_running_relay(void)
         if (!comm) continue;
         if (fgets(name, sizeof(name), comm)) {
             name[strcspn(name, "\n")] = '\0';
-            if (!strcmp(name, "grid0-relay")) {
+            if (!strcmp(name, "GRID0-ofw")) {
                 eprintf("Another GRID0 Relay is already running (PID %ld).\n"
                         "Stop that relay before starting this one; two instances can interfere.\n", pid);
                 found = 1;
@@ -69,7 +69,7 @@ static int acquire_relay_instance(void)
         char path[PROC_PIDPATHINFO_MAXSIZE];
         if (proc_pidpath(pids[i], path, sizeof(path)) <= 0) continue;
         const char *name = strrchr(path, '/');
-        if (name && !strcmp(name + 1, "grid0-relay")) {
+        if (name && !strcmp(name + 1, "GRID0-ofw")) {
             eprintf("Another GRID0 Relay is already running (PID %d).\n"
                     "Stop that relay before starting this one; two instances can interfere.\n", pids[i]);
             free(pids);
@@ -82,7 +82,7 @@ static int acquire_relay_instance(void)
     /* Do not unlink this file on exit: its inode is the shared lock. The OS
      * releases flock on process exit, including a crash or forced stop. */
     static int lock_fd = -1;
-    lock_fd = open("/var/run/grid0-relay.lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    lock_fd = open("/var/run/GRID0-ofw.lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (lock_fd < 0) {
         eprintf("Cannot open relay instance lock: %s. Start the relay with administrator privileges.\n", strerror(errno));
         return -1;

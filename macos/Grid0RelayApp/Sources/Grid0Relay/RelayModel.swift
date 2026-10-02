@@ -21,7 +21,7 @@ final class RelayModel: ObservableObject {
     @Published private(set) var isStarting = false
     @Published private(set) var relayPID: Int32?
 
-    private let logURL = URL(fileURLWithPath: "/var/tmp/grid0-relay.log")
+    private let logURL = URL(fileURLWithPath: "/var/tmp/GRID0-ofw.log")
 
     init() {
         refreshAdapters()
@@ -187,7 +187,7 @@ final class RelayModel: ObservableObject {
         let fileManager = FileManager.default
         var directory = URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
         for _ in 0..<8 {
-            let candidate = directory.appending(path: "build/src/grid0-relay").path
+            let candidate = directory.appending(path: "build/src/GRID0-ofw").path
             if fileManager.isExecutableFile(atPath: candidate) { return candidate }
             directory.deleteLastPathComponent()
         }

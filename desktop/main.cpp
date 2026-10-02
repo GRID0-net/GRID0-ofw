@@ -19,7 +19,7 @@ static void startupLog(const char *stage) {
     DWORD n = GetTempPathW(MAX_PATH, temp);
     
     if (!n || n >= MAX_PATH) return;
-    const QString path = QString::fromWCharArray(temp) + "GRID0-Relay-startup.log";
+    const QString path = QString::fromWCharArray(temp) + "GRID0-ofw-startup.log";
     QFile log(path);
     
     if (log.open(QIODevice::WriteOnly | QIODevice::Append)) {
