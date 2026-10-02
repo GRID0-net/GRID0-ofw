@@ -163,7 +163,7 @@ def main():
     # The relay and its launcher are started by pkexec from outside this image,
     # so what they link against directly must all come from the host. libpcap's
     # own dependencies are the host libpcap's business, not ours.
-    for name in ('GRID0-ofw', 'GRID0-ofw-supervisor'):
+    for name in ('GRID0-ofw-cli', 'GRID0-ofw-supervisor'):
         for library in linked(appdir / 'usr/bin' / name):
             if library not in SYSTEM_LIBRARIES:
                 raise RuntimeError(f'{name} links {library}, which pkexec would not find outside the '
