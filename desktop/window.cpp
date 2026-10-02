@@ -91,7 +91,8 @@ Window::Window(bool preview) : previewMode(preview) {
     manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode");
     modeRow->addWidget(manualMode); modeRow->addWidget(autoMode); modeRow->addStretch();
     playLayout->addLayout(modeRow);
-    auto *dnsRow = new QHBoxLayout;
+    dnsToggle = new QWidget;
+    auto *dnsRow = new QHBoxLayout(dnsToggle);
     auto *dnsLabel = new QLabel("Closest 90DNS server:");
     dnsLabel->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsRow->addWidget(dnsLabel);
@@ -99,31 +100,43 @@ Window::Window(bool preview) : previewMode(preview) {
     dnsUsFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsFrFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsRow->addWidget(dnsUsFirst); dnsRow->addWidget(dnsFrFirst); dnsRow->addStretch();
-    playLayout->addLayout(dnsRow);
+    playLayout->addWidget(dnsToggle);
     group->setObjectName("switchSettings");
     form->setSizeConstraint(QLayout::SetMinimumSize);
     group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
     form->setColumnStretch(1, 1);
+    form->setColumnStretch(3, 1);
     form->setHorizontalSpacing(20);
     form->setContentsMargins(18, 22, 18, 18); form->setVerticalSpacing(14);
     address = text("—"); mask = text("—"); gatewayValue = text("—");
-    dnsPrimary = text("207.246.121.77"); dnsSecondary = text("163.172.141.219");
+    dnsAmerica = text("207.246.121.77"); dnsEurope = text("163.172.141.219");
     address->setObjectName("switchIP"); mask->setObjectName("switchMask"); gatewayValue->setObjectName("switchGateway");
-    dnsPrimary->setObjectName("switchDnsPrimary"); dnsSecondary->setObjectName("switchDnsSecondary");
-    for (auto *l : {address, mask, gatewayValue, dnsPrimary, dnsSecondary}) { l->setTextInteractionFlags(Qt::TextSelectableByMouse); title(l, 14); }
+    dnsAmerica->setObjectName("switchDnsAmerica"); dnsEurope->setObjectName("switchDnsEurope");
+    for (auto *l : {address, mask, gatewayValue, dnsAmerica, dnsEurope}) { l->setTextInteractionFlags(Qt::TextSelectableByMouse); title(l, 14); }
     int row = 0;
-    for (auto pair : {qMakePair(QString("IP address"), address), qMakePair(QString("Subnet mask"), mask), qMakePair(QString("Gateway"), gatewayValue), qMakePair(QString("Primary DNS"), dnsPrimary), qMakePair(QString("Secondary DNS"), dnsSecondary)}) {
+    for (auto pair : {qMakePair(QString("IP address"), address), qMakePair(QString("Subnet mask"), mask), qMakePair(QString("Gateway"), gatewayValue)}) {
         auto *label = new QLabel(pair.first);
         pair.second->setWordWrap(false);
         pair.second->setMinimumHeight(pair.second->fontMetrics().height() + 4);
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, row, 0); form->addWidget(pair.second, row++, 1);
     }
-    auto *dnsNote = text("DNS is optional. 90DNS blocks Nintendo tracking, not needed to play.");
-    form->addWidget(dnsNote, row++, 0, 1, 2);
+    auto *dnsHeader = text("DNS (optional, for safety)");
+    title(dnsHeader, 12);
+    form->addWidget(dnsHeader, 0, 2, 1, 2);
+    int dnsLine = 1;
+    for (auto pair : {qMakePair(QString("America"), dnsAmerica), qMakePair(QString("Europe"), dnsEurope)}) {
+        auto *label = new QLabel(pair.first);
+        pair.second->setWordWrap(false);
+        pair.second->setMinimumHeight(pair.second->fontMetrics().height() + 4);
+        pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
+        form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
+    }
+    auto *dnsNotice = text("Put the closest one as primary DNS on your Switch.");
+    form->addWidget(dnsNotice, 3, 0, 1, 4);
     auto *copy = new QPushButton("Copy Switch settings");
     auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();
-    form->addLayout(copyRow, row, 0, 1, 2); playLayout->addWidget(group);
+    form->addLayout(copyRow, 4, 0, 1, 4); playLayout->addWidget(group);
 #ifdef Q_OS_MACOS
     // A QFrame gives the native effect an independent host. QGroupBox uses a
     // shared Qt backing view, which would place the AppKit layer over its text.
@@ -131,7 +144,7 @@ Window::Window(bool preview) : previewMode(preview) {
     addMacGlass(summary, QtLiquidGlass::Material::ClearGlass, 16.0);
 #endif
     connect(copy, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText("IP address: " + address->text() + "\nSubnet mask: " + mask->text() + "\nGateway: " + gatewayValue->text() + "\nPrimary DNS: " + dnsPrimary->text() + "\nSecondary DNS: " + dnsSecondary->text());
+        QApplication::clipboard()->setText("IP address: " + address->text() + "\nSubnet mask: " + mask->text() + "\nGateway: " + gatewayValue->text() + "\nAmerica DNS: " + dnsAmerica->text() + "\nEurope DNS: " + dnsEurope->text());
     });
     settingsHint = text("Use the exact subnet mask shown here. After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
@@ -315,10 +328,9 @@ void Window::updateState() {
     auto a = preferences.overlay(adapters);
     address->setText(a.ip.isEmpty() ? "—" : a.ip); mask->setText(a.mask.isEmpty() ? "—" : a.mask);
     gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "—" : a.gateway) : preferences.gateway);
-    dnsPrimary->setText(preferences.dnsFranceFirst ? "163.172.141.219" : "207.246.121.77");
-    dnsSecondary->setText(preferences.dnsFranceFirst ? "207.246.121.77" : "163.172.141.219");
     auto error = preferences.validate(adapters); validation->setText(error);
     switchSettingsGroup->setVisible(!preferences.dhcp);
+    dnsToggle->setVisible(preferences.dhcp);
     settingsHint->setVisible(!preferences.dhcp);
     dhcpHint->setVisible(preferences.dhcp);
     QString hotspotIp;
