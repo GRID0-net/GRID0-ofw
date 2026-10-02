@@ -21,7 +21,7 @@ Theres both a cli you can use, and a Native QT gui with either macOS theming or 
 
 Simple Usage Guide:, or check [the main repo](https://github.com/Musi95/GRID0)
 
-1. Download the latest release from [releases](https://github.com/redluigi323/GRID0-relay/releases).
+1. Download the latest release from [releases](https://github.com/GRID0-net/ofw-GRID0/releases).
    Want the newest code instead? The **Nightly build** prerelease on that same page is rebuilt
    automatically every time main changes, for Windows, both kinds of Mac, and Linux.
 2. Run it by either running GRID0Relay.exe(Windows), GRID0 Relay.app(macOS), or the AppImage(Linux) (you will be prompted for admin perms when necessary).
