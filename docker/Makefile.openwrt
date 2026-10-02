@@ -15,7 +15,7 @@ define Package/$(PKG_NAME)
 	CATEGORY:=Network
 	SUBMENU:=GRID0
 	DEPENDS:=+libstdcpp +libatomic +libpcap +libpthread
-	TITLE:=GRID0 Relay client
+	TITLE:=GRID0-ofw client
 endef
 
 define Package/$(PKG_NAME)/description

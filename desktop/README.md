@@ -65,8 +65,8 @@ On Linux the same checks apply, using `build-linux/desktop` as the build directo
 Window-only UI previews do not start a relay or save preferences:
 
 ```sh
-build/desktop/Grid0Relay.app/Contents/MacOS/Grid0Relay --preview --screenshot /tmp/play.png
-build/desktop/Grid0Relay.app/Contents/MacOS/Grid0Relay --preview --settings --advanced --screenshot /tmp/advanced.png
+build/desktop/GRID0-ofw.app/Contents/MacOS/GRID0-ofw --preview --screenshot /tmp/play.png
+build/desktop/GRID0-ofw.app/Contents/MacOS/GRID0-ofw --preview --settings --advanced --screenshot /tmp/advanced.png
 ```
 
 ## Platform boundary

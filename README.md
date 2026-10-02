@@ -1,6 +1,6 @@
 ![Banner](img/banner.png)
 
-# GRID0 Relay
+# GRID0-ofw
 ![License](https://img.shields.io/badge/License-GPLv2-blue.svg)
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
 =====
@@ -24,7 +24,7 @@ Simple Usage Guide:, or check [the main repo](https://github.com/Musi95/GRID0)
 1. Download the latest release from [releases](https://github.com/GRID0-net/ofw-GRID0/releases).
    Want the newest code instead? The **Nightly build** prerelease on that same page is rebuilt
    automatically every time main changes, for Windows, both kinds of Mac, and Linux.
-2. Run it by either running GRID0Relay.exe(Windows), GRID0 Relay.app(macOS), or the AppImage(Linux) (you will be prompted for admin perms when necessary).
+2. Run it by either running GRID0-ofw.exe(Windows), GRID0-ofw.app(macOS), or the AppImage(Linux) (you will be prompted for admin perms when necessary).
 3. If you dont have ZeroTier One and Npcap installed, the app tells you on startup and offers to install them. On Linux, install ZeroTier and your distro's libpcap package (libpcap0.8 on Debian/Ubuntu, libpcap on Fedora/Arch).
 4. Join a network on ZeroTier's UI.
 5. Setup the adapters (will be automatically chosen if both are detected).

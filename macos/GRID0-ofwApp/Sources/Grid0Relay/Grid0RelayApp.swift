@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct Grid0RelayApp: App {
+struct GRID0-ofwApp: App {
     @StateObject private var relay = RelayModel()
 
     var body: some Scene {

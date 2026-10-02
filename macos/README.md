@@ -1,8 +1,8 @@
-# Grid0 Relay for macOS
+# GRID0-ofw for macOS
 
 The current desktop application is the [Qt app in ../desktop](../desktop/README.md). The SwiftUI package below is the earlier prototype, retained for reference. Use the root README's Qt build and packaging commands for new work.
 
-`Grid0Relay` is a native SwiftUI frontend for the existing CMake relay. Open [Grid0RelayApp/Package.swift](Grid0RelayApp/Package.swift) in Xcode, then run the `Grid0Relay` scheme.
+`GRID0-ofw` is a native SwiftUI frontend for the existing CMake relay. Open [GRID0-ofwApp/Package.swift](GRID0-ofwApp/Package.swift) in Xcode, then run the `GRID0-ofw` scheme.
 
 The app discovers local adapters, prefills `en0` as the Wi-Fi side and a ZeroTier-looking adapter such as `feth1082` as the overlay side, and lets the user change both. It also exposes the game subnet, fake gateway, automatic local-Switch discovery, relay-binary path, traffic-diagnostics toggle, relay log, and a future Switch-discovery status area.
 

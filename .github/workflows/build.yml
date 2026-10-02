@@ -99,15 +99,15 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          build/desktop/Grid0Relay.app/Contents/MacOS/Grid0Relay --preview --screenshot /tmp/play.png
+          build/desktop/GRID0-ofw.app/Contents/MacOS/GRID0-ofw --preview --screenshot /tmp/play.png
           test -s /tmp/play.png
       - name: Package the app bundle
         run: python3 desktop/package-macos.py --build build --output dist/macos --macdeployqt "$(brew --prefix qtbase)/bin/macdeployqt"
       - name: Check the packaged bundle
         run: |
-          codesign --verify --deep --strict "dist/macos/GRID0 Relay.app"
-          test -x "dist/macos/GRID0 Relay.app/Contents/MacOS/GRID0-ofw"
-          test -x "dist/macos/GRID0 Relay.app/Contents/MacOS/GRID0-ofw-supervisor"
+          codesign --verify --deep --strict "dist/macos/GRID0-ofw.app"
+          test -x "dist/macos/GRID0-ofw.app/Contents/MacOS/GRID0-ofw"
+          test -x "dist/macos/GRID0-ofw.app/Contents/MacOS/GRID0-ofw-supervisor"
           test -s dist/macos/GRID0-ofw-macOS.zip
       - name: Name the archive for its architecture
         run: cp dist/macos/GRID0-ofw-macOS.zip GRID0-ofw-macOS-${{ matrix.arch }}.zip
@@ -171,7 +171,7 @@ jobs:
       - name: Check linked entry point and execute GUI startup
         shell: pwsh
         run: |
-          python tests/check_windows_entrypoint.py build-windows/desktop/Grid0Relay.exe --objdump objdump
+          python tests/check_windows_entrypoint.py build-windows/desktop/GRID0-ofw.exe --objdump objdump
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/test_windows_gui_startup.py dist/windows-test/GRID0-ofw
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -209,7 +209,7 @@ jobs:
           These are unsigned development builds. Windows and macOS will warn on first run, and nothing
           here has been through a release test. For a stable build, use a versioned release instead.
 
-          - `GRID0-ofw-Windows-x64.zip` - extract the whole folder, then run `GRID0Relay.exe`
+          - `GRID0-ofw-Windows-x64.zip` - extract the whole folder, then run `GRID0-ofw.exe`
           - `GRID0-ofw-macOS-arm64.zip` - Apple Silicon Macs
           - `GRID0-ofw-macOS-x64.zip` - Intel Macs
           - `GRID0-ofw-x86_64.AppImage` - Linux; needs ZeroTier and your distribution's libpcap

@@ -3,7 +3,7 @@
 
 // Do not call `main`: Qt headers can rename the application's main to qMain,
 // leaving MinGW's fallback main -> WinMain stub. Calling it loops forever.
-extern int grid0RelayMain(int, char **);
+extern int grid0OfwMain(int, char **);
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    return grid0RelayMain(__argc, __argv);
+    return grid0OfwMain(__argc, __argv);
 }

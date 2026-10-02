@@ -7,14 +7,14 @@ target_compile_features(zll_desktop_model PUBLIC cxx_std_17)
 target_link_libraries(zll_desktop_model PUBLIC Qt6::Widgets Qt6::Network)
 target_include_directories(zll_desktop_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(Grid0Relay WIN32 MACOSX_BUNDLE main.cpp window.cpp resources.qrc)
-target_link_libraries(Grid0Relay PRIVATE zll_desktop_model)
-set_target_properties(Grid0Relay PROPERTIES
-    MACOSX_BUNDLE_BUNDLE_NAME "GRID0 Relay"
+add_executable(GRID0-ofw WIN32 MACOSX_BUNDLE main.cpp window.cpp resources.qrc)
+target_link_libraries(GRID0-ofw PRIVATE zll_desktop_model)
+set_target_properties(GRID0-ofw PROPERTIES
+    MACOSX_BUNDLE_BUNDLE_NAME "GRID0-ofw"
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.grid0.relay"
     MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
     MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
-add_dependencies(Grid0Relay GRID0-ofw)
+add_dependencies(GRID0-ofw GRID0-ofw)
 if(UNIX)
     # macOS and Linux both start the relay through this helper: one authorized
     # launch, one child, owned by the GUI's private socket.
@@ -24,19 +24,19 @@ if(UNIX)
     if(ZLL_STATIC_RUNTIME)
         target_link_options(zll-supervisor PRIVATE -static-libstdc++ -static-libgcc)
     endif()
-    add_dependencies(Grid0Relay zll-supervisor)
-    add_custom_command(TARGET Grid0Relay POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:Grid0Relay>/GRID0-ofw"
-        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:zll-supervisor>" "$<TARGET_FILE_DIR:Grid0Relay>/GRID0-ofw-supervisor")
+    add_dependencies(GRID0-ofw zll-supervisor)
+    add_custom_command(TARGET GRID0-ofw POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:zll-supervisor>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw-supervisor")
 endif()
 if(APPLE)
     # Native macOS 26 glass for a few contained surfaces. The library is a
     # no-op away from Cocoa; Windows and Linux retain their native Qt styling.
     add_subdirectory(${PROJECT_SOURCE_DIR}/external/qt-liquid-glass qt-liquid-glass)
-    target_link_libraries(Grid0Relay PRIVATE QtLiquidGlass)
-    add_custom_command(TARGET Grid0Relay POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:Grid0Relay>/Contents/Resources"
-        COMMAND ${CMAKE_COMMAND} -E copy "${PROJECT_SOURCE_DIR}/LICENSE.txt" "$<TARGET_BUNDLE_DIR:Grid0Relay>/Contents/Resources/LICENSE.txt")
+    target_link_libraries(GRID0-ofw PRIVATE QtLiquidGlass)
+    add_custom_command(TARGET GRID0-ofw POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_BUNDLE_DIR:GRID0-ofw>/Contents/Resources"
+        COMMAND ${CMAKE_COMMAND} -E copy "${PROJECT_SOURCE_DIR}/LICENSE.txt" "$<TARGET_BUNDLE_DIR:GRID0-ofw>/Contents/Resources/LICENSE.txt")
 endif()
 
 if(WIN32)
@@ -44,13 +44,13 @@ if(WIN32)
     target_compile_definitions(zll_desktop_model PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX)
     # Build the entry point with the selected compiler's CRT. The static Qt
     # entry point from a downloaded SDK may use a different Windows CRT.
-    set_target_properties(Grid0Relay PROPERTIES QT_NO_ENTRYPOINT ON)
-    target_sources(Grid0Relay PRIVATE windows.rc windows-entry.cpp)
+    set_target_properties(GRID0-ofw PROPERTIES QT_NO_ENTRYPOINT ON)
+    target_sources(GRID0-ofw PRIVATE windows.rc windows-entry.cpp)
     if(MSVC)
-        target_link_options(Grid0Relay PRIVATE /MANIFEST:NO)
+        target_link_options(GRID0-ofw PRIVATE /MANIFEST:NO)
     endif()
-    add_custom_command(TARGET Grid0Relay POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:Grid0Relay>/GRID0-ofw.exe")
+    add_custom_command(TARGET GRID0-ofw POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GRID0-ofw>" "$<TARGET_FILE_DIR:GRID0-ofw>/GRID0-ofw.exe")
 endif()
 
 enable_testing()

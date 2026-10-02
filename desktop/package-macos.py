@@ -14,8 +14,8 @@ p.add_argument('--build', type=pathlib.Path, default=pathlib.Path('build'))
 p.add_argument('--output', type=pathlib.Path, default=pathlib.Path('dist'))
 p.add_argument('--macdeployqt', default='macdeployqt')
 args = p.parse_args()
-source = args.build.resolve() / 'desktop/Grid0Relay.app'
-destination = args.output.resolve() / 'GRID0 Relay.app'
+source = args.build.resolve() / 'desktop/GRID0-ofw.app'
+destination = args.output.resolve() / 'GRID0-ofw.app'
 args.output.mkdir(parents=True, exist_ok=True)
 if destination.exists():
     raise SystemExit('Output app already exists; use a fresh output folder.')
@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory(prefix='zll-icon-') as temporary:
     work = pathlib.Path(temporary)
     original = work / 'icon.png'
     icon_environment = os.environ | {'QT_QPA_PLATFORM': 'offscreen'}
-    subprocess.run([str(source / 'Contents/MacOS/Grid0Relay'), '--write-icon', str(original)], check=True, env=icon_environment)
+    subprocess.run([str(source / 'Contents/MacOS/GRID0-ofw'), '--write-icon', str(original)], check=True, env=icon_environment)
     # ICNS can contain standard PNG payloads. Writing the six current icon
     # sizes directly avoids iconutil rejecting valid iconsets on some macOS 26
     # builds, while preserving a full-resolution Finder and Dock icon.
@@ -42,12 +42,12 @@ with tempfile.TemporaryDirectory(prefix='zll-icon-') as temporary:
 info = destination / 'Contents/Info.plist'
 with info.open('rb') as file:
     values = plistlib.load(file)
-values['CFBundleDisplayName'] = 'GRID0 Relay'
+values['CFBundleDisplayName'] = 'GRID0-ofw'
 values['CFBundleIconFile'] = 'AppIcon.icns'
 with info.open('wb') as file:
     plistlib.dump(values, file)
 subprocess.run([args.macdeployqt, str(destination), '-always-overwrite'], check=True)
-executable = destination / 'Contents/MacOS/Grid0Relay'
+executable = destination / 'Contents/MacOS/GRID0-ofw'
 # macdeployqt normally rewrites these paths. Keep a final explicit pass because
 # a Homebrew Qt executable can retain absolute framework paths, which loads a
 # second Qt beside the bundle's Cocoa plugin and aborts during QApplication.

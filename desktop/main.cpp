@@ -34,7 +34,7 @@ static QPixmap applicationIcon() {
     return QPixmap(":/branding/grid0-app-icon.png");
 }
 
-int grid0RelayMain(int argc, char **argv) {
+int grid0OfwMain(int argc, char **argv) {
     startupLog("entered application; creating QApplication");
 #ifdef Q_OS_WIN
     qInstallMessageHandler([](QtMsgType, const QMessageLogContext &, const QString &message) {
@@ -44,7 +44,7 @@ int grid0RelayMain(int argc, char **argv) {
     
     QApplication app(argc, argv);
     startupLog("QApplication created");
-    app.setOrganizationName("GRID0 Relay"); app.setApplicationName("GRID0Relay"); app.setApplicationVersion("0.6.10");
+    app.setOrganizationName("GRID0-ofw"); app.setApplicationName("GRID0-ofw"); app.setApplicationVersion("0.6.10");
 #ifdef Q_OS_WIN
     // Qt's Windows 11 style supports system light/dark and high-contrast themes.
     if (QStyleFactory::keys().contains("windows11", Qt::CaseInsensitive)) app.setStyle("windows11");
@@ -69,7 +69,7 @@ int grid0RelayMain(int argc, char **argv) {
     const QString data = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation);
     QDir().mkpath(data);
     QLockFile lock(data + "/desktop.lock");
-    if (!preview && !lock.tryLock(0)) { QMessageBox::information(nullptr, "GRID0 Relay", "The desktop app is already open."); return 1; }
+    if (!preview && !lock.tryLock(0)) { QMessageBox::information(nullptr, "GRID0-ofw", "The desktop app is already open."); return 1; }
     startupLog("creating main window");
     Window window(preview); window.show(); window.activateWindow();
     startupLog("main window shown");
@@ -81,5 +81,5 @@ int grid0RelayMain(int argc, char **argv) {
 }
 
 #ifndef Q_OS_WIN
-int main(int argc, char **argv) { return grid0RelayMain(argc, argv); }
+int main(int argc, char **argv) { return grid0OfwMain(argc, argv); }
 #endif
