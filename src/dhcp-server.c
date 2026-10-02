@@ -226,7 +226,9 @@ static int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
          * router and broadcast all come from the overlay network. */
         off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->zerotier_netmask, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->packet_ctx.ip, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, lp->packet_ctx.ip, 4);
+        /* 90DNS so the Switch can't phone home to Nintendo. US first, France second. */
+        static const uint8_t dns_90dns[8] = {207,246,121,77, 163,172,141,219};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_90dns, 8);
         off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, lp->zerotier_broadcast_ip, 4);
     }
     dhcp[off++] = DHCP_OPT_END;
