@@ -122,7 +122,7 @@ Window::Window(bool preview) : previewMode(preview) {
         form->addWidget(label, row, 0); form->addWidget(pair.second, row++, 1);
     }
     auto *dnsHeader = text("DNS (optional, for safety)");
-    title(dnsHeader, 12);
+    title(dnsHeader, 10);
     form->addWidget(dnsHeader, 0, 2, 1, 2);
     int dnsLine = 1;
     for (auto pair : {qMakePair(QString("America"), dnsAmerica), qMakePair(QString("Europe"), dnsEurope)}) {
