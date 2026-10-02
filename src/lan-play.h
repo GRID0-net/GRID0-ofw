@@ -152,6 +152,7 @@ struct cli_options {
     bool status_events;
     bool discover_switch;
     bool dhcp_server;
+    bool dns_france_first;
     char *capture_prefix;
 
     char *netif_ipaddr;

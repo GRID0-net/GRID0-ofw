@@ -91,6 +91,15 @@ Window::Window(bool preview) : previewMode(preview) {
     manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode");
     modeRow->addWidget(manualMode); modeRow->addWidget(autoMode); modeRow->addStretch();
     playLayout->addLayout(modeRow);
+    auto *dnsRow = new QHBoxLayout;
+    auto *dnsLabel = new QLabel("Closest 90DNS server:");
+    dnsLabel->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
+    dnsRow->addWidget(dnsLabel);
+    dnsUsFirst = new QRadioButton("US (207.246.121.77)"); dnsFrFirst = new QRadioButton("France (163.172.141.219)");
+    dnsUsFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
+    dnsFrFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
+    dnsRow->addWidget(dnsUsFirst); dnsRow->addWidget(dnsFrFirst); dnsRow->addStretch();
+    playLayout->addLayout(dnsRow);
     group->setObjectName("switchSettings");
     form->setSizeConstraint(QLayout::SetMinimumSize);
     group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -212,6 +221,8 @@ Window::Window(bool preview) : previewMode(preview) {
     for (auto *check : {diagnostics, capture, discovery}) connect(check, &QCheckBox::toggled, this, [this] { save(); });
     manualMode->setChecked(!preferences.dhcp); autoMode->setChecked(preferences.dhcp);
     for (auto *mode : {manualMode, autoMode}) connect(mode, &QRadioButton::toggled, this, [this] { save(); });
+    dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
+    for (auto *dns : {dnsUsFirst, dnsFrFirst}) connect(dns, &QRadioButton::toggled, this, [this] { save(); });
     connect(choose, &QPushButton::clicked, this, [this] {
         if (relay.busy()) return;
         auto path = QFileDialog::getOpenFileName(this, "Choose relay executable", executable->text());
@@ -292,6 +303,7 @@ void Window::save() {
     if (preferences.relayPath.isEmpty()) preferences.relayPath = bundled;
     preferences.diagnostics = diagnostics->isChecked(); preferences.capture = capture->isChecked(); preferences.discover = discovery->isChecked();
     preferences.dhcp = autoMode->isChecked();
+    preferences.dnsFranceFirst = dnsFrFirst->isChecked();
     if (!previewMode) {
         auto stored = preferences;
         if (stored.relayPath == bundled) stored.relayPath.clear(); // Moving the app must not leave a stale path.
@@ -303,6 +315,8 @@ void Window::updateState() {
     auto a = preferences.overlay(adapters);
     address->setText(a.ip.isEmpty() ? "—" : a.ip); mask->setText(a.mask.isEmpty() ? "—" : a.mask);
     gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "—" : a.gateway) : preferences.gateway);
+    dnsPrimary->setText(preferences.dnsFranceFirst ? "163.172.141.219" : "207.246.121.77");
+    dnsSecondary->setText(preferences.dnsFranceFirst ? "207.246.121.77" : "163.172.141.219");
     auto error = preferences.validate(adapters); validation->setText(error);
     switchSettingsGroup->setVisible(!preferences.dhcp);
     settingsHint->setVisible(!preferences.dhcp);
@@ -328,7 +342,7 @@ void Window::updateState() {
     start->setEnabled(!relay.busy() && error.isEmpty()); stop->setEnabled(relay.busy() && relay.state() != RelayController::Stopping);
     stop->setText(relay.state() == RelayController::Authorizing ? "Cancel" : "Stop relay");
     configuration->setEnabled(!relay.busy());
-    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode}) w->setEnabled(!relay.busy());
+    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode, dnsUsFirst, dnsFrFirst}) w->setEnabled(!relay.busy());
 }
 void Window::checkDependencies() {
     if (!requirements || !setupRequirements) return;

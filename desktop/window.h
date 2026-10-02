@@ -37,6 +37,7 @@ private:
     QLineEdit *gateway, *executable;
     QCheckBox *diagnostics, *capture, *discovery;
     QRadioButton *manualMode, *autoMode;
+    QRadioButton *dnsUsFirst, *dnsFrFirst;
     QGroupBox *switchSettingsGroup;
     QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsPrimary, *dnsSecondary, *validation, *settingsHint, *dhcpHint;
     QLabel *hotspotStatus = nullptr;
