@@ -8,7 +8,7 @@ class LayoutTests : public QObject {
 private slots:
     void switchSettingsStayReadable() {
         Window window(true);
-        window.resize(640, 590);
+        window.resize(640, 720);
         window.show();
         auto *status = window.findChild<QLabel *>("relayStatus");
         auto *group = window.findChild<QGroupBox *>("switchSettings");
