@@ -2,6 +2,7 @@
 #include <QApplication>
 #include <QGroupBox>
 #include <QScrollArea>
+#include <QTextDocument>
 #include <QtTest>
 class LayoutTests : public QObject {
     Q_OBJECT
@@ -24,8 +25,15 @@ private slots:
         }
         QTest::qWait(50);
         for (auto *label : group->findChildren<QLabel *>()) {
+            // Rich text labels carry HTML markup; measure what is rendered.
+            QString shown = label->text();
+            if (label->textFormat() == Qt::RichText) {
+                QTextDocument doc;
+                doc.setHtml(shown);
+                shown = doc.toPlainText();
+            }
             QVERIFY2(label->height() >= label->fontMetrics().height(), qPrintable(label->text()));
-            QVERIFY2(label->width() >= label->fontMetrics().horizontalAdvance(label->text()), qPrintable(label->text()));
+            QVERIFY2(label->width() >= label->fontMetrics().horizontalAdvance(shown), qPrintable(label->text()));
             QVERIFY(group->rect().contains(label->geometry()));
         }
         for (auto *button : group->findChildren<QPushButton *>()) {

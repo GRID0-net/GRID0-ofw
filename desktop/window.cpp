@@ -121,7 +121,11 @@ Window::Window(bool preview) : previewMode(preview) {
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, row, 0); form->addWidget(pair.second, row++, 1);
     }
-    auto *dnsHeader = text("DNS (90dns, optional)");
+    auto *dnsHeader = new QLabel();
+    dnsHeader->setText("DNS (<a href=\"https://gbatemp.net/threads/90dns-dns-server-for-blocking-all-nintendo-servers.516234/\">90dns</a>, optional)");
+    dnsHeader->setTextFormat(Qt::RichText);
+    dnsHeader->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    dnsHeader->setOpenExternalLinks(true);
     title(dnsHeader, 10);
     form->addWidget(dnsHeader, 0, 2, 1, 2);
     int dnsLine = 1;
@@ -132,11 +136,13 @@ Window::Window(bool preview) : previewMode(preview) {
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
     }
-    auto *dnsNotice = text("Closest one as primary DNS.");
-    form->addWidget(dnsNotice, 3, 2, 1, 2);
+    auto *dnsNotice1 = text("Set closest one as Primary DNS");
+    form->addWidget(dnsNotice1, 3, 2, 1, 2);
+    auto *dnsNotice2 = text("Set the other as Secondary DNS.");
+    form->addWidget(dnsNotice2, 4, 2, 1, 2);
     auto *copy = new QPushButton("Copy Switch settings");
     auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();
-    form->addLayout(copyRow, 4, 0, 1, 4); playLayout->addWidget(group);
+    form->addLayout(copyRow, 5, 0, 1, 4); playLayout->addWidget(group);
 #ifdef Q_OS_MACOS
     // A QFrame gives the native effect an independent host. QGroupBox uses a
     // shared Qt backing view, which would place the AppKit layer over its text.
