@@ -8,8 +8,11 @@ class LayoutTests : public QObject {
 private slots:
     void switchSettingsStayReadable() {
         Window window(true);
-        window.resize(640, 720);
         window.show();
+        // Size to fit the content: the panel grows as rows are added, so a
+        // hardcoded height breaks every time the UI legitimately gets taller.
+        window.resize(QSize(640, 720).expandedTo(window.sizeHint()));
+        QTest::qWait(50);
         auto *status = window.findChild<QLabel *>("relayStatus");
         auto *group = window.findChild<QGroupBox *>("switchSettings");
         QVERIFY(status && group);
