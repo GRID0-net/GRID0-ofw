@@ -190,6 +190,7 @@ void Preferences::load(QSettings &s) {
     diagnostics = s.value("advanced/diagnostics", false).toBool();
     capture = s.value("advanced/capture", false).toBool(); discover = s.value("advanced/discover", true).toBool();
     dhcp = s.value("network/dhcp", false).toBool();
+    dnsFranceFirst = s.value("network/dnsFranceFirst", false).toBool();
     autoSelectOverlayAdapter(discoverAdapters());
 }
 void Preferences::save(QSettings &s) const {
@@ -197,6 +198,7 @@ void Preferences::save(QSettings &s) const {
     s.setValue("network/gateway", gateway); s.setValue("advanced/relay", relayPath);
     s.setValue("advanced/diagnostics", diagnostics); s.setValue("advanced/capture", capture);
     s.setValue("network/dhcp", dhcp); s.sync();
+    s.setValue("network/dnsFranceFirst", dnsFranceFirst);
     s.setValue("advanced/discover", discover); s.sync();
 }
 Adapter Preferences::overlay(const QList<Adapter> &all) const {
@@ -246,6 +248,7 @@ QStringList Preferences::arguments(const QList<Adapter> &all, const QString &pre
     if (diagnostics) args << "--diagnostics";
     if (!discover) args << "--no-discover-switch";
     if (dhcp) args << "--dhcp";
+    if (dnsFranceFirst) args << "--dns-france-first";
     if (capture) args << "--capture-prefix" << prefix;
     return args;
 }
