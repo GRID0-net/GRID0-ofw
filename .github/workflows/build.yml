@@ -177,9 +177,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:QT_QPA_PLATFORM = 'offscreen'
           & 'dist/windows-test/GRID0-Relay/zll-layout-tests.exe'
-          $code = $LASTEXITCODE
-          if (Test-Path layout-debug.txt) { Get-Content layout-debug.txt }
-          if ($code -ne 0) { exit $code }
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package player build
         run: python desktop/package-windows.py --build build-windows --qt deps/windows/qt --qt-source deps/windows/downloads/qtbase-everywhere-src-6.11.2.tar.xz --compiler g++ --output dist/windows-x64
       - uses: actions/upload-artifact@v4
