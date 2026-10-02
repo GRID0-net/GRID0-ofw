@@ -60,7 +60,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          build/desktop/Grid0Relay.app/Contents/MacOS/Grid0Relay --preview --screenshot /tmp/play.png
+          build/desktop/GRID0-ofw.app/Contents/MacOS/GRID0-ofw --preview --screenshot /tmp/play.png
           test -s /tmp/play.png
       - name: Package the app bundle
         run: python3 desktop/package-macos.py --build build --output dist/macos --macdeployqt "$(brew --prefix qtbase)/bin/macdeployqt"

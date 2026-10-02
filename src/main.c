@@ -31,7 +31,7 @@ static int report_running_relay(void)
         if (fgets(name, sizeof(name), comm)) {
             name[strcspn(name, "\n")] = '\0';
             if (!strcmp(name, "GRID0-ofw")) {
-                eprintf("Another GRID0 Relay is already running (PID %ld).\n"
+                eprintf("Another GRID0-ofw is already running (PID %ld).\n"
                         "Stop that relay before starting this one; two instances can interfere.\n", pid);
                 found = 1;
             }
@@ -70,7 +70,7 @@ static int acquire_relay_instance(void)
         if (proc_pidpath(pids[i], path, sizeof(path)) <= 0) continue;
         const char *name = strrchr(path, '/');
         if (name && !strcmp(name + 1, "GRID0-ofw")) {
-            eprintf("Another GRID0 Relay is already running (PID %d).\n"
+            eprintf("Another GRID0-ofw is already running (PID %d).\n"
                     "Stop that relay before starting this one; two instances can interfere.\n", pids[i]);
             free(pids);
             return -1;
@@ -94,7 +94,7 @@ static int acquire_relay_instance(void)
         return -1;
     }
     if (flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
-        eprintf("Another GRID0 Relay holds the instance lock.\n");
+        eprintf("Another GRID0-ofw holds the instance lock.\n");
         close(lock_fd); lock_fd = -1;
         return -1;
     }
@@ -419,7 +419,7 @@ void lan_play_signal_cb(uv_signal_t *signal, int signum)
 
 void print_version()
 {
-    printf("GRID0 Relay " LANPLAY_VERSION "\n");
+    printf("GRID0-ofw " LANPLAY_VERSION "\n");
 }
 
 void list_netif()
@@ -462,9 +462,9 @@ int old_main()
 #if defined(__APPLE__) || defined(__linux__)
     if (acquire_relay_instance() != 0) return 2;
 #elif defined(_WIN32)
-    instance_mutex = CreateMutexW(NULL, FALSE, L"Local\\Grid0Relay.NativeRelay");
+    instance_mutex = CreateMutexW(NULL, FALSE, L"Local\\GRID0-ofw.NativeRelay");
     if (!instance_mutex || GetLastError() == ERROR_ALREADY_EXISTS) {
-        eprintf("Another GRID0 Relay relay is running, or its instance lock is unavailable.\n");
+        eprintf("Another GRID0-ofw relay is running, or its instance lock is unavailable.\n");
         return 2;
     }
     if (stop_event_name) {

@@ -1,4 +1,4 @@
-# Building GRID0 Relay
+# Building GRID0-ofw
 
 This is mostly here for people who want to build it themselves instead of
 waiting for a release. You will need a compiler, CMake, and the right Qt
@@ -35,7 +35,7 @@ app: an Intel Mac needs a build made on an Intel Mac.
 4. Your app will be at:
 
    ```text
-   build/desktop/Grid0Relay.app
+   build/desktop/GRID0-ofw.app
    ```
 
 5. To make a shareable app bundle and ZIP, run:
@@ -77,7 +77,7 @@ compiler too.
    pacman -S --needed git python mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja p7zip
    ```
 
-3. Clone GRID0 Relay with its submodules:
+3. Clone GRID0-ofw with its submodules:
 
    ```bash
    git clone --recurse-submodules https://github.com/GRID0-net/ofw-GRID0.git
@@ -97,7 +97,7 @@ compiler too.
    ```
 
 5. The release ZIP will be under `dist/windows-x64/`. Extract the whole ZIP
-   before running `GRID0Relay.exe`.
+   before running `GRID0-ofw.exe`.
 
    Packaging never writes over a folder that already exists. Building a second
    time means deleting `dist/windows-x64/` first, or passing a new path with
@@ -130,7 +130,7 @@ The script downloads the matching Windows Qt and Npcap SDK needed to compile.
 It does not put Npcap or ZeroTier into the release. The app handles helping the
 user install those later.
 
-Your packaged Windows release will be in `dist/`. It includes `GRID0Relay.exe`,
+Your packaged Windows release will be in `dist/`. It includes `GRID0-ofw.exe`,
 the CLI relay, Qt runtime files, licenses, and the buildable source.
 
 ## Linux

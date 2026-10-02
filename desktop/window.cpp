@@ -47,12 +47,12 @@ static void addMacGlass(QWidget *surface, QtLiquidGlass::Material material, doub
 }
 #endif
 Window::Window(bool preview) : previewMode(preview) {
-    setWindowTitle("GRID0 Relay"); resize(740, 720); setMinimumSize(640, 590);
-    auto *appMenu = menuBar()->addMenu("GRID0 Relay");
+    setWindowTitle("GRID0-ofw"); resize(740, 720); setMinimumSize(640, 590);
+    auto *appMenu = menuBar()->addMenu("GRID0-ofw");
     auto *preferencesAction = appMenu->addAction("Settings…");
     preferencesAction->setMenuRole(QAction::PreferencesRole); preferencesAction->setShortcut(QKeySequence::Preferences);
     connect(preferencesAction, &QAction::triggered, this, [this] { selectPage(1); });
-    auto *quit = appMenu->addAction("Quit GRID0 Relay"); quit->setMenuRole(QAction::QuitRole); quit->setShortcut(QKeySequence::Quit);
+    auto *quit = appMenu->addAction("Quit GRID0-ofw"); quit->setMenuRole(QAction::QuitRole); quit->setShortcut(QKeySequence::Quit);
     connect(quit, &QAction::triggered, this, &QWidget::close);
     if (!preview) preferences.load(settings);
     const QString bundled = bundledRelayPath();
@@ -65,7 +65,7 @@ Window::Window(bool preview) : previewMode(preview) {
     logo->setFixedSize(44, 44);
     logo->setAlignment(Qt::AlignCenter);
     brand->addWidget(logo);
-    auto *heading = text("GRID0 Relay"); title(heading, 23); brand->addWidget(heading);
+    auto *heading = text("GRID0-ofw"); title(heading, 23); brand->addWidget(heading);
     brand->addStretch();
     layout->addLayout(brand);
     layout->addWidget(text("Nintendo Switch LAN play over ZeroTier"));
@@ -331,7 +331,7 @@ void Window::checkDependencies() {
     const DependencyStatus state = dependencies.status();
 #ifdef Q_OS_WIN
     if (state.winPcap) {
-        requirements->setText("WinPcap is installed. Remove it before installing Npcap, then reopen GRID0 Relay.");
+        requirements->setText("WinPcap is installed. Remove it before installing Npcap, then reopen GRID0-ofw.");
         setupRequirements->setText("Open Apps & Features…"); setupRequirements->setEnabled(true);
         return;
     }
@@ -364,7 +364,7 @@ void Window::checkDependencies() {
         setupRequirements->setText("Get ZeroTier for Linux…"); setupRequirements->setEnabled(true);
     } else {
         requirements->setText("libpcap is missing. Install your distribution's package "
-            "(libpcap0.8 on Debian and Ubuntu, libpcap on Fedora and Arch), then reopen GRID0 Relay.");
+            "(libpcap0.8 on Debian and Ubuntu, libpcap on Fedora and Arch), then reopen GRID0-ofw.");
         setupRequirements->setText("Install libpcap with your package manager"); setupRequirements->setEnabled(false);
     }
 #else
@@ -376,10 +376,10 @@ void Window::promptForDependencies() {
     const DependencyStatus state = dependencies.status();
 #ifdef Q_OS_WIN
     if (state.winPcap) {
-        QMessageBox box(QMessageBox::Warning, "GRID0 Relay needs Npcap",
-            "WinPcap is installed on this PC. Npcap cannot be installed beside it, and GRID0 Relay "
+        QMessageBox box(QMessageBox::Warning, "GRID0-ofw needs Npcap",
+            "WinPcap is installed on this PC. Npcap cannot be installed beside it, and GRID0-ofw "
             "needs Npcap to see your Switch's traffic.\n\nRemove WinPcap in Apps & Features, then reopen "
-            "GRID0 Relay and it will offer the Npcap installer.", QMessageBox::NoButton, this);
+            "GRID0-ofw and it will offer the Npcap installer.", QMessageBox::NoButton, this);
         auto *open = box.addButton("Open Apps & Features…", QMessageBox::AcceptRole);
         box.addButton("Not now", QMessageBox::RejectRole);
         box.setDefaultButton(open);
@@ -393,7 +393,7 @@ void Window::promptForDependencies() {
     if (!state.npcap) missing << "Npcap";
     const bool several = missing.size() > 1;
     QMessageBox box(QMessageBox::Warning, "Required software missing",
-        "GRID0 Relay cannot start the relay without " + missing.join(" and ") + ".\n\n"
+        "GRID0-ofw cannot start the relay without " + missing.join(" and ") + ".\n\n"
         "ZeroTier carries your Switch's LAN traffic to your friends, and Npcap lets the relay read and "
         "send that traffic on this PC.", QMessageBox::NoButton, this);
     box.setInformativeText("Installing downloads the official installer" + QString(several ? "s" : "") +
@@ -408,7 +408,7 @@ void Window::promptForDependencies() {
 #elif defined(Q_OS_MACOS)
     if (state.zeroTier) return;
     QMessageBox box(QMessageBox::Warning, "ZeroTier is required",
-        "GRID0 Relay cannot start the relay without the ZeroTier client.\n\nZeroTier carries your "
+        "GRID0-ofw cannot start the relay without the ZeroTier client.\n\nZeroTier carries your "
         "Switch's LAN traffic to your friends. macOS already includes libpcap, so nothing else is needed.",
         QMessageBox::NoButton, this);
     auto *download = box.addButton("Get ZeroTier…", QMessageBox::AcceptRole);
@@ -422,12 +422,12 @@ void Window::promptForDependencies() {
     if (!state.zeroTier) missing << "the ZeroTier client";
     if (!state.npcap) missing << "libpcap";
     QMessageBox box(QMessageBox::Warning, "Required software missing",
-        "GRID0 Relay cannot start the relay without " + missing.join(" and ") + ".\n\n"
+        "GRID0-ofw cannot start the relay without " + missing.join(" and ") + ".\n\n"
         "ZeroTier carries your Switch's LAN traffic to your friends, and libpcap lets the relay read and "
         "send that traffic on this computer.", QMessageBox::NoButton, this);
     if (!state.npcap)
         box.setInformativeText("libpcap comes from your distribution: install libpcap0.8 on Debian and "
-            "Ubuntu, or libpcap on Fedora and Arch, then reopen GRID0 Relay.");
+            "Ubuntu, or libpcap on Fedora and Arch, then reopen GRID0-ofw.");
     QPushButton *download = state.zeroTier ? nullptr : box.addButton("Get ZeroTier…", QMessageBox::AcceptRole);
     auto *dismiss = box.addButton(download ? "Not now" : "OK", QMessageBox::RejectRole);
     box.setDefaultButton(download ? download : dismiss);
@@ -439,9 +439,9 @@ void Window::setupDependencies() {
     const DependencyStatus state = dependencies.status();
 #ifdef Q_OS_WIN
     if (state.winPcap) {
-        if (QMessageBox::question(this, "Remove WinPcap", "GRID0 Relay needs Npcap and cannot install it beside WinPcap. Open Apps & Features to remove WinPcap now?") == QMessageBox::Yes) {
+        if (QMessageBox::question(this, "Remove WinPcap", "GRID0-ofw needs Npcap and cannot install it beside WinPcap. Open Apps & Features to remove WinPcap now?") == QMessageBox::Yes) {
             QDesktopServices::openUrl(QUrl("ms-settings:appsfeatures"));
-            QMessageBox::information(this, "Reopen GRID0 Relay", "After removing WinPcap, close and reopen GRID0 Relay. It will then offer the Npcap installer.");
+            QMessageBox::information(this, "Reopen GRID0-ofw", "After removing WinPcap, close and reopen GRID0-ofw. It will then offer the Npcap installer.");
         }
         return;
     }
@@ -449,7 +449,7 @@ void Window::setupDependencies() {
     QStringList missing;
     if (!state.zeroTier) missing << "ZeroTier One";
     if (!state.npcap) missing << "Npcap";
-    const QString prompt = "GRID0 Relay will download the official " + missing.join(" and ") +
+    const QString prompt = "GRID0-ofw will download the official " + missing.join(" and ") +
         " installer" + (missing.size() == 1 ? QString() : "s") +
         ", validate each Windows signature, and start installation. Npcap opens its own installation screen so you can approve its driver terms. Windows administrator permission is required. Continue?";
     if (QMessageBox::question(this, "Install required software", prompt) == QMessageBox::Yes) dependencies.installMissing();

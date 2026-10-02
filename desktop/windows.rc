@@ -10,11 +10,11 @@ BEGIN
   BEGIN
     BLOCK "040904b0"
     BEGIN
-      VALUE "FileDescription", "GRID0 Relay"
-      VALUE "ProductName", "GRID0 Relay"
+      VALUE "FileDescription", "GRID0-ofw"
+      VALUE "ProductName", "GRID0-ofw"
       VALUE "FileVersion", "0.6.10"
       VALUE "ProductVersion", "0.6.10"
-      VALUE "OriginalFilename", "GRID0Relay.exe"
+      VALUE "OriginalFilename", "GRID0-ofw.exe"
     END
   END
   BLOCK "VarFileInfo"

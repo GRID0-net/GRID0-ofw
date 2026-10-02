@@ -89,7 +89,7 @@ struct ContentView: View {
                 .font(.system(size: 30))
                 .foregroundStyle(.tint)
             VStack(alignment: .leading, spacing: 2) {
-                Text("GRID0 Relay")
+                Text("GRID0-ofw")
                     .font(.title2.weight(.semibold))
                 Text("Connect native Switch LAN play through ZeroTier")
                     .foregroundStyle(.secondary)

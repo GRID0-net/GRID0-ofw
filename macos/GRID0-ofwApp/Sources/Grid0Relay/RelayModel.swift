@@ -56,8 +56,8 @@ final class RelayModel: ObservableObject {
 
     func chooseRelay() {
         let panel = NSOpenPanel()
-        panel.title = "Choose GRID0 Relay"
-        panel.message = "Select the GRID0 Relay executable built by CMake."
+        panel.title = "Choose GRID0-ofw"
+        panel.message = "Select the GRID0-ofw executable built by CMake."
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false

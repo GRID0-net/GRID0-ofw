@@ -44,7 +44,7 @@ int zll_npcap_load(char *error, size_t size)
     HMODULE candidate = LoadLibraryExW(path, NULL,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (!candidate) {
-        snprintf(error, size, "Npcap could not be loaded (Windows error %lu). Install or repair Npcap from https://npcap.com, then reopen GRID0 Relay.", GetLastError());
+        snprintf(error, size, "Npcap could not be loaded (Windows error %lu). Install or repair Npcap from https://npcap.com, then reopen GRID0-ofw.", GetLastError());
         return -1;
     }
 #define RESOLVE(name) do { \

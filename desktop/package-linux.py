@@ -35,14 +35,14 @@ QT_PLUGINS = ['platforms/libqxcb.so', 'platforms/libqwayland-generic.so', 'platf
 
 DESKTOP_ENTRY = """[Desktop Entry]
 Type=Application
-Name=GRID0 Relay
+Name=GRID0-ofw
 GenericName=Nintendo Switch LAN play relay
 Comment=Nintendo Switch LAN play over ZeroTier
-Exec=Grid0Relay
+Exec=GRID0-ofw
 Icon=GRID0-ofw
 Categories=Network;Game;
 Terminal=false
-StartupWMClass=Grid0Relay
+StartupWMClass=GRID0-ofw
 """
 
 APPRUN = """#!/bin/sh
@@ -52,7 +52,7 @@ HERE="$(dirname "$(readlink -f "$0")")"
 export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export QT_PLUGIN_PATH="$HERE/usr/plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="$HERE/usr/plugins/platforms"
-exec "$HERE/usr/bin/Grid0Relay" "$@"
+exec "$HERE/usr/bin/GRID0-ofw" "$@"
 """
 
 
@@ -123,7 +123,7 @@ def main():
     parser.add_argument('--qt-plugins', type=Path, help='Qt plugin directory; asked of qtpaths6 when omitted')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
-    binaries = {name: args.build / 'desktop' / name for name in ('Grid0Relay', 'GRID0-ofw', 'GRID0-ofw-supervisor')}
+    binaries = {name: args.build / 'desktop' / name for name in ('GRID0-ofw', 'GRID0-ofw', 'GRID0-ofw-supervisor')}
     for name, path in binaries.items():
         if not path.is_file():
             parser.error(f'{path} is missing. Build with -DZLL_BUILD_GUI=ON first.')
@@ -159,7 +159,7 @@ def main():
     if not (appdir / 'usr/plugins/platforms/libqxcb.so').is_file():
         parser.error('Qt\'s xcb platform plugin is missing; install the Qt 6 GUI packages.')
 
-    libraries = bundle([appdir / 'usr/bin/Grid0Relay'] + bundled_plugins, appdir / 'usr/lib')
+    libraries = bundle([appdir / 'usr/bin/GRID0-ofw'] + bundled_plugins, appdir / 'usr/lib')
     # The relay and its launcher are started by pkexec from outside this image,
     # so what they link against directly must all come from the host. libpcap's
     # own dependencies are the host libpcap's business, not ours.
@@ -178,7 +178,7 @@ def main():
 
     icon = appdir / 'GRID0-ofw.png'
     environment = os.environ | {'QT_QPA_PLATFORM': 'offscreen', 'QT_PLUGIN_PATH': str(plugins)}
-    subprocess.run([str(appdir / 'usr/bin/Grid0Relay'), '--write-icon', str(icon), '256'],
+    subprocess.run([str(appdir / 'usr/bin/GRID0-ofw'), '--write-icon', str(icon), '256'],
                    check=True, env=environment)
     icons = appdir / 'usr/share/icons/hicolor/256x256/apps'
     icons.mkdir(parents=True)

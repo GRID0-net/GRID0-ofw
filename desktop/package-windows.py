@@ -23,7 +23,7 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     subprocess.run([sys.executable, str(root / 'tests/check_windows_entrypoint.py'),
-                    str(args.build / 'desktop/Grid0Relay.exe'),
+                    str(args.build / 'desktop/GRID0-ofw.exe'),
                     '--objdump', args.compiler.replace('g++', 'objdump')], check=True)
     if args.output.exists(): parser.error('Use a fresh output directory; existing packages are never overwritten.')
     if not args.qt_source.is_file(): parser.error('The matching Qt source archive is required.')
@@ -43,8 +43,8 @@ def main():
                      ', '.join(str(directory) for directory in search[:-1]))
     app = args.output / 'GRID0-ofw'
     app.mkdir(parents=True)
-    for name in ['Grid0Relay.exe', 'GRID0-ofw.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
-        packaged = 'GRID0Relay.exe' if name == 'Grid0Relay.exe' else name
+    for name in ['GRID0-ofw.exe', 'GRID0-ofw.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
+        packaged = 'GRID0-ofw.exe' if name == 'GRID0-ofw.exe' else name
         shutil.copy2(args.build / 'desktop' / name, app / packaged)
     for name in ['platforms/qwindows.dll', 'styles/qmodernwindowsstyle.dll'] + (['platforms/qoffscreen.dll'] if args.include_tests else []):
         dest = app / 'plugins' / name

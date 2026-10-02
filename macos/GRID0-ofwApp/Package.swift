@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "Grid0Relay",
+    name: "GRID0-ofw",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Grid0Relay", targets: ["Grid0Relay"])
+        .executable(name: "GRID0-ofw", targets: ["GRID0-ofw"])
     ],
     targets: [
         .executableTarget(
-            name: "Grid0Relay",
-            path: "Sources/Grid0Relay"
+            name: "GRID0-ofw",
+            path: "Sources/GRID0-ofw"
         )
     ],
     swiftLanguageModes: [.v5]
