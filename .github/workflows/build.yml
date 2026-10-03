@@ -153,14 +153,14 @@ jobs:
           & "$package/zll-desktop-tests.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host '== relay version =='
-          & "$package/GRID0-ofw.exe" --version
+          & "$package/GRID0-ofw-cli.exe" --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Without Npcap the relay is meant to fail: it prints its own message
           # and exits 2. Read that from files rather than merging the program's
           # stderr into PowerShell's, which this shell turns into a script error
           # before the check below can run.
           Write-Host '== relay without Npcap: expecting its own error and exit 2 =='
-          $relay = (Resolve-Path "$package/GRID0-ofw.exe").Path
+          $relay = (Resolve-Path "$package/GRID0-ofw-cli.exe").Path
           $run = Start-Process -FilePath $relay -ArgumentList '--list-if' -NoNewWindow -Wait -PassThru `
               -RedirectStandardOutput list-if.out -RedirectStandardError list-if.err
           $log = (Get-Content list-if.out, list-if.err -Raw -ErrorAction SilentlyContinue) -join "`n"
