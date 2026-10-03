@@ -186,7 +186,13 @@ void Preferences::autoSelectOverlayAdapter(const QList<Adapter> &adapters, const
 
 // Picks the Switch-side adapter the same way the overlay adapter is picked:
 // the PC hotspot in Automatic (DHCP) mode, the Wi-Fi adapter otherwise.
+// A saved choice that is still up and fits the current mode is left alone.
 void Preferences::autoSelectLocalAdapter(const QList<Adapter> &adapters) {
+    for (const auto &a : adapters) {
+        if (a.name != localInterface || !a.up || a.overlay) continue;
+        if (dhcp && a.hotspot) return;
+        if (!dhcp && !a.hotspot && (a.wifi || a.name == "en0")) return;
+    }
     for (const auto &a : adapters) {
         if (!a.up || a.overlay) continue;
         if (dhcp && a.hotspot) { localInterface = a.name; return; }
@@ -205,7 +211,7 @@ void Preferences::load(QSettings &s) {
     dnsFranceFirst = s.value("network/dnsFranceFirst", false).toBool();
     const QList<Adapter> current = discoverAdapters();
     autoSelectOverlayAdapter(current);
-    autoSelectLocalAdapter(current);
+    if (localInterface.isEmpty()) autoSelectLocalAdapter(current);
 }
 void Preferences::save(QSettings &s) const {
     s.setValue("network/local", localInterface); s.setValue("network/overlay", overlayInterface);
