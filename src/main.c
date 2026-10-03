@@ -30,7 +30,7 @@ static int report_running_relay(void)
         if (!comm) continue;
         if (fgets(name, sizeof(name), comm)) {
             name[strcspn(name, "\n")] = '\0';
-            if (!strcmp(name, "GRID0-ofw")) {
+            if (!strcmp(name, "GRID0-ofw-cli")) {
                 eprintf("Another GRID0-ofw is already running (PID %ld).\n"
                         "Stop that relay before starting this one; two instances can interfere.\n", pid);
                 found = 1;
@@ -69,7 +69,7 @@ static int acquire_relay_instance(void)
         char path[PROC_PIDPATHINFO_MAXSIZE];
         if (proc_pidpath(pids[i], path, sizeof(path)) <= 0) continue;
         const char *name = strrchr(path, '/');
-        if (name && !strcmp(name + 1, "GRID0-ofw")) {
+        if (name && !strcmp(name + 1, "GRID0-ofw-cli")) {
             eprintf("Another GRID0-ofw is already running (PID %d).\n"
                     "Stop that relay before starting this one; two instances can interfere.\n", pids[i]);
             free(pids);
