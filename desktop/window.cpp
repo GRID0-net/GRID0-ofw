@@ -41,7 +41,6 @@
 static void ensureParentShortcut() {
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString linkPath = QFileInfo(appDir).absolutePath() + "/GRID0-ofw.lnk";
-    if (QFile::exists(linkPath)) return;
     const QString target = QCoreApplication::applicationFilePath();
     CoInitialize(nullptr);
     IShellLinkW *shellLink = nullptr;
@@ -153,16 +152,12 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *autoGroup = new QGroupBox("Windows Hotspot Setup");
     auto *autoLayout = new QVBoxLayout(autoGroup);
     autoSettingsGroup = autoGroup;
-    dnsToggle = new QWidget;
-    auto *dnsRow = new QHBoxLayout(dnsToggle);
-    auto *dnsLabel = new QLabel("Closest 90DNS server:");
+    auto *dnsLabel = new QLabel("90DNS");
     dnsLabel->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
-    dnsRow->addWidget(dnsLabel);
     dnsUsFirst = new QRadioButton("US (207.246.121.77)"); dnsFrFirst = new QRadioButton("France (163.172.141.219)");
     for (auto *r : {dnsUsFirst, dnsFrFirst}) { auto f = r->font(); f.setPointSize(14); f.setWeight(QFont::DemiBold); r->setFont(f); }
     dnsUsFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsFrFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
-    dnsRow->addWidget(dnsUsFirst); dnsRow->addWidget(dnsFrFirst); dnsRow->addStretch();
     group->setObjectName("switchSettings");
     form->setSizeConstraint(QLayout::SetMinimumSize);
     group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -184,7 +179,7 @@ Window::Window(bool preview) : previewMode(preview) {
         form->addWidget(label, row, 0); form->addWidget(pair.second, row++, 1);
     }
     auto *dnsHeader = new QLabel();
-    dnsHeader->setText("DNS (<a href=\"https://gbatemp.net/threads/90dns-dns-server-for-blocking-all-nintendo-servers.516234/\">90dns</a>, optional)");
+    dnsHeader->setText("DNS (<a href=\"https://gbatemp.net/threads/90dns-dns-server-for-blocking-all-nintendo-servers.516234/\">90dns</a>, for an easier setup use 8.8.8.8)");
     dnsHeader->setTextFormat(Qt::RichText);
     dnsHeader->setTextInteractionFlags(Qt::TextBrowserInteraction);
     dnsHeader->setOpenExternalLinks(true);
@@ -219,14 +214,17 @@ Window::Window(bool preview) : previewMode(preview) {
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
     dhcpHint = text("Connect your Switch to this PC's mobile hotspot with Automatic settings.");
-    auto *hotspotRow = new QHBoxLayout;
+    auto *hotspotTopRow = new QHBoxLayout;
     auto *hotspotName = new QLabel("PC Hotspot");
     hotspotState = new QLabel("OFF"); title(hotspotState, 14);
-    hotspotDot = new QLabel("●"); title(hotspotDot, 14);
-    hotspotRow->addWidget(hotspotName);
-    hotspotRow->addWidget(hotspotState);
-    hotspotRow->addWidget(hotspotDot);
-    hotspotRow->addStretch();
+    hotspotDot = new QLabel("●"); title(hotspotDot, 20);
+    hotspotTopRow->addWidget(hotspotName);
+    hotspotTopRow->addWidget(hotspotState);
+    hotspotTopRow->addWidget(hotspotDot);
+    hotspotTopRow->addStretch();
+    hotspotTopRow->addWidget(dnsLabel);
+    hotspotTopRow->addWidget(dnsUsFirst);
+    hotspotTopRow->addWidget(dnsFrFirst);
     hotspotHint = text("");
     { auto f = hotspotHint->font(); f.setPointSize(9); hotspotHint->setFont(f); }
 #ifdef Q_OS_WIN
@@ -247,13 +245,12 @@ Window::Window(bool preview) : previewMode(preview) {
     });
 #endif
     // Automatic mode gets its own boxed section like the manual one.
-    autoLayout->addLayout(hotspotRow);
+    autoLayout->addLayout(hotspotTopRow);
     autoLayout->addWidget(hotspotHint);
 #ifdef Q_OS_WIN
     autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
 #endif
     autoLayout->addWidget(dhcpHint);
-    autoLayout->addWidget(dnsToggle);
     playLayout->addWidget(autoGroup);
     validation = text(""); playLayout->addWidget(validation);
     auto *configure = new QPushButton("Connection settings…"); playLayout->addWidget(configure, 0, Qt::AlignLeft);
