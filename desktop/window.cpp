@@ -276,7 +276,8 @@ void Window::updateHeaderTheme() {
         qApp->setStyleSheet(QString());
     } else if (dark) {
         qApp->setStyleSheet(
-            "QWidget { background-color: #1e1e1e; color: #ffffff; }"
+            "QMainWindow, QDialog { background-color: #1e1e1e; }"
+            "QLabel, QCheckBox, QRadioButton { color: #ffffff; background: transparent; }"
             "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
             "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 6px 14px; }"
             "QPushButton:hover { background-color: #4a4a4a; }"
@@ -286,18 +287,19 @@ void Window::updateHeaderTheme() {
             "QTabBar::tab:selected { background-color: #3a3a3a; color: #ffffff; }"
             "QGroupBox { color: #ffffff; border: 1px solid #555555; border-radius: 6px; margin-top: 12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
-            "QCheckBox, QRadioButton { color: #ffffff; spacing: 8px; }"
+            "QCheckBox, QRadioButton { spacing: 8px; }"
             "QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; }"
             "QCheckBox::indicator:unchecked, QRadioButton::indicator:unchecked { border: 2px solid #888888; border-radius: 3px; background: #2d2d2d; }"
             "QRadioButton::indicator:unchecked { border-radius: 8px; }"
             "QCheckBox::indicator:checked, QRadioButton::indicator:checked { border: 2px solid #2a82da; background: #2a82da; }"
             "QRadioButton::indicator:checked { border-radius: 8px; }"
-            "QLabel { color: #ffffff; }"
+
             "QMenuBar, QMenu { background-color: #2d2d2d; color: #ffffff; }"
         );
     } else {
         qApp->setStyleSheet(
-            "QWidget { background-color: #f0f0f0; color: #000000; }"
+            "QMainWindow, QDialog { background-color: #f0f0f0; }"
+            "QLabel, QCheckBox, QRadioButton { color: #000000; background: transparent; }"
             "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
             "QPushButton { background-color: #e0e0e0; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 6px 14px; }"
             "QPushButton:hover { background-color: #d0d0d0; }"
@@ -307,13 +309,13 @@ void Window::updateHeaderTheme() {
             "QTabBar::tab:selected { background-color: #ffffff; color: #000000; }"
             "QGroupBox { color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; margin-top: 12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
-            "QCheckBox, QRadioButton { color: #000000; spacing: 8px; }"
+            "QCheckBox, QRadioButton { spacing: 8px; }"
             "QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; }"
             "QCheckBox::indicator:unchecked, QRadioButton::indicator:unchecked { border: 2px solid #888888; border-radius: 3px; background: #ffffff; }"
             "QRadioButton::indicator:unchecked { border-radius: 8px; }"
             "QCheckBox::indicator:checked, QRadioButton::indicator:checked { border: 2px solid #2a82da; background: #2a82da; }"
             "QRadioButton::indicator:checked { border-radius: 8px; }"
-            "QLabel { color: #000000; }"
+
             "QMenuBar, QMenu { background-color: #f0f0f0; color: #000000; }"
         );
     }
