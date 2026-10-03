@@ -38,6 +38,18 @@ static QLabel *text(const QString &s, QWidget *parent = nullptr) {
     auto *l = new QLabel(s, parent); l->setWordWrap(true); l->setTextFormat(Qt::PlainText); return l;
 }
 static void title(QLabel *l, int size) { auto f = l->font(); f.setPointSize(size); f.setWeight(QFont::DemiBold); l->setFont(f); }
+// True when the release tag is actually newer, so the updater never offers
+// a downgrade when the branch is ahead of the published releases.
+static bool versionIsNewer(const QString &latest, const QString &current) {
+    const auto lp = latest.split('.');
+    const auto cp = current.split('.');
+    for (int i = 0; i < qMax(lp.size(), cp.size()); i++) {
+        int l = i < lp.size() ? lp[i].toInt() : 0;
+        int c = i < cp.size() ? cp[i].toInt() : 0;
+        if (l != c) return l > c;
+    }
+    return false;
+}
 #ifdef Q_OS_MACOS
 static void addMacGlass(QWidget *surface, QtLiquidGlass::Material material, double radius) {
     // Tests and screenshots use Qt's offscreen platform, which deliberately
@@ -400,14 +412,8 @@ void Window::checkForUpdates() {
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            QString err = reply->errorString();
-            if (err.contains("TLS", Qt::CaseInsensitive)) {
-                QMessageBox::information(this, "Update check",
-                    "Automatic check unavailable (TLS). Opening releases page instead.");
-                QDesktopServices::openUrl(QUrl("https://github.com/GRID0-net/GRID0-ofw/releases"));
-            } else {
-                QMessageBox::warning(this, "Update check", QString("Could not check for updates: %1").arg(err));
-            }
+            QMessageBox::warning(this, "Update check",
+                QString("Could not check for updates: %1").arg(reply->errorString()));
             return;
         }
         auto doc = QJsonDocument::fromJson(reply->readAll());
@@ -416,14 +422,16 @@ void Window::checkForUpdates() {
             QMessageBox::warning(this, "Update check", "Could not parse release info.");
             return;
         }
-#ifndef LANPLAY_VERSION
-#define LANPLAY_VERSION "GRID0-ofw-0.6.10"
-#endif
         QString current = QString::fromLatin1(LANPLAY_VERSION);
         QString currentTag = current.section('-', 1);
         QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
         if (currentTag == latestTag) {
             QMessageBox::information(this, "Update check", QString("You are on the latest version (%1).").arg(current));
+            return;
+        }
+        if (!versionIsNewer(latestTag, currentTag)) {
+            QMessageBox::information(this, "Update check",
+                QString("No newer release available (you have %1, latest release is %2).").arg(current, tag));
             return;
         }
         auto btn = QMessageBox::question(this, "Update available",

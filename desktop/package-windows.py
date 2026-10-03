@@ -46,7 +46,7 @@ def main():
     for name in ['GRID0-ofw.exe', 'GRID0-ofw-cli.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
         packaged = name
         shutil.copy2(args.build / 'desktop' / name, app / packaged)
-    for name in ['platforms/qwindows.dll', 'styles/qmodernwindowsstyle.dll'] + (['platforms/qoffscreen.dll'] if args.include_tests else []):
+    for name in ['platforms/qwindows.dll', 'styles/qmodernwindowsstyle.dll', 'tls/qschannelbackend.dll'] + (['platforms/qoffscreen.dll'] if args.include_tests else []):
         dest = app / 'plugins' / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(args.qt / 'plugins' / name, dest)

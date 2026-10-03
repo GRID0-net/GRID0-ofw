@@ -44,7 +44,7 @@ int grid0OfwMain(int argc, char **argv) {
     
     QApplication app(argc, argv);
     startupLog("QApplication created");
-    app.setOrganizationName("GRID0-ofw"); app.setApplicationName("GRID0-ofw"); app.setApplicationVersion("0.6.10");
+    app.setOrganizationName("GRID0-ofw"); app.setApplicationName("GRID0-ofw"); app.setApplicationVersion("2.0.0");
 #ifdef Q_OS_WIN
     // Qt's Windows 11 style supports system light/dark and high-contrast themes.
     if (QStyleFactory::keys().contains("windows11", Qt::CaseInsensitive)) app.setStyle("windows11");
