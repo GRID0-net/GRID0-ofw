@@ -907,9 +907,7 @@ int lan_play_init(struct lan_play *lan_play)
     for (size_t i = 0; i < sizeof(game_ports) / sizeof(game_ports[0]); ++i) {
         ret = native_udp_guard_reserve(lan_play->udp_guard, game_ports[i]);
         if (ret != 0) {
-            native_udp_guard_close(lan_play->udp_guard);
-            lan_play->udp_guard = NULL;
-            RETURN_ERR(lan_play, "Cannot reserve ZeroTier UDP/%u: %s. Check for another application using this port.",
+            LLOG(LLOG_WARNING, "Could not reserve UDP/%u (%s). Another app may be using it, continuing without guard on this port.",
                 game_ports[i], uv_strerror(ret));
         }
     }
