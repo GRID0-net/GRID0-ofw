@@ -290,6 +290,8 @@ int parse_arguments(int argc, char **argv)
             options.discover_switch = false;
         } else if (!strcmp(arg, "--dhcp")) {
             options.dhcp_server = true;
+        } else if (!strcmp(arg, "--dns-france-first")) {
+            options.dns_france_first = true;
         } else if (!strcmp(arg, "--broadcast")) {
             options.broadcast = true;
             options.relay_server_addr = "255.255.255.255:11451";
@@ -374,6 +376,7 @@ void print_help(const char *name)
         "        [--capture-prefix <path>] save five packet traces, including game payloads\n"
         "        [--no-discover-switch] disable automatic local Switch ARP discovery\n"
         "        [--dhcp] run a DHCP server for Automatic/DHCP Switches (Nintendo devices only)\n"
+        "        [--dns-france-first] list the France 90DNS server before the US one\n"
         "        [--pmtu <pmtu>]\n"
         "        [--socks5-server-addr <addr>]\n"
         "        [--rpc <address>]\n"

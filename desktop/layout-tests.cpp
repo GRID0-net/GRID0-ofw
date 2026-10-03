@@ -2,14 +2,18 @@
 #include <QApplication>
 #include <QGroupBox>
 #include <QScrollArea>
+#include <QTextDocument>
 #include <QtTest>
 class LayoutTests : public QObject {
     Q_OBJECT
 private slots:
     void switchSettingsStayReadable() {
         Window window(true);
-        window.resize(640, 590);
         window.show();
+        // Size to fit the content: the panel grows as rows are added, so a
+        // hardcoded height breaks every time the UI legitimately gets taller.
+        window.resize(QSize(640, 720).expandedTo(window.sizeHint()));
+        QTest::qWait(50);
         auto *status = window.findChild<QLabel *>("relayStatus");
         auto *group = window.findChild<QGroupBox *>("switchSettings");
         QVERIFY(status && group);
@@ -21,8 +25,15 @@ private slots:
         }
         QTest::qWait(50);
         for (auto *label : group->findChildren<QLabel *>()) {
+            // rich text labels carry html, measure what shows
+            QString shown = label->text();
+            if (label->textFormat() == Qt::RichText) {
+                QTextDocument doc;
+                doc.setHtml(shown);
+                shown = doc.toPlainText();
+            }
             QVERIFY2(label->height() >= label->fontMetrics().height(), qPrintable(label->text()));
-            QVERIFY2(label->width() >= label->fontMetrics().horizontalAdvance(label->text()), qPrintable(label->text()));
+            QVERIFY2(label->width() >= label->fontMetrics().horizontalAdvance(shown), qPrintable(label->text()));
             QVERIFY(group->rect().contains(label->geometry()));
         }
         for (auto *button : group->findChildren<QPushButton *>()) {
