@@ -36,6 +36,9 @@
 #ifdef Q_OS_WIN
 #include <shobjidl.h>
 #include <shlguid.h>
+extern "C" {
+#include "win-firewall.h"
+}
 // The release package puts everything in an app/ child folder. Create a
 // shortcut in the parent folder so the user has a clean entry point.
 static void ensureParentShortcut() {
@@ -224,6 +227,17 @@ Window::Window(bool preview) : previewMode(preview) {
     hotspotStateRow->addStretch();
     hotspotGrid->addWidget(hotspotName, 0, 0);
     hotspotGrid->addLayout(hotspotStateRow, 0, 1);
+#ifdef Q_OS_WIN
+    auto *fwName = new QLabel("DHCP Guard");
+    fwState = new QLabel("OFF"); title(fwState, 14);
+    fwDot = new QLabel("●"); title(fwDot, 20);
+    auto *fwStateRow = new QHBoxLayout;
+    fwStateRow->addWidget(fwState);
+    fwStateRow->addWidget(fwDot);
+    fwStateRow->addStretch();
+    hotspotGrid->addWidget(fwName, 0, 2);
+    hotspotGrid->addLayout(fwStateRow, 0, 3);
+#endif
     auto *dnsOptionRow = new QHBoxLayout;
     dnsOptionRow->addWidget(dnsUsFirst);
     dnsOptionRow->addWidget(dnsFrFirst);
@@ -636,6 +650,11 @@ void Window::updateState() {
             hotspotState->setText(hotspotOn ? "ON" : "OFF");
             hotspotDot->setStyleSheet(hotspotOn ? "color: #27ae60;" : "color: #e74c3c;");
 #ifdef Q_OS_WIN
+            if (fwState && fwDot) {
+                const bool fwOn = winfw_hotspot_dhcp_block_active();
+                fwState->setText(fwOn ? "ON" : "OFF");
+                fwDot->setStyleSheet(fwOn ? "color: #27ae60;" : "color: #e74c3c;");
+            }
             hotspotHint->setText(hotspotOn
                 ? "Connect your Switch to it."
                 : "Turn it on with the button below, then connect your Switch to it.");

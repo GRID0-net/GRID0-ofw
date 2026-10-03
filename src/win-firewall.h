@@ -10,6 +10,9 @@
  * affected by the firewall. Requires admin (the relay already needs it
  * for Npcap though). */
 void winfw_set_hotspot_dhcp_block(bool enable);
+/* True if the block rule currently exists. */
+bool winfw_hotspot_dhcp_block_active(void);
 #else
 static inline void winfw_set_hotspot_dhcp_block(bool enable) { (void)enable; }
+static inline bool winfw_hotspot_dhcp_block_active(void) { return false; }
 #endif
