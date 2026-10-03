@@ -155,9 +155,11 @@ Window::Window(bool preview) : previewMode(preview) {
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
     }
-    auto *dnsNotice1 = text("Set closest one as Primary DNS, the other as Secondary DNS");
+    auto *dnsNotice1 = text("Set closest one as Primary DNS");
+    auto *dnsNotice2 = text("Set the other as Secondary DNS");
+    auto *dnsTextCol = new QVBoxLayout; dnsTextCol->addWidget(dnsNotice1); dnsTextCol->addWidget(dnsNotice2);
     auto *copy = new QPushButton("Copy Switch settings");
-    auto *copyRow = new QHBoxLayout; copyRow->addWidget(dnsNotice1); copyRow->addWidget(copy); copyRow->addStretch();
+    auto *copyRow = new QHBoxLayout; copyRow->addLayout(dnsTextCol); copyRow->addWidget(copy); copyRow->addStretch();
     form->addLayout(copyRow, 3, 0, 1, 4); playLayout->addWidget(group);
 #ifdef Q_OS_MACOS
     // A QFrame gives the native effect an independent host. QGroupBox uses a
