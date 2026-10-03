@@ -7,6 +7,7 @@
 #include <QDesktopServices>
 #include <QJsonDocument>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include <QNetworkAccessManager>
@@ -383,6 +384,9 @@ void Window::checkForUpdates() {
             QMessageBox::warning(this, "Update check", "Could not parse release info.");
             return;
         }
+#ifndef LANPLAY_VERSION
+#define LANPLAY_VERSION "GRID0-ofw-0.6.10"
+#endif
         QString current = QString::fromLatin1(LANPLAY_VERSION);
         QString currentTag = current.section('-', 1);
         QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
