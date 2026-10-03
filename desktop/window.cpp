@@ -105,7 +105,7 @@ Window::Window(bool preview) : previewMode(preview) {
     // uses square browser/editor tabs, inappropriate for this utility.
     tabs = new QTabWidget; layout->addWidget(tabs);
 
-    auto *play = new QWidget; auto *playLayout = new QVBoxLayout(play); playLayout->setContentsMargins(16, 24, 16, 12); playLayout->setSpacing(18);
+    auto *play = new QWidget; auto *playLayout = new QVBoxLayout(play); playLayout->setContentsMargins(16, 24, 16, 12); playLayout->setSpacing(8);
     auto *summary = new QFrame; summary->setObjectName("relaySummary");
     auto *summaryLayout = new QVBoxLayout(summary); summaryLayout->setContentsMargins(16, 14, 16, 14); summaryLayout->setSpacing(8);
     status = text("Ready to connect"); status->setObjectName("relayStatus"); title(status, 18); summaryLayout->addWidget(status);
@@ -122,6 +122,9 @@ Window::Window(bool preview) : previewMode(preview) {
     summaryLayout->addLayout(actions); playLayout->addWidget(summary);
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
+    auto *autoGroup = new QGroupBox("Windows Hotspot Setup");
+    auto *autoLayout = new QVBoxLayout(autoGroup);
+    autoSettingsGroup = autoGroup;
     dnsToggle = new QWidget;
     auto *dnsRow = new QHBoxLayout(dnsToggle);
     auto *dnsLabel = new QLabel("Closest 90DNS server:");
@@ -131,7 +134,6 @@ Window::Window(bool preview) : previewMode(preview) {
     dnsUsFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsFrFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsRow->addWidget(dnsUsFirst); dnsRow->addWidget(dnsFrFirst); dnsRow->addStretch();
-    playLayout->addWidget(dnsToggle);
     group->setObjectName("switchSettings");
     form->setSizeConstraint(QLayout::SetMinimumSize);
     group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
@@ -188,13 +190,10 @@ Window::Window(bool preview) : previewMode(preview) {
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
     dhcpHint = text("Set your Switch to Automatic and connect it to this PC's mobile hotspot. When the relay starts it runs a DHCP server on the hotspot that gives each Nintendo console a ZeroTier-subnet address, nothing to type in.");
-    playLayout->addWidget(dhcpHint);
     hotspotStatus = text(""); hotspotStatus->setWordWrap(true);
-    playLayout->addWidget(hotspotStatus);
 #ifdef Q_OS_WIN
     hotspotSetup = new QPushButton("Set up PC hotspot…");
     hotspotSetup->setToolTip("Opens Windows' Mobile hotspot settings. Turn the hotspot on, then come back and the relay picks it up on its own.");
-    playLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
     connect(hotspotSetup, &QPushButton::clicked, this, [this] {
         QDesktopServices::openUrl(QUrl("ms-settings:network-mobilehotspot"));
         // The user flips the toggle in Settings; poll until the new adapter shows up.
@@ -209,6 +208,14 @@ Window::Window(bool preview) : previewMode(preview) {
         timer->start(3000);
     });
 #endif
+    // Automatic mode gets its own boxed section like the manual one.
+    autoLayout->addWidget(hotspotStatus);
+#ifdef Q_OS_WIN
+    autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
+#endif
+    autoLayout->addWidget(dhcpHint);
+    autoLayout->addWidget(dnsToggle);
+    playLayout->addWidget(autoGroup);
     validation = text(""); playLayout->addWidget(validation);
     auto *configure = new QPushButton("Connection settings…"); playLayout->addWidget(configure, 0, Qt::AlignLeft);
     connect(configure, &QPushButton::clicked, this, [this] { selectPage(1, 0); });
@@ -573,26 +580,26 @@ void Window::updateState() {
     validation->setText(error);
     validation->setVisible(!error.isEmpty());
     switchSettingsGroup->setVisible(!preferences.dhcp);
-    dnsToggle->setVisible(preferences.dhcp);
+    autoSettingsGroup->setVisible(preferences.dhcp);
     settingsHint->setVisible(!preferences.dhcp);
-    dhcpHint->setVisible(preferences.dhcp);
     QString hotspotIp;
     for (const auto &ad : adapters) if (ad.hotspot && ad.up) { hotspotIp = ad.ip; break; }
+    const bool hotspotOn = !hotspotIp.isEmpty();
     if (hotspotStatus) {
-        hotspotStatus->setVisible(preferences.dhcp);
         if (preferences.dhcp) {
 #ifdef Q_OS_WIN
-            hotspotStatus->setText(hotspotIp.isEmpty()
-                ? "PC hotspot: off. Turn it on with the button below, then connect your Switch to it."
-                : ("PC hotspot: on (" + hotspotIp + "), connect your Switch to it."));
+            hotspotStatus->setText(hotspotOn
+                ? ("PC hotspot: on (" + hotspotIp + "), connect your Switch to it.")
+                : "PC hotspot: off. Turn it on with the button below, then connect your Switch to it.");
 #else
-            hotspotStatus->setText(hotspotIp.isEmpty()
-                ? "Automatic mode works best with a PC-hosted hotspot."
-                : ("Hotspot network detected (" + hotspotIp + ")."));
+            hotspotStatus->setText(hotspotOn
+                ? ("Hotspot network detected (" + hotspotIp + ").")
+                : "Automatic mode works best with a PC-hosted hotspot.");
 #endif
+            hotspotStatus->setStyleSheet(hotspotOn ? "color: #27ae60;" : "color: #e74c3c;");
         }
     }
-    if (hotspotSetup) hotspotSetup->setVisible(preferences.dhcp && hotspotIp.isEmpty());
+    if (hotspotSetup) hotspotSetup->setVisible(!hotspotOn);
     if (!relay.busy()) status->setText(error.isEmpty() ? "Ready to connect" : "Finish connection setup");
     start->setEnabled(!relay.busy() && error.isEmpty()); stop->setEnabled(relay.busy() && relay.state() != RelayController::Stopping);
     stop->setText(relay.state() == RelayController::Authorizing ? "Cancel" : "Stop relay");
