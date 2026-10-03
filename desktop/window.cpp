@@ -378,7 +378,14 @@ void Window::checkForUpdates() {
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            QMessageBox::warning(this, "Update check", QString("Could not check for updates: %1").arg(reply->errorString()));
+            QString err = reply->errorString();
+            if (err.contains("TLS", Qt::CaseInsensitive)) {
+                QMessageBox::information(this, "Update check",
+                    "Automatic check unavailable (TLS). Opening releases page instead.");
+                QDesktopServices::openUrl(QUrl("https://github.com/GRID0-net/GRID0-ofw/releases"));
+            } else {
+                QMessageBox::warning(this, "Update check", QString("Could not check for updates: %1").arg(err));
+            }
             return;
         }
         auto doc = QJsonDocument::fromJson(reply->readAll());
