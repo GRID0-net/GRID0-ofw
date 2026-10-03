@@ -10,6 +10,24 @@ import zipfile
 import sys
 from pathlib import Path
 from windows_pe import PE, audit, is_system
+import struct
+
+
+def _write_relative_lnk(link_path: Path, target_rel: str, workdir_rel: str):
+    """Write a Windows .lnk with a relative target path."""
+    header = bytearray(76)
+    struct.pack_into('<I', header, 0, 76)
+    header[4:20] = bytes.fromhex('0102140000000000C000000000000046')
+    struct.pack_into('<I', header, 20, 0x98)
+    struct.pack_into('<I', header, 24, 0x80)
+    struct.pack_into('<I', header, 60, 1)
+    def enc(s: str) -> bytes:
+        e = s.encode('utf-16le') + b'\x00\x00'
+        return struct.pack('<H', len(s) + 1) + e
+    with open(link_path, 'wb') as f:
+        f.write(header)
+        f.write(enc(target_rel))
+        f.write(enc(workdir_rel))
 
 
 def main():
@@ -98,16 +116,14 @@ def main():
     # Create a relative-path shortcut in the parent folder so the user can
     # launch the app without digging into app/. Windows resolves the relative
     # target against the shortcut's own location.
-    if sys.platform == 'win32':
-        pkg_root = args.output / 'GRID0-ofw'
-        link_path = pkg_root / 'GRID0-ofw.lnk'
-        ps = (
-            "$s = New-Object -ComObject WScript.Shell; "
-            f"$l = $s.CreateShortcut('{link_path}'); "
-            "$l.TargetPath = 'app\\GRID0-ofw.exe'; "
-            "$l.WorkingDirectory = 'app'; $l.Save()"
-        )
-        subprocess.run(['powershell', '-NoProfile', '-Command', ps], check=True)
+    # Create a relative-path shortcut in the parent folder so the user can
+    # launch the app without digging into app/. Windows resolves the relative
+    # target against the shortcut's own location. We write the .lnk binary
+    # directly because WScript.Shell stores a machine-specific ID list instead
+    # of a portable relative path.
+    pkg_root = args.output / 'GRID0-ofw'
+    link_path = pkg_root / 'GRID0-ofw.lnk'
+    _write_relative_lnk(link_path, 'app\\GRID0-ofw.exe', 'app')
     archive = args.output / 'GRID0-ofw-Windows-x64.zip'
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zip:
         for path in sorted((args.output / 'GRID0-ofw').rglob('*')):
