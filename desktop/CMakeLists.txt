@@ -11,8 +11,7 @@ target_compile_features(zll_desktop_model PUBLIC cxx_std_17)
 target_link_libraries(zll_desktop_model PUBLIC Qt6::Widgets Qt6::Network)
 target_include_directories(zll_desktop_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(GRID0-ofw WIN32 MACOSX_BUNDLE main.cpp window.cpp resources.qrc ../src/win-firewall.c)
-target_include_directories(GRID0-ofw PRIVATE ../src)
+add_executable(GRID0-ofw WIN32 MACOSX_BUNDLE main.cpp window.cpp resources.qrc)
 target_link_libraries(GRID0-ofw PRIVATE zll_desktop_model)
 set_target_properties(GRID0-ofw PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "GRID0-ofw"
@@ -66,15 +65,13 @@ if(WIN32)
     set_target_properties(zll-test-relay PROPERTIES AUTOMOC OFF)
     add_dependencies(zll-desktop-tests zll-test-relay)
     # Exercise the same WinMain and UI code without UAC on a CI runner.
-    add_executable(zll-startup-test WIN32 main.cpp window.cpp windows-entry.cpp ../src/win-firewall.c)
-    target_include_directories(zll-startup-test PRIVATE ../src)
-    set_target_properties(zll-startup-test PROPERTIES QT_NO_ENTRYPOINT ON)
+    add_executable(zll-startup-test WIN32 main.cpp window.cpp windows-entry.cpp)
+        set_target_properties(zll-startup-test PROPERTIES QT_NO_ENTRYPOINT ON)
     target_link_libraries(zll-startup-test PRIVATE zll_desktop_model)
 endif()
 add_test(NAME desktop COMMAND zll-desktop-tests)
 
-add_executable(zll-layout-tests layout-tests.cpp window.cpp ../src/win-firewall.c)
-target_include_directories(zll-layout-tests PRIVATE ../src)
+add_executable(zll-layout-tests layout-tests.cpp window.cpp)
 target_link_libraries(zll-layout-tests PRIVATE zll_desktop_model Qt6::Test)
 if(APPLE)
     target_link_libraries(zll-layout-tests PRIVATE QtLiquidGlass)
