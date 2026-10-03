@@ -186,7 +186,7 @@ Window::Window(bool preview) : previewMode(preview) {
     connect(copy, &QPushButton::clicked, this, [this] {
         QApplication::clipboard()->setText("IP address: " + address->text() + "\nSubnet mask: " + mask->text() + "\nGateway: " + gatewayValue->text() + "\nAmerica DNS: " + dnsAmerica->text() + "\nEurope DNS: " + dnsEurope->text());
     });
-    settingsHint = text("Use the exact subnet mask shown here. After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
+    settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
     dhcpHint = text("Set your Switch to Automatic and connect it to this PC's mobile hotspot. When the relay starts it runs a DHCP server on the hotspot that gives each Nintendo console a ZeroTier-subnet address, nothing to type in.");
     playLayout->addWidget(dhcpHint);
