@@ -103,9 +103,9 @@ def main():
         link_path = pkg_root / 'GRID0-ofw.lnk'
         ps = (
             "$s = New-Object -ComObject WScript.Shell; "
-            f"$l = $s.CreateShortcut(r'{link_path}'); "
-            "$l.TargetPath = r'app\\GRID0-ofw.exe'; "
-            "$l.WorkingDirectory = r'app'; $l.Save()"
+            f"$l = $s.CreateShortcut('{link_path}'); "
+            "$l.TargetPath = 'app\\GRID0-ofw.exe'; "
+            "$l.WorkingDirectory = 'app'; $l.Save()"
         )
         subprocess.run(['powershell', '-NoProfile', '-Command', ps], check=True)
     archive = args.output / 'GRID0-ofw-Windows-x64.zip'
