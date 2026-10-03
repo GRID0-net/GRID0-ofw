@@ -310,18 +310,24 @@ void Window::updateHeaderTheme() {
     pal.setColor(QPalette::Text, dark ? Qt::white : Qt::black);
     pal.setColor(QPalette::ButtonText, dark ? Qt::white : Qt::black);
     qApp->setPalette(pal);
+    QColor tabBg = dark ? QColor("#1e1e1e") : QColor("#f0f0f0");
+    for (int i = 0; i < tabs->count(); ++i) {
+        QWidget *page = tabs->widget(i);
+        QPalette pp = page->palette();
+        pp.setColor(QPalette::Window, tabBg);
+        page->setPalette(pp);
+        page->setAutoFillBackground(true);
+    }
     if (t == 0) {
         qApp->setStyleSheet(QString());
     } else if (dark) {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #1e1e1e; }"
             "QTabWidget::pane { background-color: #1e1e1e; }"
-            "QStackedWidget > QWidget { background-color: #1e1e1e; }"
+            
             "QLabel { color: #ffffff; }"
                         "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px 8px; }"
-            "QComboBox::drop-down { border: none; width: 24px; }"
-            "QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #ffffff; width: 0; height: 0; margin-right: 8px; }"
             "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; selection-background-color: #3a3a3a; border: 1px solid #555555; }"
             "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 6px 14px; outline: none; }"
             "QPushButton:hover { background-color: #4a4a4a; }"
@@ -340,12 +346,10 @@ void Window::updateHeaderTheme() {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #f0f0f0; }"
             "QTabWidget::pane { background-color: #f0f0f0; }"
-            "QStackedWidget > QWidget { background-color: #f0f0f0; }"
+            
             "QLabel { color: #000000; }"
                         "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px 8px; }"
-            "QComboBox::drop-down { border: none; width: 24px; }"
-            "QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #000000; width: 0; height: 0; margin-right: 8px; }"
             "QComboBox QAbstractItemView { background-color: #ffffff; color: #000000; selection-background-color: #e0e0e0; border: 1px solid #aaaaaa; }"
             "QPushButton { background-color: #e0e0e0; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 6px 14px; }"
             "QPushButton:hover { background-color: #d0d0d0; }"
