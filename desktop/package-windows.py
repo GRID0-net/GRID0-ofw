@@ -96,13 +96,6 @@ def main():
     checksums = {str(p.relative_to(app)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(app.rglob('*')) if p.is_file()}
     (app / 'SHA256SUMS.txt').write_text(''.join(f'{digest}  {name}\n' for name, digest in checksums.items()), encoding='utf-8')
     archive = args.output / 'GRID0-ofw-Windows-x64.zip'
-    # Create a shortcut in the parent folder pointing to app/GRID0-ofw.exe.
-    # The app rewrites it with the absolute path on first run.
-    shortcut = args.output / 'GRID0-ofw' / 'GRID0-ofw.lnk'
-    subprocess.run(['powershell', '-NoProfile', '-Command',
-        f"$s = New-Object -ComObject WScript.Shell; $l = $s.CreateShortcut('{shortcut}'); "
-        f"$l.TargetPath = 'app\\GRID0-ofw.exe'; $l.WorkingDirectory = 'app'; $l.Save()"],
-        check=True)
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zip:
         for path in sorted((args.output / 'GRID0-ofw').rglob('*')):
             if path.is_file(): zip.write(path, path.relative_to(args.output))
