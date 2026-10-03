@@ -290,7 +290,7 @@ Window::Window(bool preview) : previewMode(preview) {
     diagnostics = new QCheckBox("Detailed traffic diagnostics"); capture = new QCheckBox("Save packet captures for the next relay session"); discovery = new QCheckBox("Find the Switch automatically");
     av->addWidget(diagnostics); av->addWidget(capture); av->addWidget(discovery);
     auto *themeRow = new QHBoxLayout; themeRow->addWidget(new QLabel("Appearance:"));
-    theme = new QComboBox; theme->addItems({"System", "Dark", "Light"}); theme->setCurrentIndex(preferences.theme);
+    theme = new QComboBox; theme->addItems({"System", "Dark", "Light", "Special"}); theme->setCurrentIndex(preferences.theme);
     themeRow->addWidget(theme); themeRow->addStretch(); av->addLayout(themeRow);
     auto *updateRow = new QHBoxLayout; auto *checkUpdates = new QPushButton("Check for updates"); updateRow->addWidget(checkUpdates); updateRow->addStretch(); av->addLayout(updateRow);
     connect(checkUpdates, &QPushButton::clicked, this, [this] { checkForUpdates(); });
@@ -461,9 +461,39 @@ void Window::updateHeaderTheme() {
             "QMenuBar, QMenu { background-color: #f0f0f0; color: #000000; }"
         );
     }
-    const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
+    if (t == 3) {
+        QPalette pal = systemPalette;
+        pal.setColor(QPalette::Window, QColor(0x32, 0x00, 0x04));
+        pal.setColor(QPalette::Base, QColor(0x4a, 0x0a, 0x0e));
+        pal.setColor(QPalette::WindowText, Qt::white);
+        pal.setColor(QPalette::Text, Qt::white);
+        pal.setColor(QPalette::ButtonText, Qt::white);
+        qApp->setPalette(pal);
+        qApp->setStyleSheet(
+            "QMainWindow, QDialog { background-color: #320004; }"
+            "QTabWidget::pane { background-color: #320004; }"
+            "QLabel { color: #ffffff; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #4a0a0e; color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; padding: 4px; }"
+            "QComboBox { background-color: #4a0a0e; color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; padding: 4px 8px; }"
+            "QComboBox QAbstractItemView { background-color: #4a0a0e; color: #ffffff; selection-background-color: #5a0e12; border: 1px solid #7a1e24; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #7a1e24; }"
+            "QComboBox::down-arrow { image: url(:/branding/combo-arrow-white.png); width: 12px; height: 12px; }"
+            "QPushButton { background-color: #4a0a0e; color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; padding: 6px 14px; outline: none; }"
+            "QPushButton:hover { background-color: #5a0e12; }"
+            "QPushButton:pressed { background-color: #320004; }"
+            "QPushButton:disabled { background-color: #2a0203; color: #885555; border: 1px solid #5a1a1e; }"
+            "QTabWidget::pane { border: 1px solid #7a1e24; background-color: #320004; }"
+            "QTabBar::tab { background-color: #320004; color: #cc9999; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
+            "QTabBar::tab:selected { background-color: #5a0e12; color: #ffffff; }"
+            "QGroupBox { color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; margin-top: 12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+            "QMenuBar, QMenu { background-color: #4a0a0e; color: #ffffff; }"
+        );
+    }
+    const bool useDarkAssets = dark || t == 3;
+    const QString path = useDarkAssets ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
     headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
-    headerOfw->setStyleSheet(dark ? "color: #cccccc; background: transparent;" : "color: #333333; background: transparent;");
+    headerOfw->setStyleSheet(useDarkAssets ? "color: #cccccc; background: transparent;" : "color: #333333; background: transparent;");
 }
 void Window::checkForUpdates(bool quiet) {
     auto *manager = new QNetworkAccessManager(this);
