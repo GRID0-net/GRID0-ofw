@@ -41,7 +41,7 @@ def main():
     if not any((directory / 'libstdc++-6.dll').is_file() for directory in search[:-1]):
         parser.error('Cannot locate the selected MinGW compiler runtime (libstdc++-6.dll). Checked: ' +
                      ', '.join(str(directory) for directory in search[:-1]))
-    app = args.output / 'GRID0-ofw'
+    app = args.output / 'GRID0-ofw' / 'app'
     app.mkdir(parents=True)
     for name in ['GRID0-ofw.exe', 'GRID0-ofw-cli.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
         packaged = name
