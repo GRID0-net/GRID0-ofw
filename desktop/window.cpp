@@ -203,7 +203,7 @@ Window::Window(bool preview) : previewMode(preview) {
     });
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
-    dhcpHint = text("Connect your Switch to this PC's mobile hotspot with Automatic settings.");
+    dhcpHint = text("Connect your Switch to this PC's mobile hotspot\nwith Automatic settings.");
     auto *hotspotTopRow = new QHBoxLayout;
     auto *hotspotName = new QLabel("PC Hotspot");
     hotspotState = new QLabel("OFF"); title(hotspotState, 14);
