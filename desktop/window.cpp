@@ -5,6 +5,10 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QJsonDocument>
+#include <QNetworkRequest>
+#include <QNetworkReply>
+#include <QNetworkAccessManager>
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -226,9 +230,7 @@ Window::Window(bool preview) : previewMode(preview) {
     theme = new QComboBox; theme->addItems({"System", "Dark", "Light"}); theme->setCurrentIndex(preferences.theme);
     themeRow->addWidget(theme); themeRow->addStretch(); av->addLayout(themeRow);
     auto *updateRow = new QHBoxLayout; auto *checkUpdates = new QPushButton("Check for updates"); updateRow->addWidget(checkUpdates); updateRow->addStretch(); av->addLayout(updateRow);
-    connect(checkUpdates, &QPushButton::clicked, this, [this] {
-        QDesktopServices::openUrl(QUrl("https://github.com/GRID0-net/GRID0-ofw/releases"));
-    });
+    connect(checkUpdates, &QPushButton::clicked, this, [this] { checkForUpdates(); });
     av->addWidget(text("Packet captures include game payloads and network addresses. Reports stay on this computer until you choose to share them."));
     auto *binaryRow = new QHBoxLayout; executable = new QLineEdit; executable->setPlaceholderText("Bundled relay (recommended)"); executable->setClearButtonEnabled(true); auto *choose = new QPushButton("Choose…");
     binaryRow->addWidget(executable); binaryRow->addWidget(choose); av->addWidget(text("Relay executable")); av->addLayout(binaryRow);
@@ -362,6 +364,95 @@ void Window::updateHeaderTheme() {
     const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
     headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
     headerOfw->setStyleSheet(dark ? "color: white; background: transparent;" : "color: black; background: transparent;");
+}
+void Window::checkForUpdates() {
+    auto *manager = new QNetworkAccessManager(this);
+    QNetworkRequest req(QUrl("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest"));
+    req.setHeader(QNetworkRequest::UserAgentHeader, "GRID0-ofw");
+    auto *reply = manager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            QMessageBox::warning(this, "Update check", QString("Could not check for updates: %1").arg(reply->errorString()));
+            return;
+        }
+        auto doc = QJsonDocument::fromJson(reply->readAll());
+        QString tag = doc["tag_name"].toString();
+        if (tag.isEmpty()) {
+            QMessageBox::warning(this, "Update check", "Could not parse release info.");
+            return;
+        }
+        QString current = QStringLiteral(LANPLAY_VERSION);
+        QString currentTag = current.section('-', 1);
+        QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
+        if (currentTag == latestTag) {
+            QMessageBox::information(this, "Update check", QString("You are on the latest version (%1).").arg(current));
+            return;
+        }
+        auto btn = QMessageBox::question(this, "Update available",
+            QString("Version %1 is available (you have %2). Download and install?").arg(tag, current),
+            QMessageBox::Yes | QMessageBox::No);
+        if (btn != QMessageBox::Yes) return;
+        QString assetName;
+#ifdef Q_OS_WIN
+        assetName = "Windows";
+#elif defined(Q_OS_MACOS)
+#ifdef Q_PROCESSOR_ARM_64
+        assetName = "macOS-arm64";
+#else
+        assetName = "macOS-x64";
+#endif
+#else
+        assetName = "AppImage";
+#endif
+        QString dlUrl;
+        for (auto a : doc["assets"].toArray()) {
+            QString name = a.toObject()["name"].toString();
+            if (name.contains(assetName)) { dlUrl = a.toObject()["browser_download_url"].toString(); break; }
+        }
+        if (dlUrl.isEmpty()) {
+            QDesktopServices::openUrl(QUrl("https://github.com/GRID0-net/GRID0-ofw/releases"));
+            return;
+        }
+        QMessageBox::information(this, "Update", "Downloading update. The app will close and replace itself.");
+        auto *dlManager = new QNetworkAccessManager(this);
+        auto *dlReply = dlManager->get(QNetworkRequest(QUrl(dlUrl)));
+        connect(dlReply, &QNetworkReply::finished, this, [this, dlReply, tag]() {
+            dlReply->deleteLater();
+            if (dlReply->error() != QNetworkReply::NoError) {
+                QMessageBox::warning(this, "Update", "Download failed.");
+                return;
+            }
+            QString tmp = QDir::temp().filePath("grid0-update.zip");
+            QFile f(tmp);
+            if (!f.open(QIODevice::WriteOnly) || f.write(dlReply->readAll()) < 0) {
+                QMessageBox::warning(this, "Update", "Could not save update.");
+                return;
+            }
+            f.close();
+            QString appDir = QCoreApplication::applicationDirPath();
+            QString extractDir = QDir::temp().filePath("grid0-update-extract");
+            QDir().mkpath(extractDir);
+#ifdef Q_OS_WIN
+            QString script = QDir::temp().filePath("grid0-update.bat");
+            QFile s(script);
+            if (s.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream ts(&s);
+                ts << "@echo off\n";
+                ts << "timeout /t 2 /nobreak >nul\n";
+                ts << QString("powershell -command \"Expand-Archive -Path '%1' -DestinationPath '%2' -Force\"\n").arg(tmp, extractDir);
+                ts << QString("xcopy \"%1\\*\" \"%2\" /E /Y\n").arg(extractDir, appDir);
+                ts << QString("start \"\" \"%1\\GRID0-ofw.exe\"\n").arg(appDir);
+                ts << "del \"%~f0\"\n";
+                s.close();
+            }
+            QProcess::startDetached(script, {});
+#else
+            QDesktopServices::openUrl(QUrl::fromLocalFile(tmp));
+#endif
+            qApp->quit();
+        });
+    });
 }
 void Window::selectPage(int page, int sub) { tabs->setCurrentIndex(page); settingsTabs->setCurrentIndex(sub); }
 void Window::refreshAdapters() {
