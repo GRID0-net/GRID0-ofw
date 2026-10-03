@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QNetworkRequest>
 #include <QNetworkReply>
 #include <QNetworkAccessManager>
@@ -382,7 +383,7 @@ void Window::checkForUpdates() {
             QMessageBox::warning(this, "Update check", "Could not parse release info.");
             return;
         }
-        QString current = QStringLiteral(LANPLAY_VERSION);
+        QString current = QString::fromLatin1(LANPLAY_VERSION);
         QString currentTag = current.section('-', 1);
         QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
         if (currentTag == latestTag) {
