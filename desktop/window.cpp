@@ -42,11 +42,11 @@ static void ensureParentShortcut() {
     const QString linkPath = QFileInfo(appDir).absolutePath() + "/GRID0-ofw.lnk";
     const QString target = QCoreApplication::applicationFilePath();
     // Use PowerShell to create the .lnk; MinGW's shobjidl.h is broken.
-    QString ps = QString("powershell -NoProfile -Command \"$s = New-Object -ComObject WScript.Shell; "
-                         "$l = $s.CreateShortcut('%1'); $l.TargetPath = '%2'; "
-                         "$l.WorkingDirectory = '%3'; $l.Save()")
-                     .arg(linkPath, target, appDir);
-    QProcess::execute(ps);
+    const QString cmd = QString("$s = New-Object -ComObject WScript.Shell; "
+                                "$l = $s.CreateShortcut('%1'); $l.TargetPath = '%2'; "
+                                "$l.WorkingDirectory = '%3'; $l.Save()")
+                            .arg(linkPath, target, appDir);
+    QProcess::execute("powershell", {"-NoProfile", "-Command", cmd});
 }
 #endif
 
@@ -473,19 +473,19 @@ void Window::updateHeaderTheme() {
             "QMainWindow, QDialog { background-color: #320004; }"
             "QTabWidget::pane { background-color: #320004; }"
             "QLabel { color: #ffffff; }"
-            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #4a0a0e; color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; padding: 4px; }"
-            "QComboBox { background-color: #4a0a0e; color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; padding: 4px 8px; }"
-            "QComboBox QAbstractItemView { background-color: #4a0a0e; color: #ffffff; selection-background-color: #5a0e12; border: 1px solid #7a1e24; }"
-            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #7a1e24; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #4a0a0e; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px; }"
+            "QComboBox { background-color: #4a0a0e; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px 8px; }"
+            "QComboBox QAbstractItemView { background-color: #4a0a0e; color: #ffffff; selection-background-color: #5a0e12; border: 1px solid #1e0002; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #1e0002; }"
             "QComboBox::down-arrow { image: url(:/branding/combo-arrow-white.png); width: 12px; height: 12px; }"
-            "QPushButton { background-color: #4a0a0e; color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; padding: 6px 14px; outline: none; }"
+            "QPushButton { background-color: #4a0a0e; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 6px 14px; outline: none; }"
             "QPushButton:hover { background-color: #5a0e12; }"
             "QPushButton:pressed { background-color: #320004; }"
             "QPushButton:disabled { background-color: #2a0203; color: #885555; border: 1px solid #5a1a1e; }"
-            "QTabWidget::pane { border: 1px solid #7a1e24; background-color: #320004; }"
+            "QTabWidget::pane { border: 1px solid #1e0002; background-color: #320004; }"
             "QTabBar::tab { background-color: #320004; color: #cc9999; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
             "QTabBar::tab:selected { background-color: #5a0e12; color: #ffffff; }"
-            "QGroupBox { color: #ffffff; border: 1px solid #7a1e24; border-radius: 6px; margin-top: 12px; }"
+            "QGroupBox { color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; margin-top: 12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
             "QMenuBar, QMenu { background-color: #4a0a0e; color: #ffffff; }"
         );
