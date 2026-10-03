@@ -203,33 +203,23 @@ Window::Window(bool preview) : previewMode(preview) {
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
     dhcpHint = text("Connect your Switch to this PC's mobile hotspot with Automatic settings.");
-    auto *hotspotGrid = new QGridLayout;
+    auto *hotspotTopRow = new QHBoxLayout;
     auto *hotspotName = new QLabel("PC Hotspot");
     hotspotState = new QLabel("OFF"); title(hotspotState, 14);
     hotspotDot = new QLabel("●"); title(hotspotDot, 20);
-    auto *hotspotStateRow = new QHBoxLayout;
-    hotspotStateRow->addWidget(hotspotState);
-    hotspotStateRow->addWidget(hotspotDot);
-    hotspotStateRow->addStretch();
-    hotspotGrid->addWidget(hotspotName, 0, 0);
-    hotspotGrid->addLayout(hotspotStateRow, 0, 1);
+    hotspotTopRow->addWidget(hotspotName);
+    hotspotTopRow->addWidget(hotspotState);
+    hotspotTopRow->addWidget(hotspotDot);
+    hotspotTopRow->addSpacing(24);
 #ifdef Q_OS_WIN
     auto *fwName = new QLabel("DHCP Guard");
     fwState = new QLabel("OFF"); title(fwState, 14);
     fwDot = new QLabel("●"); title(fwDot, 20);
-    auto *fwStateRow = new QHBoxLayout;
-    fwStateRow->addWidget(fwState);
-    fwStateRow->addWidget(fwDot);
-    fwStateRow->addStretch();
-    hotspotGrid->addWidget(fwName, 0, 2);
-    hotspotGrid->addLayout(fwStateRow, 0, 3);
+    hotspotTopRow->addWidget(fwName);
+    hotspotTopRow->addWidget(fwState);
+    hotspotTopRow->addWidget(fwDot);
 #endif
-    auto *dnsOptionRow = new QHBoxLayout;
-    dnsOptionRow->addWidget(dnsUsFirst);
-    dnsOptionRow->addWidget(dnsFrFirst);
-    dnsOptionRow->addStretch();
-    hotspotGrid->addWidget(dnsLabel, 1, 0);
-    hotspotGrid->addLayout(dnsOptionRow, 1, 1);
+    hotspotTopRow->addStretch();
     hotspotHint = text("");
     { auto f = hotspotHint->font(); f.setPointSize(9); hotspotHint->setFont(f); }
 #ifdef Q_OS_WIN
@@ -250,12 +240,18 @@ Window::Window(bool preview) : previewMode(preview) {
     });
 #endif
     // Automatic mode gets its own boxed section like the manual one.
-    autoLayout->addLayout(hotspotGrid);
+    autoLayout->addLayout(hotspotTopRow);
     autoLayout->addWidget(hotspotHint);
 #ifdef Q_OS_WIN
     autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
 #endif
     autoLayout->addWidget(dhcpHint);
+    auto *dnsBottomRow = new QHBoxLayout;
+    dnsBottomRow->addWidget(dnsLabel);
+    dnsBottomRow->addWidget(dnsUsFirst);
+    dnsBottomRow->addWidget(dnsFrFirst);
+    dnsBottomRow->addStretch();
+    autoLayout->addLayout(dnsBottomRow);
     playLayout->addWidget(autoGroup);
     validation = text(""); playLayout->addWidget(validation);
     auto *configure = new QPushButton("Connection settings…"); playLayout->addWidget(configure, 0, Qt::AlignLeft);
@@ -381,6 +377,14 @@ Window::Window(bool preview) : previewMode(preview) {
     if (!previewMode) QTimer::singleShot(2000, this, [this] { checkForUpdates(true); });
 #ifdef Q_OS_WIN
     if (!previewMode) ensureParentShortcut();
+    if (!previewMode) {
+        auto *hotspotTimer = new QTimer(this);
+        connect(hotspotTimer, &QTimer::timeout, this, [this] {
+            refreshAdapters();
+            updateState();
+        });
+        hotspotTimer->start(5000);
+    }
 #endif
 }
 void Window::updateHeaderTheme() {
