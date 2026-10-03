@@ -190,13 +190,14 @@ void Preferences::load(QSettings &s) {
     diagnostics = s.value("advanced/diagnostics", false).toBool();
     capture = s.value("advanced/capture", false).toBool(); discover = s.value("advanced/discover", true).toBool();
     dhcp = s.value("network/dhcp", false).toBool();
+    theme = s.value("appearance/theme", 0).toInt();
     autoSelectOverlayAdapter(discoverAdapters());
 }
 void Preferences::save(QSettings &s) const {
     s.setValue("network/local", localInterface); s.setValue("network/overlay", overlayInterface);
     s.setValue("network/gateway", gateway); s.setValue("advanced/relay", relayPath);
     s.setValue("advanced/diagnostics", diagnostics); s.setValue("advanced/capture", capture);
-    s.setValue("network/dhcp", dhcp); s.sync();
+    s.setValue("network/dhcp", dhcp); s.setValue("appearance/theme", theme); s.sync();
     s.setValue("advanced/discover", discover); s.sync();
 }
 Adapter Preferences::overlay(const QList<Adapter> &all) const {
