@@ -17,7 +17,7 @@ class Window : public QMainWindow {
 public:
     explicit Window(bool preview = false);
     void selectPage(int page, int settingsPage = 0);
-    void checkForUpdates();
+    void checkForUpdates(bool quiet = false);
 protected:
     void closeEvent(QCloseEvent *) override;
 private:

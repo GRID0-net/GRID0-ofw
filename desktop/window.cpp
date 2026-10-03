@@ -115,14 +115,13 @@ Window::Window(bool preview) : previewMode(preview) {
     // back to a rectangular bezel rather than the standard macOS button.
     start = new QPushButton("Start relay"); start->setAutoDefault(true); start->setDefault(true);
     stop = new QPushButton("Stop relay");
-    actions->addWidget(start); actions->addWidget(stop); actions->addStretch(); summaryLayout->addLayout(actions); playLayout->addWidget(summary);
+    manualMode = new QRadioButton("Manual"); autoMode = new QRadioButton("Automatic");
+    manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode");
+    actions->addWidget(start); actions->addWidget(stop); actions->addStretch();
+    actions->addWidget(manualMode); actions->addWidget(autoMode);
+    summaryLayout->addLayout(actions); playLayout->addWidget(summary);
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
-    auto *modeRow = new QHBoxLayout;
-    manualMode = new QRadioButton("Manual IP settings"); autoMode = new QRadioButton("Automatic (DHCP)");
-    manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode");
-    modeRow->addWidget(manualMode); modeRow->addWidget(autoMode); modeRow->addStretch();
-    playLayout->addLayout(modeRow);
     dnsToggle = new QWidget;
     auto *dnsRow = new QHBoxLayout(dnsToggle);
     auto *dnsLabel = new QLabel("Closest 90DNS server:");
@@ -213,7 +212,6 @@ Window::Window(bool preview) : previewMode(preview) {
     validation = text(""); playLayout->addWidget(validation);
     auto *configure = new QPushButton("Connection settings…"); playLayout->addWidget(configure, 0, Qt::AlignLeft);
     connect(configure, &QPushButton::clicked, this, [this] { selectPage(1, 0); });
-    playLayout->addStretch();
     playLayout->setSizeConstraint(QLayout::SetMinimumSize);
     auto *playScroll = new QScrollArea; playScroll->setWidgetResizable(true);
     playScroll->setFrameShape(QFrame::NoFrame); playScroll->setWidget(play);
@@ -330,6 +328,8 @@ Window::Window(bool preview) : previewMode(preview) {
     // Missing ZeroTier or Npcap is reported once the window is up, not silently
     // left in Settings: without them Start cannot work at all.
     if (!previewMode) QTimer::singleShot(0, this, [this] { checkDependencies(); promptForDependencies(); });
+    // Check for updates on launch. Quiet: only asks if an update is actually available.
+    if (!previewMode) QTimer::singleShot(2000, this, [this] { checkForUpdates(true); });
 }
 void Window::updateHeaderTheme() {
     int t = preferences.theme;
@@ -364,7 +364,7 @@ void Window::updateHeaderTheme() {
             "QPushButton:hover { background-color: #4a4a4a; }"
             "QPushButton:pressed { background-color: #2a2a2a; }"
             "QPushButton:disabled { background-color: #252525; color: #777777; border: 1px solid #444444; }"
-            "QTabWidget::pane { border: 1px solid #555555; background-color: #1e1e1e; border-radius: 6px; }"
+            "QTabWidget::pane { border: 1px solid #555555; background-color: #1e1e1e; }"
             "QTabBar::tab { background-color: #1e1e1e; color: #aaaaaa; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
             "QTabBar::tab:selected { background-color: #3a3a3a; color: #ffffff; }"
             "QGroupBox { color: #ffffff; border: 1px solid #555555; border-radius: 6px; margin-top: 12px; }"
@@ -395,7 +395,7 @@ void Window::updateHeaderTheme() {
             "QPushButton:hover { background-color: #d0d0d0; }"
             "QPushButton:pressed { background-color: #c0c0c0; }"
             "QPushButton:disabled { background-color: #f5f5f5; color: #aaaaaa; border: 1px solid #cccccc; }"
-            "QTabWidget::pane { border: 1px solid #aaaaaa; background-color: #f0f0f0; border-radius: 6px; }"
+            "QTabWidget::pane { border: 1px solid #aaaaaa; background-color: #f0f0f0; }"
             "QTabBar::tab { background-color: #f0f0f0; color: #666666; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
             "QTabBar::tab:selected { background-color: #ffffff; color: #000000; }"
             "QGroupBox { color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; margin-top: 12px; }"
@@ -409,33 +409,33 @@ void Window::updateHeaderTheme() {
     headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
     headerOfw->setStyleSheet(dark ? "color: #cccccc; background: transparent;" : "color: #333333; background: transparent;");
 }
-void Window::checkForUpdates() {
+void Window::checkForUpdates(bool quiet) {
     auto *manager = new QNetworkAccessManager(this);
     QNetworkRequest req(QUrl("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest"));
     req.setHeader(QNetworkRequest::UserAgentHeader, "GRID0-ofw");
     auto *reply = manager->get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, quiet]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            QMessageBox::warning(this, "Update check",
+            if (!quiet) QMessageBox::warning(this, "Update check",
                 QString("Could not check for updates: %1").arg(reply->errorString()));
             return;
         }
         auto doc = QJsonDocument::fromJson(reply->readAll());
         QString tag = doc["tag_name"].toString();
         if (tag.isEmpty()) {
-            QMessageBox::warning(this, "Update check", "Could not parse release info.");
+            if (!quiet) QMessageBox::warning(this, "Update check", "Could not parse release info.");
             return;
         }
         QString current = QString::fromLatin1(LANPLAY_VERSION);
         QString currentTag = current.section('-', 1);
         QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
         if (currentTag == latestTag) {
-            QMessageBox::information(this, "Update check", QString("You are on the latest version (%1).").arg(current));
+            if (!quiet) QMessageBox::information(this, "Update check", QString("You are on the latest version (%1).").arg(current));
             return;
         }
         if (!versionIsNewer(latestTag, currentTag)) {
-            QMessageBox::information(this, "Update check",
+            if (!quiet) QMessageBox::information(this, "Update check",
                 QString("No newer release available (you have %1, latest release is %2).").arg(current, tag));
             return;
         }
@@ -569,7 +569,9 @@ void Window::updateState() {
     auto a = preferences.overlay(adapters);
     address->setText(a.ip.isEmpty() ? "—" : a.ip); mask->setText(a.mask.isEmpty() ? "—" : a.mask);
     gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "—" : a.gateway) : preferences.gateway);
-    auto error = preferences.validate(adapters); validation->setText(error);
+    auto error = preferences.validate(adapters);
+    validation->setText(error);
+    validation->setVisible(!error.isEmpty());
     switchSettingsGroup->setVisible(!preferences.dhcp);
     dnsToggle->setVisible(preferences.dhcp);
     settingsHint->setVisible(!preferences.dhcp);
