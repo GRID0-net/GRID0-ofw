@@ -23,7 +23,6 @@
 #include <QUrl>
 #include <QGridLayout>
 #include <QGuiApplication>
-#include <QStyleHints>
 #include <QScrollArea>
 #ifdef Q_OS_MACOS
 #include <QtLiquidGlass/QtLiquidGlass.h>
@@ -260,7 +259,8 @@ Window::Window(bool preview) : previewMode(preview) {
 }
 void Window::updateHeaderTheme() {
     int t = preferences.theme;
-    bool dark = t == 1 || (t == 0 && QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark);
+    const bool systemDark = QGuiApplication::palette().color(QPalette::Window).lightness() < 128;
+    bool dark = t == 1 || (t == 0 && systemDark);
     const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
     headerText->setPixmap(QPixmap(path).scaledToHeight(36, Qt::SmoothTransformation));
 }
