@@ -304,6 +304,12 @@ void Window::updateHeaderTheme() {
     const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
     headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
     headerOfw->setStyleSheet(dark ? "color: white;" : "color: black;");
+    // Force all widgets to repolish with the new palette
+    for (QWidget *w : qApp->allWidgets()) {
+        w->style()->unpolish(w);
+        w->style()->polish(w);
+        w->update();
+    }
 }
 void Window::selectPage(int page, int sub) { tabs->setCurrentIndex(page); settingsTabs->setCurrentIndex(sub); }
 void Window::refreshAdapters() {
