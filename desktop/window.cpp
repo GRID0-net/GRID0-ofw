@@ -267,49 +267,44 @@ void Window::updateHeaderTheme() {
     int t = preferences.theme;
     const bool systemDark = QGuiApplication::palette().color(QPalette::Window).lightness() < 128;
     bool dark = t == 1 || (t == 0 && systemDark);
-    // Apply the actual theme palette with complete color sets
-    if (dark) {
-        QPalette p;
-        p.setColor(QPalette::Window, QColor(30, 30, 30));
-        p.setColor(QPalette::WindowText, Qt::white);
-        p.setColor(QPalette::Base, QColor(45, 45, 45));
-        p.setColor(QPalette::AlternateBase, QColor(60, 60, 60));
-        p.setColor(QPalette::Text, Qt::white);
-        p.setColor(QPalette::Button, QColor(53, 53, 53));
-        p.setColor(QPalette::ButtonText, Qt::white);
-        p.setColor(QPalette::BrightText, Qt::white);
-        p.setColor(QPalette::Highlight, QColor(42, 130, 218));
-        p.setColor(QPalette::HighlightedText, Qt::white);
-        p.setColor(QPalette::ToolTipBase, QColor(45, 45, 45));
-        p.setColor(QPalette::ToolTipText, Qt::white);
-        p.setColor(QPalette::Link, QColor(42, 130, 218));
-        qApp->setPalette(p);
+    if (t == 0) {
+        qApp->setStyleSheet(QString());
+    } else if (dark) {
+        qApp->setStyleSheet(
+            "QWidget { background-color: #1e1e1e; color: #ffffff; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; }"
+            "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; padding: 5px 12px; }"
+            "QPushButton:hover { background-color: #4a4a4a; }"
+            "QPushButton:pressed { background-color: #2a2a2a; }"
+            "QTabWidget::pane { border: 1px solid #555555; background-color: #1e1e1e; }"
+            "QTabBar::tab { background-color: #2d2d2d; color: #ffffff; padding: 8px 16px; }"
+            "QTabBar::tab:selected { background-color: #1e1e1e; }"
+            "QGroupBox { color: #ffffff; border: 1px solid #555555; margin-top: 12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+            "QCheckBox, QRadioButton { color: #ffffff; }"
+            "QLabel { color: #ffffff; }"
+            "QMenuBar, QMenu { background-color: #2d2d2d; color: #ffffff; }"
+        );
     } else {
-        QPalette p;
-        p.setColor(QPalette::Window, QColor(240, 240, 240));
-        p.setColor(QPalette::WindowText, Qt::black);
-        p.setColor(QPalette::Base, Qt::white);
-        p.setColor(QPalette::AlternateBase, QColor(245, 245, 245));
-        p.setColor(QPalette::Text, Qt::black);
-        p.setColor(QPalette::Button, QColor(240, 240, 240));
-        p.setColor(QPalette::ButtonText, Qt::black);
-        p.setColor(QPalette::BrightText, Qt::black);
-        p.setColor(QPalette::Highlight, QColor(42, 130, 218));
-        p.setColor(QPalette::HighlightedText, Qt::white);
-        p.setColor(QPalette::ToolTipBase, Qt::white);
-        p.setColor(QPalette::ToolTipText, Qt::black);
-        p.setColor(QPalette::Link, QColor(0, 0, 255));
-        qApp->setPalette(p);
+        qApp->setStyleSheet(
+            "QWidget { background-color: #f0f0f0; color: #000000; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; }"
+            "QPushButton { background-color: #e0e0e0; color: #000000; border: 1px solid #aaaaaa; padding: 5px 12px; }"
+            "QPushButton:hover { background-color: #d0d0d0; }"
+            "QPushButton:pressed { background-color: #c0c0c0; }"
+            "QTabWidget::pane { border: 1px solid #aaaaaa; background-color: #f0f0f0; }"
+            "QTabBar::tab { background-color: #e0e0e0; color: #000000; padding: 8px 16px; }"
+            "QTabBar::tab:selected { background-color: #f0f0f0; }"
+            "QGroupBox { color: #000000; border: 1px solid #aaaaaa; margin-top: 12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+            "QCheckBox, QRadioButton { color: #000000; }"
+            "QLabel { color: #000000; }"
+            "QMenuBar, QMenu { background-color: #f0f0f0; color: #000000; }"
+        );
     }
     const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
     headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
-    headerOfw->setStyleSheet(dark ? "color: white;" : "color: black;");
-    // Force all widgets to repolish with the new palette
-    for (QWidget *w : qApp->allWidgets()) {
-        w->style()->unpolish(w);
-        w->style()->polish(w);
-        w->update();
-    }
+    headerOfw->setStyleSheet(dark ? "color: white; background: transparent;" : "color: black; background: transparent;");
 }
 void Window::selectPage(int page, int sub) { tabs->setCurrentIndex(page); settingsTabs->setCurrentIndex(sub); }
 void Window::refreshAdapters() {
