@@ -27,6 +27,7 @@ private:
     void checkDependencies();
     void promptForDependencies();
     void setupDependencies();
+    void updateHeaderTheme();
     Preferences preferences;
     QList<Adapter> adapters;
     RelayController relay;
@@ -36,6 +37,8 @@ private:
     QComboBox *local, *overlay;
     QLineEdit *gateway, *executable;
     QCheckBox *diagnostics, *capture, *discovery;
+    QComboBox *theme;
+    QLabel *headerIcon, *headerText;
     QRadioButton *manualMode, *autoMode;
     QGroupBox *switchSettingsGroup;
     QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *validation, *settingsHint, *dhcpHint;
