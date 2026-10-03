@@ -140,6 +140,7 @@ Window::Window(bool preview) : previewMode(preview) {
     switchSettingsGroup = group;
     auto *autoGroup = new QGroupBox("Windows Hotspot Setup");
     auto *autoLayout = new QVBoxLayout(autoGroup);
+    autoLayout->setContentsMargins(18, 22, 18, 18);
     autoSettingsGroup = autoGroup;
     auto *dnsLabel = new QLabel("90DNS");
     dnsLabel->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
@@ -245,6 +246,7 @@ Window::Window(bool preview) : previewMode(preview) {
 #ifdef Q_OS_WIN
     autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
 #endif
+    autoLayout->addSpacing(8);
     autoLayout->addWidget(dhcpHint);
     auto *dnsBottomRow = new QHBoxLayout;
     dnsBottomRow->addWidget(dnsLabel);
@@ -649,8 +651,8 @@ void Window::updateState() {
                 fwDot->setStyleSheet(fwOn ? "color: #27ae60;" : "color: #e74c3c;");
             }
             hotspotHint->setText(hotspotOn
-                ? "Connect your Switch to it."
-                : "Turn it on with the button below, then connect your Switch to it.");
+                ? "Start the relay then connect your Switch to the hotspot."
+                : "Turn it on with the button below, start the relay, then connect your Switch to the hotspot on Automatic settings.");
 #else
             hotspotHint->setText(hotspotOn
                 ? "Hotspot network detected."
