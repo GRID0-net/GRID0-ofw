@@ -65,7 +65,7 @@ static void addMacGlass(QWidget *surface, QtLiquidGlass::Material material, doub
 }
 #endif
 Window::Window(bool preview) : previewMode(preview) {
-    setWindowTitle("GRID0-ofw"); resize(740, 720); setMinimumSize(640, 590);
+    setWindowTitle(QString("GRID0-ofw %1").arg(QString::fromLatin1(LANPLAY_VERSION).section('-', -1))); resize(740, 720); setMinimumSize(640, 590);
     auto *appMenu = menuBar()->addMenu("GRID0-ofw");
     auto *preferencesAction = appMenu->addAction("Settings…");
     preferencesAction->setMenuRole(QAction::PreferencesRole); preferencesAction->setShortcut(QKeySequence::Preferences);
