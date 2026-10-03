@@ -159,6 +159,7 @@ Window::Window(bool preview) : previewMode(preview) {
     dnsLabel->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsRow->addWidget(dnsLabel);
     dnsUsFirst = new QRadioButton("US (207.246.121.77)"); dnsFrFirst = new QRadioButton("France (163.172.141.219)");
+    for (auto *r : {dnsUsFirst, dnsFrFirst}) { auto f = r->font(); f.setPointSize(14); f.setWeight(QFont::DemiBold); r->setFont(f); }
     dnsUsFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsFrFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     dnsRow->addWidget(dnsUsFirst); dnsRow->addWidget(dnsFrFirst); dnsRow->addStretch();
