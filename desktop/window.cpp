@@ -35,9 +35,6 @@
 #endif
 #ifdef Q_OS_WIN
 #include <QProcess>
-extern "C" {
-#include "win-firewall.h"
-}
 // The release package puts everything in an app/ child folder. Create a
 // shortcut in the parent folder so the user has a clean entry point.
 static void ensureParentShortcut() {
@@ -640,7 +637,10 @@ void Window::updateState() {
             hotspotDot->setStyleSheet(hotspotOn ? "color: #27ae60;" : "color: #e74c3c;");
 #ifdef Q_OS_WIN
             if (fwState && fwDot) {
-                const bool fwOn = winfw_hotspot_dhcp_block_active();
+                QProcess netsh;
+                netsh.start("netsh", {"advfirewall", "firewall", "show", "rule", "name=GRID0 - block hotspot DHCP"});
+                netsh.waitForFinished(5000);
+                const bool fwOn = netsh.readAllStandardOutput().contains("GRID0 - block hotspot DHCP");
                 fwState->setText(fwOn ? "ON" : "OFF");
                 fwDot->setStyleSheet(fwOn ? "color: #27ae60;" : "color: #e74c3c;");
             }
