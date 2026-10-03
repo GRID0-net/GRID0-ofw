@@ -2,5 +2,8 @@
     <qresource prefix="/branding">
         <file alias="grid0-app-icon.png">resources/grid0-app-icon.png</file>
         <file alias="grid0-logo.png">resources/grid0-logo.png</file>
+        <file alias="alpha.png">resources/alpha.png</file>
+        <file alias="beta.png">resources/beta.png</file>
     </qresource>
 </RCC>
+
