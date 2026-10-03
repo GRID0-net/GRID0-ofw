@@ -315,7 +315,8 @@ void Window::updateHeaderTheme() {
     } else if (dark) {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #1e1e1e; }"
-            "QTabWidget > QWidget { background-color: #1e1e1e; }"
+            "QTabWidget::pane { background-color: #1e1e1e; }"
+            "QStackedWidget > QWidget { background-color: #1e1e1e; }"
             "QLabel { color: #ffffff; }"
                         "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px 8px; }"
@@ -338,7 +339,8 @@ void Window::updateHeaderTheme() {
     } else {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #f0f0f0; }"
-            "QTabWidget > QWidget { background-color: #f0f0f0; }"
+            "QTabWidget::pane { background-color: #f0f0f0; }"
+            "QStackedWidget > QWidget { background-color: #f0f0f0; }"
             "QLabel { color: #000000; }"
                         "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px 8px; }"
