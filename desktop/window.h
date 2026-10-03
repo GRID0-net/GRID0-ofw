@@ -38,7 +38,7 @@ private:
     QLineEdit *gateway, *executable;
     QCheckBox *diagnostics, *capture, *discovery;
     QComboBox *theme;
-    QLabel *headerIcon, *headerText;
+    QLabel *headerIcon, *headerText, *headerOfw;
     QRadioButton *manualMode, *autoMode;
     QGroupBox *switchSettingsGroup;
     QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *validation, *settingsHint, *dhcpHint;
