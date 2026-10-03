@@ -33,6 +33,34 @@
 #ifdef Q_OS_MACOS
 #include <QtLiquidGlass/QtLiquidGlass.h>
 #endif
+#ifdef Q_OS_WIN
+#include <shobjidl.h>
+#include <shlguid.h>
+// The release package puts everything in an app/ child folder. Create a
+// shortcut in the parent folder so the user has a clean entry point.
+static void ensureParentShortcut() {
+    const QString appDir = QCoreApplication::applicationDirPath();
+    const QString linkPath = QFileInfo(appDir).absolutePath() + "/GRID0-ofw.lnk";
+    if (QFile::exists(linkPath)) return;
+    const QString target = QCoreApplication::applicationFilePath();
+    CoInitialize(nullptr);
+    IShellLinkW *shellLink = nullptr;
+    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                   IID_IShellLinkW, (void **)&shellLink))) {
+        shellLink->SetPath((wchar_t *)target.utf16());
+        shellLink->SetWorkingDirectory((wchar_t *)appDir.utf16());
+        shellLink->SetDescription(L"GRID0-ofw");
+        shellLink->SetIconLocation((wchar_t *)target.utf16(), 0);
+        IPersistFile *persistFile = nullptr;
+        if (SUCCEEDED(shellLink->QueryInterface(IID_IPersistFile, (void **)&persistFile))) {
+            persistFile->Save((wchar_t *)linkPath.utf16(), TRUE);
+            persistFile->Release();
+        }
+        shellLink->Release();
+    }
+    CoUninitialize();
+}
+#endif
 
 static QLabel *text(const QString &s, QWidget *parent = nullptr) {
     auto *l = new QLabel(s, parent); l->setWordWrap(true); l->setTextFormat(Qt::PlainText); return l;
@@ -337,6 +365,9 @@ Window::Window(bool preview) : previewMode(preview) {
     if (!previewMode) QTimer::singleShot(0, this, [this] { checkDependencies(); promptForDependencies(); });
     // Check for updates on launch. Quiet: only asks if an update is actually available.
     if (!previewMode) QTimer::singleShot(2000, this, [this] { checkForUpdates(true); });
+#ifdef Q_OS_WIN
+    if (!previewMode) ensureParentShortcut();
+#endif
 }
 void Window::updateHeaderTheme() {
     int t = preferences.theme;
@@ -516,12 +547,13 @@ void Window::checkForUpdates(bool quiet) {
                 ts << "  echo Extraction failed. > \"%APPDIR%\\grid0-update-failed.txt\"\n";
                 ts << "  exit /b 1\n";
                 ts << ")\n";
-                // The release zip nests the app in one top-level folder. Lift its contents up.
-                ts << "for /d %%D in (\"%APPDIR%\\*\") do if exist \"%%D\\GRID0-ofw.exe\" (\n";
-                ts << "  xcopy \"%%D\\*\" \"%APPDIR%\\\" /E /Y /Q\n";
-                ts << "  rmdir /s /q \"%%D\"\n";
-                ts << ")\n";
+                // The release zip nests the app under GRID0-ofw/app. Find the exe
+                // wherever it landed and lift its folder contents up.
+                ts << "powershell -NoProfile -Command \"$exe = Get-ChildItem -Path '%APPDIR%' -Recurse -Filter 'GRID0-ofw.exe' | Select-Object -First 1; if ($exe -and $exe.DirectoryName -ne '%APPDIR%') { Copy-Item ($exe.DirectoryName + '\\*') '%APPDIR%' -Recurse -Force; Remove-Item $exe.DirectoryName -Recurse -Force }\"\n";
+                ts << "if exist \"%APPDIR%\\GRID0-ofw\" rmdir /s /q \"%APPDIR%\\GRID0-ofw\"\n";
                 ts << "del \"%APPDIR%\\grid0-update.zip\"\n";
+                // Replace the parent-folder shortcut too; the new app recreates it on launch.
+                ts << "del \"%APPDIR%\\..\\GRID0-ofw.lnk\" 2>nul\n";
                 ts << "start \"\" \"%APPDIR%\\GRID0-ofw.exe\"\n";
                 ts << "del \"%~f0\"\n";
                 s.close();
