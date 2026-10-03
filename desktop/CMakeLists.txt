@@ -2,6 +2,10 @@ find_package(Qt6 6.4 REQUIRED COMPONENTS Widgets Network Test)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+# The updater compares this against release tags, so the GUI and its tests
+# must see the real project version, not a hardcoded fallback.
+add_compile_definitions("LANPLAY_VERSION=\"${LANPLAY_VERSION}\"")
+
 add_library(zll_desktop_model STATIC model.cpp controller.cpp dependencies.cpp)
 target_compile_features(zll_desktop_model PUBLIC cxx_std_17)
 target_link_libraries(zll_desktop_model PUBLIC Qt6::Widgets Qt6::Network)
