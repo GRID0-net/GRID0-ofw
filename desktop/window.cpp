@@ -34,8 +34,7 @@
 #include <QtLiquidGlass/QtLiquidGlass.h>
 #endif
 #ifdef Q_OS_WIN
-#include <shobjidl.h>
-#include <shlguid.h>
+#include <QProcess>
 extern "C" {
 #include "win-firewall.h"
 }
@@ -45,22 +44,12 @@ static void ensureParentShortcut() {
     const QString appDir = QCoreApplication::applicationDirPath();
     const QString linkPath = QFileInfo(appDir).absolutePath() + "/GRID0-ofw.lnk";
     const QString target = QCoreApplication::applicationFilePath();
-    CoInitialize(nullptr);
-    IShellLinkW *shellLink = nullptr;
-    if (SUCCEEDED(CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                                   IID_IShellLinkW, (void **)&shellLink))) {
-        shellLink->SetPath((wchar_t *)target.utf16());
-        shellLink->SetWorkingDirectory((wchar_t *)appDir.utf16());
-        shellLink->SetDescription(L"GRID0-ofw");
-        shellLink->SetIconLocation((wchar_t *)target.utf16(), 0);
-        IPersistFile *persistFile = nullptr;
-        if (SUCCEEDED(shellLink->QueryInterface(IID_IPersistFile, (void **)&persistFile))) {
-            persistFile->Save((wchar_t *)linkPath.utf16(), TRUE);
-            persistFile->Release();
-        }
-        shellLink->Release();
-    }
-    CoUninitialize();
+    // Use PowerShell to create the .lnk; MinGW's shobjidl.h is broken.
+    QString ps = QString("powershell -NoProfile -Command \"$s = New-Object -ComObject WScript.Shell; "
+                         "$l = $s.CreateShortcut('%1'); $l.TargetPath = '%2'; "
+                         "$l.WorkingDirectory = '%3'; $l.Save()")
+                     .arg(linkPath, target, appDir);
+    QProcess::execute(ps);
 }
 #endif
 

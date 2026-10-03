@@ -14,9 +14,6 @@ target_include_directories(zll_desktop_model PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(GRID0-ofw WIN32 MACOSX_BUNDLE main.cpp window.cpp resources.qrc ../src/win-firewall.c)
 target_include_directories(GRID0-ofw PRIVATE ../src)
 target_link_libraries(GRID0-ofw PRIVATE zll_desktop_model)
-if (WIN32)
-    target_link_libraries(GRID0-ofw PRIVATE ole32)
-endif()
 set_target_properties(GRID0-ofw PROPERTIES
     MACOSX_BUNDLE_BUNDLE_NAME "GRID0-ofw"
     MACOSX_BUNDLE_GUI_IDENTIFIER "org.grid0.relay"
