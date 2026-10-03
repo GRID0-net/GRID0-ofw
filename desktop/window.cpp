@@ -156,11 +156,12 @@ Window::Window(bool preview) : previewMode(preview) {
         form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
     }
     auto *dnsNotice1 = text("Set closest one as Primary DNS");
+    form->addWidget(dnsNotice1, 3, 2, 1, 2);
     auto *dnsNotice2 = text("Set the other as Secondary DNS");
-    auto *dnsTextCol = new QVBoxLayout; dnsTextCol->addWidget(dnsNotice1); dnsTextCol->addWidget(dnsNotice2);
+    form->addWidget(dnsNotice2, 4, 2, 1, 2);
     auto *copy = new QPushButton("Copy Switch settings");
-    auto *copyRow = new QHBoxLayout; copyRow->addLayout(dnsTextCol); copyRow->addWidget(copy); copyRow->addStretch();
-    form->addLayout(copyRow, 3, 0, 1, 4); playLayout->addWidget(group);
+    auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();
+    form->addLayout(copyRow, 5, 0, 1, 4); playLayout->addWidget(group);
 #ifdef Q_OS_MACOS
     // A QFrame gives the native effect an independent host. QGroupBox uses a
     // shared Qt backing view, which would place the AppKit layer over its text.
