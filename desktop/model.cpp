@@ -268,7 +268,7 @@ QStringList Preferences::arguments(const QList<Adapter> &all, const QString &pre
     if (diagnostics) args << "--diagnostics";
     if (!discover) args << "--no-discover-switch";
     if (dhcp) args << "--dhcp";
-    if (dnsFranceFirst) args << "--dns-france-first";
+    if (dhcp && dnsFranceFirst) args << "--dns-france-first";
     if (capture) args << "--capture-prefix" << prefix;
     return args;
 }
