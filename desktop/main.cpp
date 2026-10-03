@@ -31,7 +31,7 @@ static void startupLog(const char *stage) {
 }
 
 static QPixmap applicationIcon() {
-    return QPixmap(":/branding/grid0-app-icon.png");
+    return QPixmap(":/branding/windows-circle.png");
 }
 
 int grid0OfwMain(int argc, char **argv) {
