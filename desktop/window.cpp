@@ -484,7 +484,7 @@ void Window::checkForUpdates(bool quiet) {
             return;
         }
         QString current = QString::fromLatin1(LANPLAY_VERSION);
-        QString currentTag = current.section('-', 1);
+        QString currentTag = current.section('-', -1);
         QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
         if (currentTag == latestTag) {
             if (!quiet) QMessageBox::information(this, "Update check", QString("You are on the latest version (%1).").arg(current));
