@@ -40,6 +40,7 @@ private:
     QCheckBox *diagnostics, *capture, *discovery;
     QComboBox *theme;
     QLabel *headerIcon, *headerText, *headerOfw;
+    QPalette systemPalette;
     QRadioButton *manualMode, *autoMode;
     QRadioButton *dnsUsFirst, *dnsFrFirst;
     QGroupBox *switchSettingsGroup;

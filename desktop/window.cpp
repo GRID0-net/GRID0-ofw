@@ -83,6 +83,7 @@ Window::Window(bool preview) : previewMode(preview) {
     brand->addWidget(ofwLabel);
     headerOfw = ofwLabel;
     brand->addStretch();
+    systemPalette = QApplication::palette();
     updateHeaderTheme();
     layout->addLayout(brand);
     auto *subtitle = text("Nintendo Switch LAN play over ZeroTier");
@@ -320,17 +321,17 @@ Window::Window(bool preview) : previewMode(preview) {
 }
 void Window::updateHeaderTheme() {
     int t = preferences.theme;
-    const bool systemDark = qApp->style()->standardPalette().color(QPalette::Window).lightness() < 128;
+    const bool systemDark = systemPalette.color(QPalette::Window).lightness() < 128;
     bool dark = t == 1 || (t == 0 && systemDark);
     if (t == 0) {
         qApp->setStyleSheet(QString());
-        qApp->setPalette(qApp->style()->standardPalette());
+        qApp->setPalette(systemPalette);
     } else {
         // The stylesheets paint the main surfaces, but plain containers
         // (the Play scroll area, plain widgets and frames) fall back to the
         // palette. Pin the background roles too, or a dark system theme
         // leaks through when Light is picked.
-        QPalette pal = qApp->style()->standardPalette();
+        QPalette pal = systemPalette;
         pal.setColor(QPalette::Window, dark ? QColor(0x1e, 0x1e, 0x1e) : QColor(0xf0, 0xf0, 0xf0));
         pal.setColor(QPalette::Base, dark ? QColor(0x2d, 0x2d, 0x2d) : Qt::white);
         pal.setColor(QPalette::WindowText, dark ? Qt::white : Qt::black);
