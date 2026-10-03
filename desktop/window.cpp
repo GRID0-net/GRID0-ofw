@@ -60,6 +60,8 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *central = new QWidget; setCentralWidget(central);
     auto *layout = new QVBoxLayout(central); layout->setContentsMargins(24, 22, 24, 20); layout->setSpacing(16);
     auto *brand = new QHBoxLayout;
+    brand->setSpacing(8);
+    brand->addStretch();
     headerIcon = new QLabel;
     headerIcon->setPixmap(QPixmap(":/branding/windows-circle.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
     headerIcon->setFixedSize(44, 44);
@@ -74,10 +76,13 @@ Window::Window(bool preview) : previewMode(preview) {
     ofwLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     brand->addWidget(ofwLabel);
     headerOfw = ofwLabel;
+    brand->addStretch();
     updateHeaderTheme();
     brand->addStretch();
     layout->addLayout(brand);
-    layout->addWidget(text("Nintendo Switch LAN play over ZeroTier"));
+    auto *subtitle = text("Nintendo Switch LAN play over ZeroTier");
+    subtitle->setAlignment(Qt::AlignCenter);
+    layout->addWidget(subtitle);
     // Let QMacStyle draw its native rounded tabs. Document mode intentionally
     // uses square browser/editor tabs, inappropriate for this utility.
     tabs = new QTabWidget; layout->addWidget(tabs);
@@ -272,32 +277,42 @@ void Window::updateHeaderTheme() {
     } else if (dark) {
         qApp->setStyleSheet(
             "QWidget { background-color: #1e1e1e; color: #ffffff; }"
-            "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; }"
-            "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; padding: 5px 12px; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
+            "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 6px 14px; }"
             "QPushButton:hover { background-color: #4a4a4a; }"
             "QPushButton:pressed { background-color: #2a2a2a; }"
-            "QTabWidget::pane { border: 1px solid #555555; background-color: #1e1e1e; }"
-            "QTabBar::tab { background-color: #2d2d2d; color: #ffffff; padding: 8px 16px; }"
-            "QTabBar::tab:selected { background-color: #1e1e1e; }"
-            "QGroupBox { color: #ffffff; border: 1px solid #555555; margin-top: 12px; }"
+            "QTabWidget::pane { border: 1px solid #555555; background-color: #1e1e1e; border-radius: 6px; }"
+            "QTabBar::tab { background-color: #1e1e1e; color: #aaaaaa; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
+            "QTabBar::tab:selected { background-color: #3a3a3a; color: #ffffff; }"
+            "QGroupBox { color: #ffffff; border: 1px solid #555555; border-radius: 6px; margin-top: 12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
-            "QCheckBox, QRadioButton { color: #ffffff; }"
+            "QCheckBox, QRadioButton { color: #ffffff; spacing: 8px; }"
+            "QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; }"
+            "QCheckBox::indicator:unchecked, QRadioButton::indicator:unchecked { border: 2px solid #888888; border-radius: 3px; background: #2d2d2d; }"
+            "QRadioButton::indicator:unchecked { border-radius: 8px; }"
+            "QCheckBox::indicator:checked, QRadioButton::indicator:checked { border: 2px solid #2a82da; background: #2a82da; }"
+            "QRadioButton::indicator:checked { border-radius: 8px; }"
             "QLabel { color: #ffffff; }"
             "QMenuBar, QMenu { background-color: #2d2d2d; color: #ffffff; }"
         );
     } else {
         qApp->setStyleSheet(
             "QWidget { background-color: #f0f0f0; color: #000000; }"
-            "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; }"
-            "QPushButton { background-color: #e0e0e0; color: #000000; border: 1px solid #aaaaaa; padding: 5px 12px; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QComboBox, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
+            "QPushButton { background-color: #e0e0e0; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 6px 14px; }"
             "QPushButton:hover { background-color: #d0d0d0; }"
             "QPushButton:pressed { background-color: #c0c0c0; }"
-            "QTabWidget::pane { border: 1px solid #aaaaaa; background-color: #f0f0f0; }"
-            "QTabBar::tab { background-color: #e0e0e0; color: #000000; padding: 8px 16px; }"
-            "QTabBar::tab:selected { background-color: #f0f0f0; }"
-            "QGroupBox { color: #000000; border: 1px solid #aaaaaa; margin-top: 12px; }"
+            "QTabWidget::pane { border: 1px solid #aaaaaa; background-color: #f0f0f0; border-radius: 6px; }"
+            "QTabBar::tab { background-color: #f0f0f0; color: #666666; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
+            "QTabBar::tab:selected { background-color: #ffffff; color: #000000; }"
+            "QGroupBox { color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; margin-top: 12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
-            "QCheckBox, QRadioButton { color: #000000; }"
+            "QCheckBox, QRadioButton { color: #000000; spacing: 8px; }"
+            "QCheckBox::indicator, QRadioButton::indicator { width: 16px; height: 16px; }"
+            "QCheckBox::indicator:unchecked, QRadioButton::indicator:unchecked { border: 2px solid #888888; border-radius: 3px; background: #ffffff; }"
+            "QRadioButton::indicator:unchecked { border-radius: 8px; }"
+            "QCheckBox::indicator:checked, QRadioButton::indicator:checked { border: 2px solid #2a82da; background: #2a82da; }"
+            "QRadioButton::indicator:checked { border-radius: 8px; }"
             "QLabel { color: #000000; }"
             "QMenuBar, QMenu { background-color: #f0f0f0; color: #000000; }"
         );
