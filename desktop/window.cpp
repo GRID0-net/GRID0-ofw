@@ -311,12 +311,15 @@ void Window::updateHeaderTheme() {
     pal.setColor(QPalette::ButtonText, dark ? Qt::white : Qt::black);
     qApp->setPalette(pal);
     QColor tabBg = dark ? QColor("#1e1e1e") : QColor("#f0f0f0");
-    for (int i = 0; i < tabs->count(); ++i) {
-        QWidget *page = tabs->widget(i);
-        QPalette pp = page->palette();
-        pp.setColor(QPalette::Window, tabBg);
-        page->setPalette(pp);
-        page->setAutoFillBackground(true);
+    if (tabs) {
+        for (int i = 0; i < tabs->count(); ++i) {
+            QWidget *page = tabs->widget(i);
+            if (!page) continue;
+            QPalette pp = page->palette();
+            pp.setColor(QPalette::Window, tabBg);
+            page->setPalette(pp);
+            page->setAutoFillBackground(true);
+        }
     }
     if (t == 0) {
         qApp->setStyleSheet(QString());
