@@ -627,6 +627,14 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
      * consoles keep the previous behavior. */
     const bool dhcp = wifi_dest && !zt_dest;
     if (dhcp && !is_nintendo_mac(frame + 6)) return false;
+    if (dhcp && !options.dhcp_server) {
+        /* Manual mode: a console left on Automatic/DHCP must not become the
+         * relay target. Say so plainly instead of silently using it. */
+        if (!lp->switch_seen || !CMP_MAC(frame + 6, lp->switch_mac))
+            LLOG(LLOG_WARNING, "Ignoring DHCP/Automatic device %u.%u.%u.%u: the relay runs in manual IP mode. Put the Switch on manual IP settings or switch the app to Automatic (DHCP).",
+                 ip[0], ip[1], ip[2], ip[3]);
+        return false;
+    }
     if (lp->switch_seen && !CMP_IPV4(ip, lp->switch_ip)) return false;
     bool changed = !lp->switch_seen || !CMP_MAC(frame + 6, lp->switch_mac);
     if (lp->switch_seen && changed && (lp->switch_mac_confirmed || !direct)) {

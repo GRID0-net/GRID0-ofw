@@ -338,20 +338,18 @@ void Window::updateHeaderTheme() {
     if (t == 0) {
         qApp->setStyleSheet(QString());
         qApp->setPalette(systemPalette);
-    } else {
+    } else if (dark) {
         // The stylesheets paint the main surfaces, but plain containers
         // (the Play scroll area, plain widgets and frames) fall back to the
         // palette. Pin the background roles too, or a dark system theme
         // leaks through when Light is picked.
         QPalette pal = systemPalette;
-        pal.setColor(QPalette::Window, dark ? QColor(0x1e, 0x1e, 0x1e) : QColor(0xf0, 0xf0, 0xf0));
-        pal.setColor(QPalette::Base, dark ? QColor(0x2d, 0x2d, 0x2d) : Qt::white);
-        pal.setColor(QPalette::WindowText, dark ? Qt::white : Qt::black);
-        pal.setColor(QPalette::Text, dark ? Qt::white : Qt::black);
-        pal.setColor(QPalette::ButtonText, dark ? Qt::white : Qt::black);
+        pal.setColor(QPalette::Window, QColor(0x1e, 0x1e, 0x1e));
+        pal.setColor(QPalette::Base, QColor(0x2d, 0x2d, 0x2d));
+        pal.setColor(QPalette::WindowText, Qt::white);
+        pal.setColor(QPalette::Text, Qt::white);
+        pal.setColor(QPalette::ButtonText, Qt::white);
         qApp->setPalette(pal);
-    }
-    if (dark) {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #1e1e1e; }"
             "QTabWidget::pane { background-color: #1e1e1e; }"
@@ -376,6 +374,13 @@ void Window::updateHeaderTheme() {
             "QMenuBar, QMenu { background-color: #2d2d2d; color: #ffffff; }"
         );
     } else {
+        QPalette pal = systemPalette;
+        pal.setColor(QPalette::Window, QColor(0xf0, 0xf0, 0xf0));
+        pal.setColor(QPalette::Base, Qt::white);
+        pal.setColor(QPalette::WindowText, Qt::black);
+        pal.setColor(QPalette::Text, Qt::black);
+        pal.setColor(QPalette::ButtonText, Qt::black);
+        qApp->setPalette(pal);
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #f0f0f0; }"
             "QTabWidget::pane { background-color: #f0f0f0; }"
@@ -468,9 +473,14 @@ void Window::checkForUpdates() {
                 QMessageBox::warning(this, "Update", "Download failed.");
                 return;
             }
+            QByteArray data = dlReply->readAll();
+            if (data.size() < 1024 * 1024) {
+                QMessageBox::warning(this, "Update", "Download failed (empty file).");
+                return;
+            }
             QString tmp = QDir::temp().filePath("grid0-update.zip");
             QFile f(tmp);
-            if (!f.open(QIODevice::WriteOnly) || f.write(dlReply->readAll()) < 0) {
+            if (!f.open(QIODevice::WriteOnly) || f.write(data) < 0) {
                 QMessageBox::warning(this, "Update", "Could not save update.");
                 return;
             }
@@ -484,14 +494,23 @@ void Window::checkForUpdates() {
             if (s.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream ts(&s);
                 ts << "@echo off\n";
-                ts << "timeout /t 2 /nobreak >nul\n";
-                ts << QString("powershell -command \"Expand-Archive -Path '%1' -DestinationPath '%2' -Force\"\n").arg(tmp, extractDir);
-                ts << QString("xcopy \"%1\\*\" \"%2\" /E /Y\n").arg(extractDir, appDir);
+                // Wait for this app to fully exit so none of its files are locked.
+                ts << QString("powershell -NoProfile -Command \"while (Get-Process -Id %1 -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }\"\n")
+                          .arg(QCoreApplication::applicationPid());
+                ts << QString("powershell -NoProfile -Command \"Expand-Archive -Path '%1' -DestinationPath '%2' -Force\"\n").arg(tmp, extractDir);
+                // The release zip nests the app in one top-level folder. Copy from inside it.
+                ts << QString("set \"SRC=%1\"\n").arg(extractDir);
+                ts << QString("for /d %%D in (\"%1\\*\") do if exist \"%%D\\GRID0-ofw.exe\" set \"SRC=%%D\"\n").arg(extractDir);
+                ts << QString("xcopy \"%SRC%\\*\" \"%1\" /E /Y /Q\n").arg(appDir);
+                ts << QString("if errorlevel 1 (\n"
+                              "  echo Update copy failed. Your old version is untouched. > \"%1\\grid0-update-failed.txt\"\n"
+                              "  exit /b 1\n"
+                              ")\n").arg(QDir::tempPath());
                 ts << QString("start \"\" \"%1\\GRID0-ofw.exe\"\n").arg(appDir);
                 ts << "del \"%~f0\"\n";
                 s.close();
             }
-            QProcess::startDetached(script, {});
+            QProcess::startDetached("cmd.exe", {"/c", script});
 #else
             QDesktopServices::openUrl(QUrl::fromLocalFile(tmp));
 #endif
