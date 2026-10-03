@@ -203,7 +203,6 @@ Window::Window(bool preview) : previewMode(preview) {
     });
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
-    dhcpHint = text("Connect your Switch to this PC's mobile hotspot\nwith Automatic settings.");
     auto *hotspotTopRow = new QHBoxLayout;
     auto *hotspotName = new QLabel("PC Hotspot");
     hotspotState = new QLabel("OFF"); title(hotspotState, 14);
@@ -246,8 +245,7 @@ Window::Window(bool preview) : previewMode(preview) {
 #ifdef Q_OS_WIN
     autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
 #endif
-    autoLayout->addSpacing(8);
-    autoLayout->addWidget(dhcpHint);
+    autoLayout->addSpacing(32);
     auto *dnsBottomRow = new QHBoxLayout;
     dnsBottomRow->addWidget(dnsLabel);
     dnsBottomRow->addWidget(dnsUsFirst);
@@ -652,7 +650,7 @@ void Window::updateState() {
             }
             hotspotHint->setText(hotspotOn
                 ? "Start the relay then connect your Switch to the hotspot."
-                : "Turn it on with the button below, start the relay, then connect your Switch to the hotspot on Automatic settings.");
+                : "Turn it on with the button below, start the relay, then connect your Switch to the hotspot.");
 #else
             hotspotHint->setText(hotspotOn
                 ? "Hotspot network detected."

@@ -45,7 +45,7 @@ private:
     QRadioButton *dnsUsFirst, *dnsFrFirst;
     QGroupBox *switchSettingsGroup;
     QGroupBox *autoSettingsGroup;
-    QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsAmerica, *dnsEurope, *validation, *settingsHint, *dhcpHint;
+    QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsAmerica, *dnsEurope, *validation, *settingsHint;
     QLabel *hotspotState = nullptr;
     QLabel *hotspotDot = nullptr;
     QLabel *fwState = nullptr;
