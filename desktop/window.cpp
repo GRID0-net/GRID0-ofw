@@ -217,7 +217,7 @@ Window::Window(bool preview) : previewMode(preview) {
     });
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
-    dhcpHint = text("Set your Switch to Automatic and connect it to this PC's mobile hotspot. When the relay starts it runs a DHCP server on the hotspot that gives each Nintendo console a ZeroTier-subnet address, nothing to type in.");
+    dhcpHint = text("Connect your Switch to this PC's mobile hotspot with Automatic settings.");
     auto *hotspotRow = new QHBoxLayout;
     auto *hotspotName = new QLabel("PC Hotspot");
     hotspotState = new QLabel("OFF"); title(hotspotState, 14);
