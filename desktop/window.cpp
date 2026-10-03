@@ -374,17 +374,9 @@ void Window::refreshAdapters() {
     if (relay.busy()) return;
     loading = true;
     adapters = preferences.refreshAdapters();
+    preferences.autoSelectLocalAdapter(adapters);
     for (const auto &a : adapters) {
-        if (preferences.localInterface.isEmpty() && a.up && !a.overlay && (a.wifi || a.name == "en0")) preferences.localInterface = a.name;
         if (preferences.overlayInterface.isEmpty() && a.up && a.overlay) preferences.overlayInterface = a.name;
-    }
-    // Automatic (DHCP) mode is built around the PC hotspot: prefer its adapter whenever it is up.
-    if (preferences.dhcp) {
-        bool currentIsHotspot = false;
-        for (const auto &a : adapters) if (a.name == preferences.localInterface && a.hotspot && a.up) currentIsHotspot = true;
-        if (!currentIsHotspot) {
-            for (const auto &a : adapters) if (a.hotspot && a.up && !a.overlay) { preferences.localInterface = a.name; break; }
-        }
     }
     for (auto pair : {qMakePair(local, preferences.localInterface), qMakePair(overlay, preferences.overlayInterface)}) {
         pair.first->clear(); pair.first->addItem("Choose an adapter", QString());
