@@ -48,6 +48,8 @@ private:
     QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsAmerica, *dnsEurope, *validation, *settingsHint, *dhcpHint;
     QLabel *hotspotState = nullptr;
     QLabel *hotspotDot = nullptr;
+    QLabel *fwState = nullptr;
+    QLabel *fwDot = nullptr;
     QLabel *hotspotHint = nullptr;
     QPushButton *hotspotSetup = nullptr;
     QLabel *requirements = nullptr;

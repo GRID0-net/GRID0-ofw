@@ -38,4 +38,21 @@ void winfw_set_hotspot_dhcp_block(bool enable)
     }
 }
 
+bool winfw_hotspot_dhcp_block_active(void)
+{
+    char cmd[512];
+    _snprintf(cmd, sizeof(cmd), "netsh advfirewall firewall show rule name=\"" FW_RULE_NAME "\"");
+    cmd[sizeof(cmd) - 1] = '\0';
+
+    FILE *p = _popen(cmd, "r");
+    if (!p) return false;
+    char line[256];
+    bool found = false;
+    while (fgets(line, sizeof(line), p)) {
+        if (strstr(line, FW_RULE_NAME)) { found = true; break; }
+    }
+    _pclose(p);
+    return found;
+}
+
 #endif /* _WIN32 */
