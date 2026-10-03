@@ -625,7 +625,7 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
      * the first chatty device (usually the router) would claim the single
      * Switch slot and stop discovery. Manually configured ZeroTier-subnet
      * consoles keep the previous behavior. */
-    const bool dhcp = wifi_dest && !zt_dest;
+    const bool dhcp = wifi_dest && !zt_dest && options.dhcp_server;
     if (dhcp && !is_nintendo_mac(frame + 6)) return false;
     if (lp->switch_seen && !CMP_IPV4(ip, lp->switch_ip)) return false;
     bool changed = !lp->switch_seen || !CMP_MAC(frame + 6, lp->switch_mac);
