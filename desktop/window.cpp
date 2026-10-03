@@ -478,35 +478,44 @@ void Window::checkForUpdates() {
                 QMessageBox::warning(this, "Update", "Download failed (empty file).");
                 return;
             }
-            QString tmp = QDir::temp().filePath("grid0-update.zip");
+            QString appDir = QCoreApplication::applicationDirPath();
+            QString tmp = appDir + "/grid0-update.zip";
             QFile f(tmp);
             if (!f.open(QIODevice::WriteOnly) || f.write(data) < 0) {
                 QMessageBox::warning(this, "Update", "Could not save update.");
                 return;
             }
             f.close();
-            QString appDir = QCoreApplication::applicationDirPath();
-            QString extractDir = QDir::temp().filePath("grid0-update-extract");
-            QDir().mkpath(extractDir);
 #ifdef Q_OS_WIN
-            QString script = QDir::temp().filePath("grid0-update.bat");
+            QString script = appDir + "/grid0-update.bat";
             QFile s(script);
             if (s.open(QIODevice::WriteOnly | QIODevice::Text)) {
                 QTextStream ts(&s);
                 ts << "@echo off\n";
+                ts << "setlocal\n";
+                ts << QString("set \"APPDIR=%1\"\n").arg(appDir);
                 // Wait for this app to fully exit so none of its files are locked.
                 ts << QString("powershell -NoProfile -Command \"while (Get-Process -Id %1 -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }\"\n")
                           .arg(QCoreApplication::applicationPid());
-                ts << QString("powershell -NoProfile -Command \"Expand-Archive -Path '%1' -DestinationPath '%2' -Force\"\n").arg(tmp, extractDir);
-                // The release zip nests the app in one top-level folder. Copy from inside it.
-                ts << QString("set \"SRC=%1\"\n").arg(extractDir);
-                ts << QString("for /d %%D in (\"%1\\*\") do if exist \"%%D\\GRID0-ofw.exe\" set \"SRC=%%D\"\n").arg(extractDir);
-                ts << QString("xcopy \"%SRC%\\*\" \"%1\" /E /Y /Q\n").arg(appDir);
-                ts << QString("if errorlevel 1 (\n"
-                              "  echo Update copy failed. Your old version is untouched. > \"%1\\grid0-update-failed.txt\"\n"
-                              "  exit /b 1\n"
-                              ")\n").arg(QDir::tempPath());
-                ts << QString("start \"\" \"%1\\GRID0-ofw.exe\"\n").arg(appDir);
+                // Delete everything in the app folder except the zip and this script.
+                ts << "for %%F in (\"%APPDIR%\\*\") do (\n";
+                ts << "  if /i not \"%%~nxF\"==\"grid0-update.zip\" if /i not \"%%~nxF\"==\"grid0-update.bat\" (\n";
+                ts << "    if exist \"%%F\\\" (rmdir /s /q \"%%F\") else (del /f /q \"%%F\")\n";
+                ts << "  )\n";
+                ts << ")\n";
+                // Extract the update in place.
+                ts << "powershell -NoProfile -Command \"Expand-Archive -Path '%APPDIR%\\grid0-update.zip' -DestinationPath '%APPDIR%' -Force\"\n";
+                ts << "if errorlevel 1 (\n";
+                ts << "  echo Extraction failed. > \"%APPDIR%\\grid0-update-failed.txt\"\n";
+                ts << "  exit /b 1\n";
+                ts << ")\n";
+                // The release zip nests the app in one top-level folder. Lift its contents up.
+                ts << "for /d %%D in (\"%APPDIR%\\*\") do if exist \"%%D\\GRID0-ofw.exe\" (\n";
+                ts << "  xcopy \"%%D\\*\" \"%APPDIR%\\\" /E /Y /Q\n";
+                ts << "  rmdir /s /q \"%%D\"\n";
+                ts << ")\n";
+                ts << "del \"%APPDIR%\\grid0-update.zip\"\n";
+                ts << "start \"\" \"%APPDIR%\\GRID0-ofw.exe\"\n";
                 ts << "del \"%~f0\"\n";
                 s.close();
             }

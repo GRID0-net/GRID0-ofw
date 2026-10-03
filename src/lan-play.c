@@ -821,10 +821,20 @@ int lan_play_init(struct lan_play *lan_play)
     }
     eprintf("native init: opening Wi-Fi capture\n");
     ret = init_pcap(lan_play, options.netif, subnet_filter);
-    if (ret != 0) return ret;
+    if (ret != 0) {
+        if (!lan_play->last_err[0])
+            snprintf(lan_play->last_err, sizeof(lan_play->last_err),
+                     "Local capture failed: %s (%d)", uv_strerror(ret), ret);
+        return ret;
+    }
     eprintf("native init: opening ZeroTier capture\n");
     ret = init_zerotier_pcap(lan_play, options.zerotier_if, subnet_filter);
-    if (ret != 0) return ret;
+    if (ret != 0) {
+        if (!lan_play->last_err[0])
+            snprintf(lan_play->last_err, sizeof(lan_play->last_err),
+                     "ZeroTier capture failed: %s (%d)", uv_strerror(ret), ret);
+        return ret;
+    }
     eprintf("native init: reading Wi-Fi adapter MAC\n");
     ret = uv_pcap_get_mac(&lan_play->pcap, lan_play->wifi_mac);
     if (ret != 0) {

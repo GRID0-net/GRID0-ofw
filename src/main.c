@@ -122,6 +122,20 @@ static void windows_control_cb(uv_timer_t *timer)
         (parent_process && WaitForSingleObject(parent_process, 0) == WAIT_OBJECT_0))
         lan_play_signal_cb(&signal_int, SIGINT);
 }
+// Packet capture needs administrator rights. Fail early with a clear
+// message instead of a cryptic error from deep in the init path.
+static bool windows_has_admin(void)
+{
+    BOOL isAdmin = FALSE;
+    PSID adminGroup = NULL;
+    SID_IDENTIFIER_AUTHORITY ntAuth = SECURITY_NT_AUTHORITY;
+    if (AllocateAndInitializeSid(&ntAuth, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                 DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+        CheckTokenMembership(NULL, adminGroup, &isAdmin);
+        FreeSid(adminGroup);
+    }
+    return isAdmin != FALSE;
+}
 #endif
 
 int list_interfaces(pcap_if_t *alldevs)
@@ -462,6 +476,13 @@ int old_main()
         return 2;
     }
 
+#ifdef _WIN32
+    if (!windows_has_admin()) {
+        eprintf("The relay must run as administrator for packet capture. Right-click GRID0-ofw and choose Run as administrator, then start the relay again.\n");
+        return 3;
+    }
+#endif
+
 #if defined(__APPLE__) || defined(__linux__)
     if (acquire_relay_instance() != 0) return 2;
 #elif defined(_WIN32)
@@ -491,7 +512,8 @@ int old_main()
     }
     ret = lan_play_init(lan_play);
     if (ret != 0) {
-        eprintf("Failed to start native relay (status %d): %s\n", ret, lan_play->last_err[0] ? lan_play->last_err : "unknown initialization error");
+        const char *detail = lan_play->last_err[0] ? lan_play->last_err : uv_strerror(ret);
+        eprintf("Failed to start native relay (status %d): %s\n", ret, detail);
         return ret;
     }
 
