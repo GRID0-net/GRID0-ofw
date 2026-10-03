@@ -46,7 +46,18 @@ static void ensureParentShortcut() {
                                 "$l = $s.CreateShortcut('%1'); $l.TargetPath = '%2'; "
                                 "$l.WorkingDirectory = '%3'; $l.Save()")
                             .arg(linkPath, target, appDir);
-    QProcess::execute("powershell", {"-NoProfile", "-Command", cmd});
+    QProcess proc;
+    proc.start("powershell", {"-NoProfile", "-Command", cmd});
+    if (!proc.waitForFinished(10000)) {
+        qWarning() << "shortcut: powershell timed out";
+        proc.kill();
+        return;
+    }
+    const QString err = QString::fromLocal8Bit(proc.readAllStandardError()).trimmed();
+    if (proc.exitCode() != 0 || !err.isEmpty())
+        qWarning() << "shortcut: powershell exit" << proc.exitCode() << err;
+    if (!QFile::exists(linkPath))
+        qWarning() << "shortcut: not created at" << linkPath;
 }
 #endif
 
@@ -464,7 +475,7 @@ void Window::updateHeaderTheme() {
     if (t == 3) {
         QPalette pal = systemPalette;
         pal.setColor(QPalette::Window, QColor(0x32, 0x00, 0x04));
-        pal.setColor(QPalette::Base, QColor(0x4a, 0x0a, 0x0e));
+        pal.setColor(QPalette::Base, QColor(0x20, 0x00, 0x03));
         pal.setColor(QPalette::WindowText, Qt::white);
         pal.setColor(QPalette::Text, Qt::white);
         pal.setColor(QPalette::ButtonText, Qt::white);
@@ -473,21 +484,21 @@ void Window::updateHeaderTheme() {
             "QMainWindow, QDialog { background-color: #320004; }"
             "QTabWidget::pane { background-color: #320004; }"
             "QLabel { color: #ffffff; }"
-            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #4a0a0e; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px; }"
-            "QComboBox { background-color: #4a0a0e; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px 8px; }"
-            "QComboBox QAbstractItemView { background-color: #4a0a0e; color: #ffffff; selection-background-color: #5a0e12; border: 1px solid #1e0002; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px; }"
+            "QComboBox { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px 8px; }"
+            "QComboBox QAbstractItemView { background-color: #200003; color: #ffffff; selection-background-color: #280004; border: 1px solid #1e0002; }"
             "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #1e0002; }"
             "QComboBox::down-arrow { image: url(:/branding/combo-arrow-white.png); width: 12px; height: 12px; }"
-            "QPushButton { background-color: #4a0a0e; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 6px 14px; outline: none; }"
-            "QPushButton:hover { background-color: #5a0e12; }"
+            "QPushButton { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 6px 14px; outline: none; }"
+            "QPushButton:hover { background-color: #280004; }"
             "QPushButton:pressed { background-color: #320004; }"
             "QPushButton:disabled { background-color: #2a0203; color: #885555; border: 1px solid #5a1a1e; }"
             "QTabWidget::pane { border: 1px solid #1e0002; background-color: #320004; }"
             "QTabBar::tab { background-color: #320004; color: #cc9999; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
-            "QTabBar::tab:selected { background-color: #5a0e12; color: #ffffff; }"
+            "QTabBar::tab:selected { background-color: #280004; color: #ffffff; }"
             "QGroupBox { color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; margin-top: 12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
-            "QMenuBar, QMenu { background-color: #4a0a0e; color: #ffffff; }"
+            "QMenuBar, QMenu { background-color: #200003; color: #ffffff; }"
         );
     }
     const bool useDarkAssets = dark || t == 3;
