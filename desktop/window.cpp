@@ -60,17 +60,15 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *central = new QWidget; setCentralWidget(central);
     auto *layout = new QVBoxLayout(central); layout->setContentsMargins(24, 22, 24, 20); layout->setSpacing(16);
     auto *brand = new QHBoxLayout;
-    auto *logo = new QLabel;
-    logo->setPixmap(QPixmap(":/branding/windows-circle.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    logo->setFixedSize(44, 44);
-    logo->setAlignment(Qt::AlignCenter);
-    brand->addWidget(logo);
-    const bool darkMode = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
-    const QString textLogoPath = darkMode ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
-    auto *textLogo = new QLabel;
-    textLogo->setPixmap(QPixmap(textLogoPath).scaledToHeight(36, Qt::SmoothTransformation));
-    textLogo->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    brand->addWidget(textLogo);
+    headerIcon = new QLabel;
+    headerIcon->setPixmap(QPixmap(":/branding/windows-circle.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    headerIcon->setFixedSize(44, 44);
+    headerIcon->setAlignment(Qt::AlignCenter);
+    brand->addWidget(headerIcon);
+    headerText = new QLabel;
+    headerText->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    brand->addWidget(headerText);
+    updateHeaderTheme();
     brand->addStretch();
     layout->addLayout(brand);
     layout->addWidget(text("Nintendo Switch LAN play over ZeroTier"));
@@ -185,6 +183,9 @@ Window::Window(bool preview) : previewMode(preview) {
     av->addWidget(text("Troubleshooting & reports"));
     diagnostics = new QCheckBox("Detailed traffic diagnostics"); capture = new QCheckBox("Save packet captures for the next relay session"); discovery = new QCheckBox("Find the Switch automatically");
     av->addWidget(diagnostics); av->addWidget(capture); av->addWidget(discovery);
+    auto *themeRow = new QHBoxLayout; themeRow->addWidget(new QLabel("Appearance:"));
+    theme = new QComboBox; theme->addItems({"System", "Dark", "Light"}); theme->setCurrentIndex(preferences.theme);
+    themeRow->addWidget(theme); themeRow->addStretch(); av->addLayout(themeRow);
     av->addWidget(text("Packet captures include game payloads and network addresses. Reports stay on this computer until you choose to share them."));
     auto *binaryRow = new QHBoxLayout; executable = new QLineEdit; executable->setPlaceholderText("Bundled relay (recommended)"); executable->setClearButtonEnabled(true); auto *choose = new QPushButton("Choose…");
     binaryRow->addWidget(executable); binaryRow->addWidget(choose); av->addWidget(text("Relay executable")); av->addLayout(binaryRow);
@@ -195,6 +196,7 @@ Window::Window(bool preview) : previewMode(preview) {
     settingsTabs->addTab(advanced, "Advanced");
     gateway->setText(preferences.gateway); executable->setText(preferences.relayPath == bundled ? QString() : preferences.relayPath);
     diagnostics->setChecked(preferences.diagnostics); capture->setChecked(preferences.capture); discovery->setChecked(preferences.discover);
+    connect(theme, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int i) { preferences.theme = i; updateHeaderTheme(); save(); });
     connect(refresh, &QPushButton::clicked, this, &Window::refreshAdapters);
     connect(setupRequirements, &QPushButton::clicked, this, &Window::setupDependencies);
     connect(&dependencies, &DependencyInstaller::progress, requirements, &QLabel::setText);
@@ -254,6 +256,12 @@ Window::Window(bool preview) : previewMode(preview) {
     // Missing ZeroTier or Npcap is reported once the window is up, not silently
     // left in Settings: without them Start cannot work at all.
     if (!previewMode) QTimer::singleShot(0, this, [this] { checkDependencies(); promptForDependencies(); });
+}
+void Window::updateHeaderTheme() {
+    int t = preferences.theme;
+    bool dark = t == 1 || (t == 0 && QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark);
+    const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
+    headerText->setPixmap(QPixmap(path).scaledToHeight(36, Qt::SmoothTransformation));
 }
 void Window::selectPage(int page, int sub) { tabs->setCurrentIndex(page); settingsTabs->setCurrentIndex(sub); }
 void Window::refreshAdapters() {
