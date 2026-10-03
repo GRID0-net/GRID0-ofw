@@ -305,20 +305,23 @@ void Window::updateHeaderTheme() {
     int t = preferences.theme;
     const bool systemDark = QGuiApplication::palette().color(QPalette::Window).lightness() < 128;
     bool dark = t == 1 || (t == 0 && systemDark);
+    QPalette pal = qApp->palette();
+    pal.setColor(QPalette::WindowText, dark ? Qt::white : Qt::black);
+    pal.setColor(QPalette::Text, dark ? Qt::white : Qt::black);
+    pal.setColor(QPalette::ButtonText, dark ? Qt::white : Qt::black);
+    qApp->setPalette(pal);
     if (t == 0) {
         qApp->setStyleSheet(QString());
     } else if (dark) {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #1e1e1e; }"
             "QLabel { color: #ffffff; }"
-            "QCheckBox { color: #ffffff; }"
-            "QRadioButton { color: #ffffff; }"
-            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
+                        "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px 8px; }"
             "QComboBox::drop-down { border: none; width: 24px; }"
             "QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #ffffff; width: 0; height: 0; margin-right: 8px; }"
             "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; selection-background-color: #3a3a3a; border: 1px solid #555555; }"
-            "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 6px 14px; }"
+            "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 6px 14px; outline: none; }"
             "QPushButton:hover { background-color: #4a4a4a; }"
             "QPushButton:pressed { background-color: #2a2a2a; }"
             "QPushButton:disabled { background-color: #252525; color: #777777; border: 1px solid #444444; }"
@@ -335,9 +338,7 @@ void Window::updateHeaderTheme() {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #f0f0f0; }"
             "QLabel { color: #000000; }"
-            "QCheckBox { color: #000000; }"
-            "QRadioButton { color: #000000; }"
-            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
+                        "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px 8px; }"
             "QComboBox::drop-down { border: none; width: 24px; }"
             "QComboBox::down-arrow { image: none; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid #000000; width: 0; height: 0; margin-right: 8px; }"
