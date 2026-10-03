@@ -218,7 +218,16 @@ Window::Window(bool preview) : previewMode(preview) {
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
     dhcpHint = text("Set your Switch to Automatic and connect it to this PC's mobile hotspot. When the relay starts it runs a DHCP server on the hotspot that gives each Nintendo console a ZeroTier-subnet address, nothing to type in.");
-    hotspotStatus = text(""); hotspotStatus->setWordWrap(true);
+    auto *hotspotRow = new QHBoxLayout;
+    auto *hotspotName = new QLabel("PC Hotspot");
+    hotspotState = new QLabel("OFF"); title(hotspotState, 14);
+    hotspotDot = new QLabel("●"); title(hotspotDot, 14);
+    hotspotRow->addWidget(hotspotName);
+    hotspotRow->addWidget(hotspotState);
+    hotspotRow->addWidget(hotspotDot);
+    hotspotRow->addStretch();
+    hotspotHint = text("");
+    { auto f = hotspotHint->font(); f.setPointSize(9); hotspotHint->setFont(f); }
 #ifdef Q_OS_WIN
     hotspotSetup = new QPushButton("Set up PC hotspot…");
     hotspotSetup->setToolTip("Opens Windows' Mobile hotspot settings. Turn the hotspot on, then come back and the relay picks it up on its own.");
@@ -237,7 +246,8 @@ Window::Window(bool preview) : previewMode(preview) {
     });
 #endif
     // Automatic mode gets its own boxed section like the manual one.
-    autoLayout->addWidget(hotspotStatus);
+    autoLayout->addLayout(hotspotRow);
+    autoLayout->addWidget(hotspotHint);
 #ifdef Q_OS_WIN
     autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
 #endif
@@ -618,18 +628,19 @@ void Window::updateState() {
     QString hotspotIp;
     for (const auto &ad : adapters) if (ad.hotspot && ad.up) { hotspotIp = ad.ip; break; }
     const bool hotspotOn = !hotspotIp.isEmpty();
-    if (hotspotStatus) {
+    if (hotspotState && hotspotDot && hotspotHint) {
         if (preferences.dhcp) {
+            hotspotState->setText(hotspotOn ? "ON" : "OFF");
+            hotspotDot->setStyleSheet(hotspotOn ? "color: #27ae60;" : "color: #e74c3c;");
 #ifdef Q_OS_WIN
-            hotspotStatus->setText(hotspotOn
-                ? ("PC hotspot: on (" + hotspotIp + "), connect your Switch to it.")
-                : "PC hotspot: off. Turn it on with the button below, then connect your Switch to it.");
+            hotspotHint->setText(hotspotOn
+                ? "Connect your Switch to it."
+                : "Turn it on with the button below, then connect your Switch to it.");
 #else
-            hotspotStatus->setText(hotspotOn
-                ? ("Hotspot network detected (" + hotspotIp + ").")
+            hotspotHint->setText(hotspotOn
+                ? "Hotspot network detected."
                 : "Automatic mode works best with a PC-hosted hotspot.");
 #endif
-            hotspotStatus->setStyleSheet(hotspotOn ? "color: #27ae60;" : "color: #e74c3c;");
         }
     }
     if (hotspotSetup) hotspotSetup->setVisible(!hotspotOn);

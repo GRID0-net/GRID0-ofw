@@ -46,7 +46,9 @@ private:
     QGroupBox *switchSettingsGroup;
     QGroupBox *autoSettingsGroup;
     QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsAmerica, *dnsEurope, *validation, *settingsHint, *dhcpHint;
-    QLabel *hotspotStatus = nullptr;
+    QLabel *hotspotState = nullptr;
+    QLabel *hotspotDot = nullptr;
+    QLabel *hotspotHint = nullptr;
     QWidget *dnsToggle = nullptr;
     QPushButton *hotspotSetup = nullptr;
     QLabel *requirements = nullptr;
