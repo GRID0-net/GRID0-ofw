@@ -155,16 +155,13 @@ Window::Window(bool preview) : previewMode(preview) {
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
     }
-    auto *dnsNotice1 = text("Set closest one as Primary DNS");
-    auto *dnsNotice2 = text("Set the other as Secondary DNS");
-    dnsNotice1->setWordWrap(false);
-    dnsNotice2->setWordWrap(false);
     auto *copy = new QPushButton("Copy Switch settings");
+    auto *dnsNotice = text("Set the closest as Primary, other as Secondary");
+    dnsNotice->setWordWrap(false);
     auto *dnsHintRow = new QHBoxLayout;
-    dnsHintRow->addWidget(dnsNotice1);
-    dnsHintRow->addWidget(dnsNotice2);
     dnsHintRow->addWidget(copy);
     dnsHintRow->addStretch();
+    dnsHintRow->addWidget(dnsNotice);
     form->addLayout(dnsHintRow, 3, 0, 1, 4);
     playLayout->addWidget(group);
 #ifdef Q_OS_MACOS
@@ -323,17 +320,25 @@ Window::Window(bool preview) : previewMode(preview) {
 }
 void Window::updateHeaderTheme() {
     int t = preferences.theme;
-    const bool systemDark = QGuiApplication::palette().color(QPalette::Window).lightness() < 128;
+    const bool systemDark = qApp->style()->standardPalette().color(QPalette::Window).lightness() < 128;
     bool dark = t == 1 || (t == 0 && systemDark);
-    QPalette pal = qApp->palette();
-    pal.setColor(QPalette::WindowText, dark ? Qt::white : Qt::black);
-    pal.setColor(QPalette::Text, dark ? Qt::white : Qt::black);
-    pal.setColor(QPalette::ButtonText, dark ? Qt::white : Qt::black);
-    qApp->setPalette(pal);
-
     if (t == 0) {
         qApp->setStyleSheet(QString());
-    } else if (dark) {
+        qApp->setPalette(qApp->style()->standardPalette());
+    } else {
+        // The stylesheets paint the main surfaces, but plain containers
+        // (the Play scroll area, plain widgets and frames) fall back to the
+        // palette. Pin the background roles too, or a dark system theme
+        // leaks through when Light is picked.
+        QPalette pal = qApp->style()->standardPalette();
+        pal.setColor(QPalette::Window, dark ? QColor(0x1e, 0x1e, 0x1e) : QColor(0xf0, 0xf0, 0xf0));
+        pal.setColor(QPalette::Base, dark ? QColor(0x2d, 0x2d, 0x2d) : Qt::white);
+        pal.setColor(QPalette::WindowText, dark ? Qt::white : Qt::black);
+        pal.setColor(QPalette::Text, dark ? Qt::white : Qt::black);
+        pal.setColor(QPalette::ButtonText, dark ? Qt::white : Qt::black);
+        qApp->setPalette(pal);
+    }
+    if (dark) {
         qApp->setStyleSheet(
             "QMainWindow, QDialog { background-color: #1e1e1e; }"
             "QTabWidget::pane { background-color: #1e1e1e; }"
