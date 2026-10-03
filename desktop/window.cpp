@@ -246,6 +246,7 @@ Window::Window(bool preview) : previewMode(preview) {
     playLayout->addWidget(autoGroup);
     validation = text(""); playLayout->addWidget(validation);
     auto *configure = new QPushButton("Connection settings…"); playLayout->addWidget(configure, 0, Qt::AlignLeft);
+    playLayout->addStretch();
     connect(configure, &QPushButton::clicked, this, [this] { selectPage(1, 0); });
     playLayout->setSizeConstraint(QLayout::SetMinimumSize);
     auto *playScroll = new QScrollArea; playScroll->setWidgetResizable(true);
