@@ -62,7 +62,7 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *brand = new QHBoxLayout;
     auto *logo = new QLabel;
     const bool darkMode = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
-    const QString logoPath = darkMode ? ":/branding/alpha.png" : ":/branding/beta.png";
+    const QString logoPath = darkMode ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
     logo->setPixmap(QPixmap(logoPath).scaledToHeight(44, Qt::SmoothTransformation));
     logo->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     brand->addWidget(logo);
