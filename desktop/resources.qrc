@@ -5,6 +5,8 @@
         <file alias="grid-text-dark.png">resources/grid-text-dark.png</file>
         <file alias="grid-text-light.png">resources/grid-text-light.png</file>
         <file alias="windows-circle.png">resources/windows-circle.png</file>
+        <file alias="combo-arrow-white.png">resources/combo-arrow-white.png</file>
+        <file alias="combo-arrow-black.png">resources/combo-arrow-black.png</file>
     </qresource>
 </RCC>
 
