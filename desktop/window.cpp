@@ -407,7 +407,7 @@ void Window::updateHeaderTheme() {
     }
     const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
     headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
-    headerOfw->setStyleSheet(dark ? "color: white; background: transparent;" : "color: black; background: transparent;");
+    headerOfw->setStyleSheet(dark ? "color: #cccccc; background: transparent;" : "color: #333333; background: transparent;");
 }
 void Window::checkForUpdates() {
     auto *manager = new QNetworkAccessManager(this);
