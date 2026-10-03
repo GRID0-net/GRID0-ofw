@@ -61,11 +61,11 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *layout = new QVBoxLayout(central); layout->setContentsMargins(24, 22, 24, 20); layout->setSpacing(16);
     auto *brand = new QHBoxLayout;
     auto *logo = new QLabel;
-    logo->setPixmap(QPixmap(":/branding/grid0-logo.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    logo->setFixedSize(44, 44);
-    logo->setAlignment(Qt::AlignCenter);
+    const bool darkMode = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
+    const QString logoPath = darkMode ? ":/branding/alpha.png" : ":/branding/beta.png";
+    logo->setPixmap(QPixmap(logoPath).scaledToHeight(44, Qt::SmoothTransformation));
+    logo->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     brand->addWidget(logo);
-    auto *heading = text("GRID0-ofw"); title(heading, 23); brand->addWidget(heading);
     brand->addStretch();
     layout->addLayout(brand);
     layout->addWidget(text("Nintendo Switch LAN play over ZeroTier"));
