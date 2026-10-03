@@ -95,6 +95,19 @@ def main():
     }, indent=2) + '\n', encoding='utf-8')
     checksums = {str(p.relative_to(app)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(app.rglob('*')) if p.is_file()}
     (app / 'SHA256SUMS.txt').write_text(''.join(f'{digest}  {name}\n' for name, digest in checksums.items()), encoding='utf-8')
+    # Create a relative-path shortcut in the parent folder so the user can
+    # launch the app without digging into app/. Windows resolves the relative
+    # target against the shortcut's own location.
+    if sys.platform == 'win32':
+        pkg_root = args.output / 'GRID0-ofw'
+        link_path = pkg_root / 'GRID0-ofw.lnk'
+        ps = (
+            "$s = New-Object -ComObject WScript.Shell; "
+            f"$l = $s.CreateShortcut(r'{link_path}'); "
+            "$l.TargetPath = r'app\\GRID0-ofw.exe'; "
+            "$l.WorkingDirectory = r'app'; $l.Save()"
+        )
+        subprocess.run(['powershell', '-NoProfile', '-Command', ps], check=True)
     archive = args.output / 'GRID0-ofw-Windows-x64.zip'
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zip:
         for path in sorted((args.output / 'GRID0-ofw').rglob('*')):

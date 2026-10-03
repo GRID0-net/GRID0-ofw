@@ -33,33 +33,6 @@
 #ifdef Q_OS_MACOS
 #include <QtLiquidGlass/QtLiquidGlass.h>
 #endif
-#ifdef Q_OS_WIN
-#include <QProcess>
-// The release package puts everything in an app/ child folder. Create a
-// shortcut in the parent folder so the user has a clean entry point.
-static void ensureParentShortcut() {
-    const QString appDir = QCoreApplication::applicationDirPath();
-    const QString linkPath = QFileInfo(appDir).absolutePath() + "/GRID0-ofw.lnk";
-    const QString target = QCoreApplication::applicationFilePath();
-    // Use PowerShell to create the .lnk; MinGW's shobjidl.h is broken.
-    const QString cmd = QString("$s = New-Object -ComObject WScript.Shell; "
-                                "$l = $s.CreateShortcut('%1'); $l.TargetPath = '%2'; "
-                                "$l.WorkingDirectory = '%3'; $l.Save()")
-                            .arg(linkPath, target, appDir);
-    QProcess proc;
-    proc.start("powershell", {"-NoProfile", "-Command", cmd});
-    if (!proc.waitForFinished(10000)) {
-        qWarning() << "shortcut: powershell timed out";
-        proc.kill();
-        return;
-    }
-    const QString err = QString::fromLocal8Bit(proc.readAllStandardError()).trimmed();
-    if (proc.exitCode() != 0 || !err.isEmpty())
-        qWarning() << "shortcut: powershell exit" << proc.exitCode() << err;
-    if (!QFile::exists(linkPath))
-        qWarning() << "shortcut: not created at" << linkPath;
-}
-#endif
 
 static QLabel *text(const QString &s, QWidget *parent = nullptr) {
     auto *l = new QLabel(s, parent); l->setWordWrap(true); l->setTextFormat(Qt::PlainText); return l;
@@ -387,7 +360,6 @@ Window::Window(bool preview) : previewMode(preview) {
     // Check for updates on launch. Quiet: only asks if an update is actually available.
     if (!previewMode) QTimer::singleShot(2000, this, [this] { checkForUpdates(true); });
 #ifdef Q_OS_WIN
-    if (!previewMode) ensureParentShortcut();
     if (!previewMode) {
         auto *hotspotTimer = new QTimer(this);
         connect(hotspotTimer, &QTimer::timeout, this, [this] {
