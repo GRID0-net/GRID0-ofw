@@ -23,6 +23,7 @@
 #include <QUrl>
 #include <QGridLayout>
 #include <QGuiApplication>
+#include <QStyleHints>
 #include <QScrollArea>
 #ifdef Q_OS_MACOS
 #include <QtLiquidGlass/QtLiquidGlass.h>
