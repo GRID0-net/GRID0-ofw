@@ -184,23 +184,6 @@ void Preferences::autoSelectOverlayAdapter(const QList<Adapter> &adapters, const
     }
 }
 
-void Preferences::autoSelectLocalAdapter(const QList<Adapter> &adapters) {
-    if (dhcp) {
-        for (const auto &a : adapters) {
-            if (a.hotspot && a.up) {
-                localInterface = a.name;
-                return;
-            }
-        }
-    } else {
-        for (const auto &a : adapters) {
-            if (a.wifi && a.up && !a.overlay) {
-                localInterface = a.name;
-                return;
-            }
-        }
-    }
-}
 void Preferences::load(QSettings &s) {
     launchZeroTierIfPresent();
     localInterface = s.value("network/local").toString(); overlayInterface = s.value("network/overlay").toString();
@@ -210,9 +193,7 @@ void Preferences::load(QSettings &s) {
     dhcp = s.value("network/dhcp", false).toBool();
     theme = s.value("appearance/theme", 0).toInt();
     dnsFranceFirst = s.value("network/dnsFranceFirst", false).toBool();
-    auto adapters = discoverAdapters();
-    autoSelectOverlayAdapter(adapters);
-    autoSelectLocalAdapter(adapters);
+    autoSelectOverlayAdapter(discoverAdapters());
 }
 void Preferences::save(QSettings &s) const {
     s.setValue("network/local", localInterface); s.setValue("network/overlay", overlayInterface);
