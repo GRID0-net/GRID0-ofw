@@ -49,7 +49,6 @@ private:
     QLabel *hotspotState = nullptr;
     QLabel *hotspotDot = nullptr;
     QLabel *hotspotHint = nullptr;
-    QWidget *dnsToggle = nullptr;
     QPushButton *hotspotSetup = nullptr;
     QLabel *requirements = nullptr;
     QPushButton *start, *stop, *refresh, *setupRequirements = nullptr;
