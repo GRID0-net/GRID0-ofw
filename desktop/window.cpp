@@ -68,6 +68,12 @@ Window::Window(bool preview) : previewMode(preview) {
     headerText = new QLabel;
     headerText->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     brand->addWidget(headerText);
+    auto *ofwLabel = new QLabel("ofw");
+    QFont ofwFont; ofwFont.setPointSize(28); ofwFont.setWeight(QFont::Light);
+    ofwLabel->setFont(ofwFont);
+    ofwLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    brand->addWidget(ofwLabel);
+    headerOfw = ofwLabel;
     updateHeaderTheme();
     brand->addStretch();
     layout->addLayout(brand);
@@ -261,8 +267,27 @@ void Window::updateHeaderTheme() {
     int t = preferences.theme;
     const bool systemDark = QGuiApplication::palette().color(QPalette::Window).lightness() < 128;
     bool dark = t == 1 || (t == 0 && systemDark);
+    // Apply the actual theme palette
+    if (t == 0) {
+        qApp->setPalette(QApplication::style()->standardPalette());
+    } else if (dark) {
+        QPalette p;
+        p.setColor(QPalette::Window, QColor(30, 30, 30));
+        p.setColor(QPalette::WindowText, Qt::white);
+        p.setColor(QPalette::Base, QColor(45, 45, 45));
+        p.setColor(QPalette::AlternateBase, QColor(60, 60, 60));
+        p.setColor(QPalette::Text, Qt::white);
+        p.setColor(QPalette::Button, QColor(53, 53, 53));
+        p.setColor(QPalette::ButtonText, Qt::white);
+        p.setColor(QPalette::Highlight, QColor(42, 130, 218));
+        p.setColor(QPalette::HighlightedText, Qt::white);
+        qApp->setPalette(p);
+    } else {
+        qApp->setPalette(QApplication::style()->standardPalette());
+    }
     const QString path = dark ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
-    headerText->setPixmap(QPixmap(path).scaledToHeight(36, Qt::SmoothTransformation));
+    headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
+    headerOfw->setStyleSheet(dark ? "color: white;" : "color: black;");
 }
 void Window::selectPage(int page, int sub) { tabs->setCurrentIndex(page); settingsTabs->setCurrentIndex(sub); }
 void Window::refreshAdapters() {
