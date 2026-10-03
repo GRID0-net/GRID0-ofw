@@ -156,12 +156,17 @@ Window::Window(bool preview) : previewMode(preview) {
         form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
     }
     auto *dnsNotice1 = text("Set closest one as Primary DNS");
-    form->addWidget(dnsNotice1, 3, 2, 1, 2);
     auto *dnsNotice2 = text("Set the other as Secondary DNS");
-    form->addWidget(dnsNotice2, 4, 2, 1, 2);
+    dnsNotice1->setWordWrap(false);
+    dnsNotice2->setWordWrap(false);
     auto *copy = new QPushButton("Copy Switch settings");
-    auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();
-    form->addLayout(copyRow, 5, 0, 1, 4); playLayout->addWidget(group);
+    auto *dnsHintRow = new QHBoxLayout;
+    dnsHintRow->addWidget(dnsNotice1);
+    dnsHintRow->addWidget(dnsNotice2);
+    dnsHintRow->addWidget(copy);
+    dnsHintRow->addStretch();
+    form->addLayout(dnsHintRow, 3, 0, 1, 4);
+    playLayout->addWidget(group);
 #ifdef Q_OS_MACOS
     // A QFrame gives the native effect an independent host. QGroupBox uses a
     // shared Qt backing view, which would place the AppKit layer over its text.
@@ -264,7 +269,14 @@ Window::Window(bool preview) : previewMode(preview) {
     for (auto *edit : {gateway, executable}) connect(edit, &QLineEdit::textChanged, this, [this] { save(); });
     for (auto *check : {diagnostics, capture, discovery}) connect(check, &QCheckBox::toggled, this, [this] { save(); });
     manualMode->setChecked(!preferences.dhcp); autoMode->setChecked(preferences.dhcp);
-    for (auto *mode : {manualMode, autoMode}) connect(mode, &QRadioButton::toggled, this, [this] { save(); });
+    for (auto *mode : {manualMode, autoMode}) connect(mode, &QRadioButton::toggled, this, [this] {
+        if (loading) return;
+        preferences.dhcp = autoMode->isChecked();
+        preferences.autoSelectLocalAdapter(adapters);
+        const int li = local->findData(preferences.localInterface);
+        if (li >= 0) local->setCurrentIndex(li);
+        save();
+    });
     dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
     for (auto *dns : {dnsUsFirst, dnsFrFirst}) connect(dns, &QRadioButton::toggled, this, [this] { save(); });
     connect(choose, &QPushButton::clicked, this, [this] {
@@ -330,6 +342,8 @@ void Window::updateHeaderTheme() {
                         "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px 8px; }"
             "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; selection-background-color: #3a3a3a; border: 1px solid #555555; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #555555; }"
+            "QComboBox::down-arrow { image: url(:/branding/combo-arrow-white.png); width: 12px; height: 12px; }"
             "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 6px 14px; outline: none; }"
             "QPushButton:hover { background-color: #4a4a4a; }"
             "QPushButton:pressed { background-color: #2a2a2a; }"
@@ -352,6 +366,8 @@ void Window::updateHeaderTheme() {
                         "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
             "QComboBox { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px 8px; }"
             "QComboBox QAbstractItemView { background-color: #ffffff; color: #000000; selection-background-color: #e0e0e0; border: 1px solid #aaaaaa; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #aaaaaa; }"
+            "QComboBox::down-arrow { image: url(:/branding/combo-arrow-black.png); width: 12px; height: 12px; }"
             "QPushButton { background-color: #e0e0e0; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 6px 14px; }"
             "QPushButton:hover { background-color: #d0d0d0; }"
             "QPushButton:pressed { background-color: #c0c0c0; }"
@@ -477,14 +493,6 @@ void Window::refreshAdapters() {
     for (const auto &a : adapters) {
         if (preferences.localInterface.isEmpty() && a.up && !a.overlay && (a.wifi || a.name == "en0")) preferences.localInterface = a.name;
         if (preferences.overlayInterface.isEmpty() && a.up && a.overlay) preferences.overlayInterface = a.name;
-    }
-    // Automatic (DHCP) mode is built around the PC hotspot: prefer its adapter whenever it is up.
-    if (preferences.dhcp) {
-        bool currentIsHotspot = false;
-        for (const auto &a : adapters) if (a.name == preferences.localInterface && a.hotspot && a.up) currentIsHotspot = true;
-        if (!currentIsHotspot) {
-            for (const auto &a : adapters) if (a.hotspot && a.up && !a.overlay) { preferences.localInterface = a.name; break; }
-        }
     }
     for (auto pair : {qMakePair(local, preferences.localInterface), qMakePair(overlay, preferences.overlayInterface)}) {
         pair.first->clear(); pair.first->addItem("Choose an adapter", QString());
