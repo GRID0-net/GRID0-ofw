@@ -150,17 +150,17 @@ jobs:
         run: |
           $package = 'dist/windows-test/GRID0-ofw'
           Write-Host '== packaged launcher tests =='
-          & "$package/app/zll-desktop-tests.exe"
+          & "$package/zll-desktop-tests.exe"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Write-Host '== relay version =='
-          & "$package/app/GRID0-ofw-cli.exe" --version
+          & "$package/GRID0-ofw-cli.exe" --version
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # Without Npcap the relay is meant to fail: it prints its own message
           # and exits 2. Read that from files rather than merging the program's
           # stderr into PowerShell's, which this shell turns into a script error
           # before the check below can run.
           Write-Host '== relay without Npcap: expecting its own error and exit 2 =='
-          $relay = (Resolve-Path "$package/app/GRID0-ofw-cli.exe").Path
+          $relay = (Resolve-Path "$package/GRID0-ofw-cli.exe").Path
           $run = Start-Process -FilePath $relay -ArgumentList '--list-if' -NoNewWindow -Wait -PassThru `
               -RedirectStandardOutput list-if.out -RedirectStandardError list-if.err
           $log = (Get-Content list-if.out, list-if.err -Raw -ErrorAction SilentlyContinue) -join "`n"
@@ -176,7 +176,7 @@ jobs:
           python tests/test_windows_gui_startup.py dist/windows-test/GRID0-ofw
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $env:QT_QPA_PLATFORM = 'offscreen'
-          & 'dist/windows-test/GRID0-ofw/app/zll-layout-tests.exe'
+          & 'dist/windows-test/GRID0-ofw/zll-layout-tests.exe'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Package player build
         run: python desktop/package-windows.py --build build-windows --qt deps/windows/qt --qt-source deps/windows/downloads/qtbase-everywhere-src-6.11.2.tar.xz --compiler g++ --output dist/windows-x64
@@ -209,7 +209,7 @@ jobs:
           These are unsigned development builds. Windows and macOS will warn on first run, and nothing
           here has been through a release test. For a stable build, use a versioned release instead.
 
-          - `GRID0-ofw-Windows-x64.zip` - extract the whole folder, then use the `GRID0-ofw` shortcut (or run `app/GRID0-ofw.exe`)
+          - `GRID0-ofw-Windows-x64.zip` - extract the whole folder, then run `GRID0-ofw.exe`
           - `GRID0-ofw-macOS-arm64.zip` - Apple Silicon Macs
           - `GRID0-ofw-macOS-x64.zip` - Intel Macs
           - `GRID0-ofw-x86_64.AppImage` - Linux; needs ZeroTier and your distribution's libpcap
