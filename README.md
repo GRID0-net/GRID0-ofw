@@ -4,10 +4,11 @@
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
 
-**Play Switch games online with friends over a virtual LAN. OFW build for stock Switch 1 and 2.**
+**Play Switch games online with friends over a virtual LAN.<br>
+Original Firm-Ware (ofw) build for stock Switch 1 and 2, for Unmodded Switch Users.**
 
 <sub>Replaces the old LAN-play relays with better stability, faster speeds, and an easier setup.</sub><br>
-<sub>Works with banned switch users and emulator users. Fork of switch-lan-play, runs on ZeroTier. More info at [GRID0](https://github.com/GRID0-net/GRID0).</sub>
+<sub>Works for cross-play with banned switch users and emulator users. Fork of switch-lan-play, runs on ZeroTier. More info at [GRID0](https://github.com/GRID0-net/GRID0).</sub>
 
 
 ## Setup Guide
