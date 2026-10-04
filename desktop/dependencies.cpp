@@ -21,7 +21,7 @@ DependencyInstaller::DependencyInstaller(QObject *parent) : QObject(parent) {
     connect(&installer, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
         [this](int exitCode, QProcess::ExitStatus exitStatus) {
             if (exitStatus != QProcess::NormalExit || exitCode != 0) {
-                emit failed("The installer did not finish successfully. Check its window, then reopen Grid0 Relay.");
+                emit failed("The installer did not finish successfully. Check its window, then reopen GRID0-ofw.");
                 return;
             }
             installNext();
@@ -56,7 +56,7 @@ static bool downloadWithWinHttp(const QUrl &url, QSaveFile *output, QString *err
     const std::wstring host = url.host().toStdWString();
     const std::wstring path = (url.path(QUrl::FullyEncoded) +
                                (url.query().isEmpty() ? QString() : "?" + url.query(QUrl::FullyEncoded))).toStdWString();
-    HINTERNET session = WinHttpOpen(L"GRID0 Relay/0.6.10", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+    HINTERNET session = WinHttpOpen(L"GRID0-ofw/2.0.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                                     WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!session) { *error = "Windows could not initialize its secure download service."; return false; }
     HINTERNET connection = WinHttpConnect(session, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
@@ -100,7 +100,7 @@ DependencyStatus DependencyInstaller::status() const {
         result.npcap = QFile::exists(npcap);
     }
     // Npcap's service is named "npcap". NPF and the legacy uninstall key are
-    // WinPcap markers; do not offer a side-by-side driver install.
+    // WinPcap markers. Do not offer a side-by-side driver install.
     result.winPcap = !result.npcap && (serviceExists(L"NPF") || winPcapRegistryPresent());
 #elif defined(Q_OS_MACOS)
     for (const auto &adapter : QNetworkInterface::allInterfaces()) {
@@ -148,7 +148,7 @@ void DependencyInstaller::installMissing() {
 #ifdef Q_OS_WIN
     const auto current = status();
     if (current.winPcap) {
-        emit failed("WinPcap is installed. Remove it in Apps & Features, then reopen Grid0 Relay before installing Npcap.");
+        emit failed("WinPcap is installed. Remove it in Apps & Features, then reopen GRID0-ofw before installing Npcap.");
         return;
     }
     pending.clear();

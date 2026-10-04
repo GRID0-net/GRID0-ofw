@@ -135,7 +135,7 @@ void RelayController::start(const Preferences &p, const QList<Adapter> &adapters
     return;
 #else
 #if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
-    QString helper = QCoreApplication::applicationDirPath() + "/grid0-relay-supervisor";
+    QString helper = QCoreApplication::applicationDirPath() + "/GRID0-ofw-supervisor";
     QString relay = p.relayPath;
     if (!QFileInfo(helper).isExecutable()) { emit message("The bundled launcher is missing. Rebuild the desktop app."); return; }
 #endif
@@ -164,7 +164,7 @@ void RelayController::start(const Preferences &p, const QList<Adapter> &adapters
             {"switchMask", p.overlay(adapters).mask}, {"capture", p.capture}}).toJson());
     }
 #ifdef Q_OS_WIN
-    const QString eventName = "Local\\Grid0Relay.Stop." + QUuid::createUuid().toString(QUuid::Id128);
+    const QString eventName = "Local\\GRID0-ofw.Stop." + QUuid::createUuid().toString(QUuid::Id128);
     windowsStopEvent = CreateEventW(nullptr, TRUE, FALSE, reinterpret_cast<const wchar_t *>(eventName.utf16()));
     if (!windowsStopEvent) { log.close(); emit message("Cannot create the relay stop control."); return; }
     pending.clear(); ready = false;

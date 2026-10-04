@@ -3,7 +3,7 @@
 Run from the project directory:
 
 ```sh
-sudo ./build/src/grid0-relay --netif en0 --zerotier-if feth1082 --diagnostics --capture-prefix ./lobby-test-01
+sudo ./build/src/GRID0-ofw --netif en0 --zerotier-if feth1082 --diagnostics --capture-prefix ./lobby-test-01
 ```
 
 Replace adapter names with the selected local interfaces. Use a new capture prefix for each run; existing files are never overwritten. The parent directory must exist. Ctrl-C flushes and closes the captures.
@@ -36,7 +36,7 @@ Upstream `src/ipv4/ipv4.c` forwards the console's IPv4 packet into its relay cli
 
 This project instead carries IPv4 directly on the native ZeroTier adapter and maps the console's source address to the adapter's managed address. Incoming broadcasts preserve the ZeroTier subnet broadcast. The older forced translation to `10.255.255.255` has been removed. Outgoing legacy broadcast translation remains for compatibility, but UDP/35000 at a mismatched broadcast prints a warning: it cannot repair PIA authentication. This exposes traffic to the host OS stack, unlike upstream's inner game packets. macOS generated ICMP port-unreachable for unbound game UDP ports in the second captured test. The filter exposes host-source ICMP instead of hiding it.
 
-The relay now binds UDP/35000 and UDP/49152–49155 on the dynamically detected managed IPv4 address before startup completes. Additional Switch source ports are reserved before their first outgoing datagram, up to 64 total ports per run. These sockets drain the host's duplicate copies; pcap remains the only forwarding path. A conflicting application causes a clear startup error for the initial ports, or an error and dropped outgoing datagram for a newly observed port. Sockets are released on shutdown. No firewall, global ICMP suppression, or routing settings are changed. The shutdown counter `Host UDP socket copies drained` confirms how many packets reached those sockets; it does not measure console delivery.
+The relay now binds UDP/35000 and UDP/49152-49155 on the dynamically detected managed IPv4 address before startup completes. Additional Switch source ports are reserved before their first outgoing datagram, up to 64 total ports per run. These sockets drain the host's duplicate copies; pcap remains the only forwarding path. A conflicting application causes a clear startup error for the initial ports, or an error and dropped outgoing datagram for a newly observed port. Sockets are released on shutdown. No firewall, global ICMP suppression, or routing settings are changed. The shutdown counter `Host UDP socket copies drained` confirms how many packets reached those sockets; it does not measure console delivery.
 
 Do not assume removing ICMP errors guarantees a lobby: the inspected sys-zerotier `VNet::onIcmp` handles echo requests and ignores other ICMP types. The peer's installed revision and game acceptance are not established by this Mac capture.
 
@@ -68,6 +68,6 @@ Build the project first. An alternate CMake build directory can be supplied as t
 
 The first captured test was contaminated by an older GUI-launched relay that had remained running as root since the previous day. Closing a terminal or rebuilding the executable does not stop such a detached process. Both instances used the same adapters and sent different versions of received packets onto Wi-Fi.
 
-On macOS, the CLI now refuses startup if another executable named `grid0-relay` is running, including legacy versions, and new instances also hold a process-lifetime lock at `/var/run/grid0-relay.lock`. The lock file is retained after exit; its presence alone does not mean a relay is running. Do not delete the file to bypass the lock. The current implementation permits one native relay per Mac.
+On macOS, the CLI now refuses startup if another executable named `GRID0-ofw` is running, including legacy versions, and new instances also hold a process-lifetime lock at `/var/run/GRID0-ofw.lock`. The lock file is retained after exit; its presence alone does not mean a relay is running. Do not delete the file to bypass the lock. The current implementation permits one native relay per Mac.
 
 The current Qt launcher waits for `Relay started (PID ...)` after full initialization and reports early startup errors. Its supervisor sends SIGINT and reaps its relay child on Stop or app disconnection. The older SwiftUI prototype could leave a detached process; the CLI's existing-process message identifies that PID if it blocks a new test.

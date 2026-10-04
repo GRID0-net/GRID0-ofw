@@ -23,7 +23,7 @@ def main():
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     subprocess.run([sys.executable, str(root / 'tests/check_windows_entrypoint.py'),
-                    str(args.build / 'desktop/Grid0Relay.exe'),
+                    str(args.build / 'desktop/GRID0-ofw.exe'),
                     '--objdump', args.compiler.replace('g++', 'objdump')], check=True)
     if args.output.exists(): parser.error('Use a fresh output directory; existing packages are never overwritten.')
     if not args.qt_source.is_file(): parser.error('The matching Qt source archive is required.')
@@ -41,12 +41,12 @@ def main():
     if not any((directory / 'libstdc++-6.dll').is_file() for directory in search[:-1]):
         parser.error('Cannot locate the selected MinGW compiler runtime (libstdc++-6.dll). Checked: ' +
                      ', '.join(str(directory) for directory in search[:-1]))
-    app = args.output / 'GRID0-Relay'
+    app = args.output / 'GRID0-ofw'
     app.mkdir(parents=True)
-    for name in ['Grid0Relay.exe', 'grid0-relay.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
-        packaged = 'GRID0Relay.exe' if name == 'Grid0Relay.exe' else name
+    for name in ['GRID0-ofw.exe', 'GRID0-ofw-cli.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
+        packaged = name
         shutil.copy2(args.build / 'desktop' / name, app / packaged)
-    for name in ['platforms/qwindows.dll', 'styles/qmodernwindowsstyle.dll'] + (['platforms/qoffscreen.dll'] if args.include_tests else []):
+    for name in ['platforms/qwindows.dll', 'styles/qmodernwindowsstyle.dll', 'tls/qschannelbackend.dll'] + (['platforms/qoffscreen.dll'] if args.include_tests else []):
         dest = app / 'plugins' / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(args.qt / 'plugins' / name, dest)
@@ -73,7 +73,7 @@ def main():
     # developer credentials. It includes the pinned libuv/uvw implementation.
     allowed = ['CMakeLists.txt', 'README.md', 'LICENSE.txt', 'FORK_NOTICE.md', '.gitmodules',
                'src', 'base', 'cmake', 'desktop', 'external', 'lwip', 'uv_lwip', 'tests', 'scripts', 'docs', '.github']
-    with tarfile.open(source / 'GRID0-Relay-source.tar.gz', 'w:gz') as tar:
+    with tarfile.open(source / 'GRID0-ofw-source.tar.gz', 'w:gz') as tar:
         for name in allowed:
             item = root / name
             files = sorted(item.rglob('*')) if item.is_dir() else [item]
@@ -81,7 +81,7 @@ def main():
                 if not file.is_file() or file.is_symlink(): continue
                 if any(part in ('.git', '__pycache__', '.DS_Store') for part in file.parts): continue
                 if file.suffix in ('.pyc', '.pcap', '.log'): continue
-                tar.add(file, arcname='GRID0-Relay/' + str(file.relative_to(root)), recursive=False)
+                tar.add(file, arcname='GRID0-ofw/' + str(file.relative_to(root)), recursive=False)
     # Strip only copies; retain the build's debugging information locally.
     strip = shutil.which(args.compiler.replace('g++', 'strip'))
     if strip:
@@ -95,9 +95,9 @@ def main():
     }, indent=2) + '\n', encoding='utf-8')
     checksums = {str(p.relative_to(app)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(app.rglob('*')) if p.is_file()}
     (app / 'SHA256SUMS.txt').write_text(''.join(f'{digest}  {name}\n' for name, digest in checksums.items()), encoding='utf-8')
-    archive = args.output / 'GRID0-Relay-Windows-x64.zip'
+    archive = args.output / 'GRID0-ofw-Windows-x64.zip'
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zip:
-        for path in sorted(app.rglob('*')):
+        for path in sorted((args.output / 'GRID0-ofw').rglob('*')):
             if path.is_file(): zip.write(path, path.relative_to(args.output))
     print(f'Packaged and audited {len(dependencies)} Windows executables/libraries: {archive.resolve()}')
 

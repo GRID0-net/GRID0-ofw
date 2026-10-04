@@ -1,6 +1,6 @@
 # Bundled components
 
-GRID0 Relay is GPLv3; see LICENSE.txt and FORK_NOTICE.md. Its source archive includes the native relay, Qt launcher, build scripts, and the upstream-pinned libuv/uvw/lwIP sources with their notices. Session logs and packet captures are excluded.
+GRID0-ofw is GPLv3; see LICENSE.txt and FORK_NOTICE.md. Its source archive includes the native relay, Qt launcher, build scripts, and the upstream-pinned libuv/uvw/lwIP sources with their notices. Session logs and packet captures are excluded.
 
 On macOS, the desktop app statically includes the vendored [qt-liquid-glass](https://github.com/fsalinas26/qt-liquid-glass) project by Fernando Salinas. It provides the native Liquid Glass effects used by the relay-summary and Switch-settings surfaces. The upstream repository identifies the project as MIT licensed; its source and upstream README are retained under `external/qt-liquid-glass`.
 

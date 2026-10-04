@@ -1,12 +1,12 @@
-# Windows preview — Grid0 Relay
+# Windows preview - GRID0-ofw
 
 This is a Windows x64 build of the Qt desktop app and the native ZeroTier relay. The macOS version has been tested successfully with Splatoon 3 hosting and room discovery. This Windows port has been cross-compiled and its packaged DLL imports audited; Windows gameplay, adapter injection and UAC behavior still need hardware testing. It is an unsigned development build.
 
 ## Set up and play
 
-1. Extract the **whole ZIP** to a folder, then open **Grid0Relay.exe**. Approve Windows' administrator prompt.
-2. If ZeroTier One or Npcap is missing, Grid0 Relay offers the official installer in **Settings → Connection**. It downloads each installer over HTTPS, asks Windows to validate its Authenticode signature, installs ZeroTier, and opens Npcap's official installer so you can approve its driver terms. The Npcap SDK is only for developers; players do not need it.
-3. If WinPcap is detected, use the app's **Open Apps & Features** button to remove it, then reopen Grid0 Relay before installing Npcap.
+1. Extract the **whole ZIP** to a folder, then open **GRID0-ofw.exe**. Approve Windows' administrator prompt.
+2. If ZeroTier One or Npcap is missing, GRID0-ofw offers the official installer in **Settings → Connection**. It downloads each installer over HTTPS, asks Windows to validate its Authenticode signature, installs ZeroTier, and opens Npcap's official installer so you can approve its driver terms. The Npcap SDK is only for developers; players do not need it.
+3. If WinPcap is detected, use the app's **Open Apps & Features** button to remove it, then reopen GRID0-ofw before installing Npcap.
 4. Join and authorize the same ZeroTier network as your friend. Give each ZeroTier member its own managed IPv4 address; the desktop UI currently supports a `/24` network (`255.255.255.0`).
 5. Connect the PC and Switch to the same local network. In **Settings → Connection**, choose the PC's local Wi-Fi/Ethernet adapter and the ZeroTier adapter. Friendly names and IPs are shown; choices are saved. If an adapter is missing, connect ZeroTier and refresh.
 6. Enter the **exact IP, subnet mask and fake gateway shown on Play** into the Switch's manual network settings. The Switch uses this PC's ZeroTier managed IP on its separate physical LAN. Reconnect the Switch and restart the game after changes. Enter Splatoon 3's native LAN mode, not local wireless mode.
@@ -24,13 +24,13 @@ This preview uses the existing local-network method. It does not configure Mobil
 - **No room:** verify identical game versions, native LAN mode, exact mask/IP settings, and a friend actually hosting a room. Enable **Settings → Advanced → Detailed traffic diagnostics**. Packet captures are optional and include game payloads and addresses.
 - **Ports already in use:** stop another relay instance or the application using the reported UDP port. The relay reserves local game ports to prevent the host network stack from rejecting incoming packets.
 
-Reports stay under the current Windows account's local application data, normally `%LOCALAPPDATA%\Grid0 Relay\Grid0Relay\reports`. Use **Open reports folder** to find the exact path, then stop the relay and **Export report**. No reports are uploaded automatically.
+Reports stay under the current Windows account's local application data, normally `%LOCALAPPDATA%\GRID0-ofw\GRID0-ofw\reports`. Use **Open reports folder** to find the exact path, then stop the relay and **Export report**. No reports are uploaded automatically.
 
-The CLI is included as `grid0-relay.exe`. From an administrator PowerShell in the extracted folder:
+The CLI is included as `GRID0-ofw-cli.exe`. From an administrator PowerShell in the extracted folder:
 
 ```powershell
-.\grid0-relay.exe --list-if
-.\grid0-relay.exe --netif '\Device\NPF_{LOCAL-GUID}' --zerotier-if '\Device\NPF_{ZEROTIER-GUID}' --diagnostics
+.\GRID0-ofw-cli.exe --list-if
+.\GRID0-ofw.exe --netif '\Device\NPF_{LOCAL-GUID}' --zerotier-if '\Device\NPF_{ZEROTIER-GUID}' --diagnostics
 ```
 
 Use the names printed by `--list-if`, including braces. The GUI translates Windows adapter GUIDs to Npcap names automatically. Press Ctrl-C to stop the CLI.
@@ -47,7 +47,7 @@ python3 scripts/build-windows.py --host-qt "$(brew --prefix qtbase)"
 
 The host Qt tools must be **6.11.2**, matching the pinned Windows SDK. If Homebrew has moved on, use a matching Qt installation and pass its prefix to `--host-qt`; do not combine different moc/header versions. This build was compiled with Homebrew MinGW GCC 16.2.0 and the official Qt 6.11.2 MinGW SDK. Compiler runtime DLLs are taken from the selected compiler, and bundled imports/exports are checked during packaging. Runtime testing is still required for this cross-toolchain combination.
 
-Output: `dist/windows-x64/Grid0-Relay-Windows-x64.zip`. The package includes Qt's Windows 11 style, compiler DLLs, license notices, this project's buildable source, and the matching Qt source archive. Npcap and ZeroTier are downloaded only after an explicit user request; neither is included in the package. Choose a fresh `--output` directory when repackaging; existing packages are not overwritten. Use `--no-package` for a build only. SDK downloads may be cached; no private captures are added to the source archive.
+Output: `dist/windows-x64/GRID0-ofw-Windows-x64.zip`. The package includes Qt's Windows 11 style, compiler DLLs, license notices, this project's buildable source, and the matching Qt source archive. Npcap and ZeroTier are downloaded only after an explicit user request; neither is included in the package. Choose a fresh `--output` directory when repackaging; existing packages are not overwritten. Use `--no-package` for a build only. SDK downloads may be cached; no private captures are added to the source archive.
 
 On Linux, the same scripts work with `mingw-w64`, Ninja, matching host Qt tools and `7zz`/`7z` to extract the Qt archive. Linux-host cross compilation has not been tested here.
 
@@ -82,9 +82,9 @@ The Windows look is Qt Widgets' `windows11` style, with system theme/palette sup
 
 The first 0.6.0 Windows preview had an entry-point loop: Qt renamed the application `main` to `qMain`, while the custom WinMain called MinGW's fallback `main`, which called WinMain again. The app could consume a CPU core without creating any window. Version 0.6.1 uses an explicitly named application entry point, and a linked-binary regression check rejects the original broken executable.
 
-End any stuck older Grid0 Relay processes in Task Manager, extract the replacement ZIP into a fresh folder, and run **Grid0Relay.exe**. The dashed `grid0-relay.exe` is the command-line relay and does not have a GUI.
+End any stuck older GRID0-ofw processes in Task Manager, extract the replacement ZIP into a fresh folder, and run **GRID0-ofw.exe**. The dashed `GRID0-ofw.exe` is the command-line relay and does not have a GUI.
 
-Windows startup stages and Qt messages are appended to `%TEMP%\Grid0-Relay-startup.log`. If no window appears, include that file in a report. Each line is tagged with its process ID; no packet capture is enabled by this log. A failure before the application entry point may not create a log.
+Windows startup stages and Qt messages are appended to `%TEMP%\GRID0-ofw-startup.log`. If no window appears, include that file in a report. Each line is tagged with its process ID; no packet capture is enabled by this log. A failure before the application entry point may not create a log.
 
 The CI GUI smoke test uses the same entry point and window sources without an administrator manifest, renders a preview through the offscreen Qt plugin, and requires exit within 20 seconds. UAC and real desktop appearance still require a Windows PC. This test is configured for Windows CI, not claimed as executed on the Mac.
 

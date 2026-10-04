@@ -627,6 +627,14 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
      * consoles keep the previous behavior. */
     const bool dhcp = wifi_dest && !zt_dest;
     if (dhcp && !is_nintendo_mac(frame + 6)) return false;
+    if (dhcp && !options.dhcp_server) {
+        /* Manual mode: a console left on Automatic/DHCP must not become the
+         * relay target. Say so plainly instead of silently using it. */
+        if (!lp->switch_seen || !CMP_MAC(frame + 6, lp->switch_mac))
+            LLOG(LLOG_WARNING, "Ignoring DHCP/Automatic device %u.%u.%u.%u: the relay runs in manual IP mode. Put the Switch on manual IP settings or switch the app to Automatic (DHCP).",
+                 ip[0], ip[1], ip[2], ip[3]);
+        return false;
+    }
     if (lp->switch_seen && !CMP_IPV4(ip, lp->switch_ip)) return false;
     bool changed = !lp->switch_seen || !CMP_MAC(frame + 6, lp->switch_mac);
     if (lp->switch_seen && changed && (lp->switch_mac_confirmed || !direct)) {
@@ -813,10 +821,20 @@ int lan_play_init(struct lan_play *lan_play)
     }
     eprintf("native init: opening Wi-Fi capture\n");
     ret = init_pcap(lan_play, options.netif, subnet_filter);
-    if (ret != 0) return ret;
+    if (ret != 0) {
+        if (!lan_play->last_err[0])
+            snprintf(lan_play->last_err, sizeof(lan_play->last_err),
+                     "Local capture failed: %s (%d)", uv_strerror(ret), ret);
+        return ret;
+    }
     eprintf("native init: opening ZeroTier capture\n");
     ret = init_zerotier_pcap(lan_play, options.zerotier_if, subnet_filter);
-    if (ret != 0) return ret;
+    if (ret != 0) {
+        if (!lan_play->last_err[0])
+            snprintf(lan_play->last_err, sizeof(lan_play->last_err),
+                     "ZeroTier capture failed: %s (%d)", uv_strerror(ret), ret);
+        return ret;
+    }
     eprintf("native init: reading Wi-Fi adapter MAC\n");
     ret = uv_pcap_get_mac(&lan_play->pcap, lan_play->wifi_mac);
     if (ret != 0) {
@@ -907,9 +925,7 @@ int lan_play_init(struct lan_play *lan_play)
     for (size_t i = 0; i < sizeof(game_ports) / sizeof(game_ports[0]); ++i) {
         ret = native_udp_guard_reserve(lan_play->udp_guard, game_ports[i]);
         if (ret != 0) {
-            native_udp_guard_close(lan_play->udp_guard);
-            lan_play->udp_guard = NULL;
-            RETURN_ERR(lan_play, "Cannot reserve ZeroTier UDP/%u: %s. Check for another application using this port.",
+            LLOG(LLOG_WARNING, "Could not reserve UDP/%u (%s). Another app may be using it, continuing without guard on this port.",
                 game_ports[i], uv_strerror(ret));
         }
     }

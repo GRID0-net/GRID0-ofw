@@ -1,6 +1,6 @@
-# GRID0 Relay fork notice
+# GRID0-ofw fork notice
 
-GRID0 Relay is a derivative of [switch-lan-play](https://github.com/spacemeowx2/switch-lan-play), based on upstream commit `1be20e1905f6ed2b2136f29f0c5aa66f2f8de04e`.
+GRID0-ofw is a derivative of [switch-lan-play](https://github.com/spacemeowx2/switch-lan-play), based on upstream commit `1be20e1905f6ed2b2136f29f0c5aa66f2f8de04e`.
 
 Upstream is licensed under GNU GPL version 3. This derivative is distributed under the same license; see [LICENSE.txt](LICENSE.txt). Its original copyright notices, bundled lwIP licensing files, and submodule licensing files are retained.
 
