@@ -5,6 +5,8 @@
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
 =====
 
+GRID0 is a way to play Switch games online with friends over a virtual LAN. This is the OFW (original firmware) version, for normal unmodded Switch 1 and Switch 2 consoles. For more info see the main repo at [GRID0-net/GRID0](https://github.com/GRID0-net/GRID0).
+
 A modern replacement to the old LAN-play relay servers resulting in:
 - Much more stability across the board
 - Much faster speeds
