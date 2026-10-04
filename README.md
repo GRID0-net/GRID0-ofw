@@ -48,6 +48,7 @@ Stock consoles cannot execute background custom modules. `GRID0-ofw` runs on a P
 </details></small>
 
 Then just start the relay and play with your friends over LAN!
-=====
 
-<sub>Built by 3 humans with limited AI assistance, tested on real Switches over many days and restless nights. A fork of switch-lan-play, networking via ZeroTier.</sub>
+---
+
+<sub>Built by 3 humans with limited AI assistance, tested on real Switches over many days and restless nights.
