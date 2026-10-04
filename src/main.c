@@ -30,8 +30,8 @@ static int report_running_relay(void)
         if (!comm) continue;
         if (fgets(name, sizeof(name), comm)) {
             name[strcspn(name, "\n")] = '\0';
-            if (!strcmp(name, "grid0-relay")) {
-                eprintf("Another GRID0 Relay is already running (PID %ld).\n"
+            if (!strcmp(name, "GRID0-ofw-cli")) {
+                eprintf("Another GRID0-ofw is already running (PID %ld).\n"
                         "Stop that relay before starting this one; two instances can interfere.\n", pid);
                 found = 1;
             }
@@ -69,8 +69,8 @@ static int acquire_relay_instance(void)
         char path[PROC_PIDPATHINFO_MAXSIZE];
         if (proc_pidpath(pids[i], path, sizeof(path)) <= 0) continue;
         const char *name = strrchr(path, '/');
-        if (name && !strcmp(name + 1, "grid0-relay")) {
-            eprintf("Another GRID0 Relay is already running (PID %d).\n"
+        if (name && !strcmp(name + 1, "GRID0-ofw-cli")) {
+            eprintf("Another GRID0-ofw is already running (PID %d).\n"
                     "Stop that relay before starting this one; two instances can interfere.\n", pids[i]);
             free(pids);
             return -1;
@@ -82,7 +82,7 @@ static int acquire_relay_instance(void)
     /* Do not unlink this file on exit: its inode is the shared lock. The OS
      * releases flock on process exit, including a crash or forced stop. */
     static int lock_fd = -1;
-    lock_fd = open("/var/run/grid0-relay.lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
+    lock_fd = open("/var/run/GRID0-ofw.lock", O_RDWR | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600);
     if (lock_fd < 0) {
         eprintf("Cannot open relay instance lock: %s. Start the relay with administrator privileges.\n", strerror(errno));
         return -1;
@@ -94,7 +94,7 @@ static int acquire_relay_instance(void)
         return -1;
     }
     if (flock(lock_fd, LOCK_EX | LOCK_NB) != 0) {
-        eprintf("Another GRID0 Relay holds the instance lock.\n");
+        eprintf("Another GRID0-ofw holds the instance lock.\n");
         close(lock_fd); lock_fd = -1;
         return -1;
     }
@@ -121,6 +121,20 @@ static void windows_control_cb(uv_timer_t *timer)
     if ((stop_event && WaitForSingleObject(stop_event, 0) == WAIT_OBJECT_0) ||
         (parent_process && WaitForSingleObject(parent_process, 0) == WAIT_OBJECT_0))
         lan_play_signal_cb(&signal_int, SIGINT);
+}
+// Packet capture needs administrator rights. Fail early with a clear
+// message instead of a cryptic error from deep in the init path.
+static bool windows_has_admin(void)
+{
+    BOOL isAdmin = FALSE;
+    PSID adminGroup = NULL;
+    SID_IDENTIFIER_AUTHORITY ntAuth = SECURITY_NT_AUTHORITY;
+    if (AllocateAndInitializeSid(&ntAuth, 2, SECURITY_BUILTIN_DOMAIN_RID,
+                                 DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup)) {
+        CheckTokenMembership(NULL, adminGroup, &isAdmin);
+        FreeSid(adminGroup);
+    }
+    return isAdmin != FALSE;
 }
 #endif
 
@@ -290,6 +304,8 @@ int parse_arguments(int argc, char **argv)
             options.discover_switch = false;
         } else if (!strcmp(arg, "--dhcp")) {
             options.dhcp_server = true;
+        } else if (!strcmp(arg, "--dns-france-first")) {
+            options.dns_france_first = true;
         } else if (!strcmp(arg, "--broadcast")) {
             options.broadcast = true;
             options.relay_server_addr = "255.255.255.255:11451";
@@ -374,6 +390,7 @@ void print_help(const char *name)
         "        [--capture-prefix <path>] save five packet traces, including game payloads\n"
         "        [--no-discover-switch] disable automatic local Switch ARP discovery\n"
         "        [--dhcp] run a DHCP server for Automatic/DHCP Switches (Nintendo devices only)\n"
+        "        [--dns-france-first] list the France 90DNS server before the US one\n"
         "        [--pmtu <pmtu>]\n"
         "        [--socks5-server-addr <addr>]\n"
         "        [--rpc <address>]\n"
@@ -419,7 +436,7 @@ void lan_play_signal_cb(uv_signal_t *signal, int signum)
 
 void print_version()
 {
-    printf("GRID0 Relay " LANPLAY_VERSION "\n");
+    printf("GRID0-ofw " LANPLAY_VERSION "\n");
 }
 
 void list_netif()
@@ -459,12 +476,19 @@ int old_main()
         return 2;
     }
 
+#ifdef _WIN32
+    if (!windows_has_admin()) {
+        eprintf("The relay must run as administrator for packet capture. Right-click GRID0-ofw and choose Run as administrator, then start the relay again.\n");
+        return 3;
+    }
+#endif
+
 #if defined(__APPLE__) || defined(__linux__)
     if (acquire_relay_instance() != 0) return 2;
 #elif defined(_WIN32)
-    instance_mutex = CreateMutexW(NULL, FALSE, L"Local\\Grid0Relay.NativeRelay");
+    instance_mutex = CreateMutexW(NULL, FALSE, L"Local\\GRID0-ofw.NativeRelay");
     if (!instance_mutex || GetLastError() == ERROR_ALREADY_EXISTS) {
-        eprintf("Another GRID0 Relay relay is running, or its instance lock is unavailable.\n");
+        eprintf("Another GRID0-ofw relay is running, or its instance lock is unavailable.\n");
         return 2;
     }
     if (stop_event_name) {
@@ -488,7 +512,8 @@ int old_main()
     }
     ret = lan_play_init(lan_play);
     if (ret != 0) {
-        eprintf("Failed to start native relay (status %d): %s\n", ret, lan_play->last_err[0] ? lan_play->last_err : "unknown initialization error");
+        const char *detail = lan_play->last_err[0] ? lan_play->last_err : uv_strerror(ret);
+        eprintf("Failed to start native relay (status %d): %s\n", ret, detail);
         return ret;
     }
 

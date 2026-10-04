@@ -17,7 +17,7 @@ endif()
 # A submodule counts as present only when its own marker file is there. A
 # checkout that exists but contains something else is reported by name instead
 # of being added as a subdirectory: a copy of this project in external/uvw
-# would otherwise make CMake configure GRID0 Relay a second time and fail with
+# would otherwise make CMake configure GRID0-ofw a second time and fail with
 # dozens of confusing duplicate-target errors.
 function(zll_require_submodule path marker name)
     set(directory "${ZLL_EXTERNAL_DIR}/${path}")

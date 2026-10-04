@@ -17,6 +17,7 @@ class Window : public QMainWindow {
 public:
     explicit Window(bool preview = false);
     void selectPage(int page, int settingsPage = 0);
+    void checkForUpdates(bool quiet = false);
 protected:
     void closeEvent(QCloseEvent *) override;
 private:
@@ -27,6 +28,7 @@ private:
     void checkDependencies();
     void promptForDependencies();
     void setupDependencies();
+    void updateHeaderTheme();
     Preferences preferences;
     QList<Adapter> adapters;
     RelayController relay;
@@ -36,10 +38,19 @@ private:
     QComboBox *local, *overlay;
     QLineEdit *gateway, *executable;
     QCheckBox *diagnostics, *capture, *discovery;
+    QComboBox *theme;
+    QLabel *headerIcon, *headerText, *headerOfw;
+    QPalette systemPalette;
     QRadioButton *manualMode, *autoMode;
+    QRadioButton *dnsUsFirst, *dnsFrFirst;
     QGroupBox *switchSettingsGroup;
-    QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *validation, *settingsHint, *dhcpHint;
-    QLabel *hotspotStatus = nullptr;
+    QGroupBox *autoSettingsGroup;
+    QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsAmerica, *dnsEurope, *validation, *settingsHint;
+    QLabel *hotspotState = nullptr;
+    QLabel *hotspotDot = nullptr;
+    QLabel *fwState = nullptr;
+    QLabel *fwDot = nullptr;
+    QLabel *hotspotHint = nullptr;
     QPushButton *hotspotSetup = nullptr;
     QLabel *requirements = nullptr;
     QPushButton *start, *stop, *refresh, *setupRequirements = nullptr;

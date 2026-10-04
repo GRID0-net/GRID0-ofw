@@ -1,4 +1,4 @@
-# Building GRID0 Relay
+# Building GRID0-ofw
 
 This is mostly here for people who want to build it themselves instead of
 waiting for a release. You will need a compiler, CMake, and the right Qt
@@ -21,8 +21,8 @@ app: an Intel Mac needs a build made on an Intel Mac.
 2. Clone the repo with submodules, then enter it:
 
    ```bash
-   git clone --recurse-submodules https://github.com/redluigi323/GRID0-relay.git
-   cd GRID0-relay
+   git clone --recurse-submodules https://github.com/GRID0-net/ofw-GRID0.git
+   cd GRID0-ofw
    ```
 
 3. Configure and build the Qt GUI and relay:
@@ -35,7 +35,7 @@ app: an Intel Mac needs a build made on an Intel Mac.
 4. Your app will be at:
 
    ```text
-   build/desktop/Grid0Relay.app
+   build/desktop/GRID0-ofw.app
    ```
 
 5. To make a shareable app bundle and ZIP, run:
@@ -49,8 +49,8 @@ their Mac. macOS already includes libpcap, so Npcap is not needed here.
 
 Both Macs are built in CI: the Apple Silicon app on `macos-latest` and the
 Intel app on `macos-15-intel`, on every push and again for a release, where
-they are attached as `GRID0-Relay-macOS-arm64.zip` and
-`GRID0-Relay-macOS-x64.zip`. GitHub retired the older `macos-13` Intel image in
+they are attached as `GRID0-ofw-macOS-arm64.zip` and
+`GRID0-ofw-macOS-x64.zip`. GitHub retired the older `macos-13` Intel image in
 December 2025, so that label no longer works.
 
 ## Windows
@@ -77,11 +77,11 @@ compiler too.
    pacman -S --needed git python mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-cmake mingw-w64-ucrt-x86_64-ninja p7zip
    ```
 
-3. Clone GRID0 Relay with its submodules:
+3. Clone GRID0-ofw with its submodules:
 
    ```bash
-   git clone --recurse-submodules https://github.com/redluigi323/GRID0-relay.git
-   cd GRID0-relay
+   git clone --recurse-submodules https://github.com/GRID0-net/ofw-GRID0.git
+   cd GRID0-ofw
    ```
 
    The submodules are not optional. GitHub's "Download ZIP" button leaves
@@ -97,7 +97,7 @@ compiler too.
    ```
 
 5. The release ZIP will be under `dist/windows-x64/`. Extract the whole ZIP
-   before running `GRID0Relay.exe`.
+   before running `GRID0-ofw.exe`.
 
    Packaging never writes over a folder that already exists. Building a second
    time means deleting `dist/windows-x64/` first, or passing a new path with
@@ -130,7 +130,7 @@ The script downloads the matching Windows Qt and Npcap SDK needed to compile.
 It does not put Npcap or ZeroTier into the release. The app handles helping the
 user install those later.
 
-Your packaged Windows release will be in `dist/`. It includes `GRID0Relay.exe`,
+Your packaged Windows release will be in `dist/`. It includes `GRID0-ofw.exe`,
 the CLI relay, Qt runtime files, licenses, and the buildable source.
 
 ## Linux
@@ -151,12 +151,12 @@ sudo apt install build-essential cmake ninja-build python3 qt6-base-dev \
 Then clone with submodules and build:
 
 ```bash
-git clone --recurse-submodules https://github.com/redluigi323/GRID0-relay.git
-cd GRID0-relay
+git clone --recurse-submodules https://github.com/GRID0-net/ofw-GRID0.git
+cd GRID0-ofw
 python3 scripts/build-linux.py --native
 ```
 
-Your AppImage will be at `dist/linux-x64/GRID0-Relay-x86_64.AppImage`. Mark it
+Your AppImage will be at `dist/linux-x64/GRID0-ofw-x86_64.AppImage`. Mark it
 executable and run it; the app asks for the relay's capture privileges through
 `pkexec` when you press Start. Without a polkit agent it tells you the `sudo`
 command to run instead.
@@ -206,7 +206,7 @@ python3 tests/run_native_tests.py
 On Linux, also check the launcher and its helper:
 
 ```bash
-python3 tests/test_desktop_supervisor.py build-linux/desktop/grid0-relay-supervisor
+python3 tests/test_desktop_supervisor.py build-linux/desktop/GRID0-ofw-supervisor
 ```
 
 GitHub Actions runs these same tests for every push: the CLI on Linux and

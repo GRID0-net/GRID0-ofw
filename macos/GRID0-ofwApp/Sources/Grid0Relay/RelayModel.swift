@@ -21,7 +21,7 @@ final class RelayModel: ObservableObject {
     @Published private(set) var isStarting = false
     @Published private(set) var relayPID: Int32?
 
-    private let logURL = URL(fileURLWithPath: "/var/tmp/grid0-relay.log")
+    private let logURL = URL(fileURLWithPath: "/var/tmp/GRID0-ofw.log")
 
     init() {
         refreshAdapters()
@@ -56,8 +56,8 @@ final class RelayModel: ObservableObject {
 
     func chooseRelay() {
         let panel = NSOpenPanel()
-        panel.title = "Choose GRID0 Relay"
-        panel.message = "Select the GRID0 Relay executable built by CMake."
+        panel.title = "Choose GRID0-ofw"
+        panel.message = "Select the GRID0-ofw executable built by CMake."
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
@@ -187,7 +187,7 @@ final class RelayModel: ObservableObject {
         let fileManager = FileManager.default
         var directory = URL(fileURLWithPath: fileManager.currentDirectoryPath, isDirectory: true)
         for _ in 0..<8 {
-            let candidate = directory.appending(path: "build/src/grid0-relay").path
+            let candidate = directory.appending(path: "build/src/GRID0-ofw").path
             if fileManager.isExecutableFile(atPath: candidate) { return candidate }
             directory.deleteLastPathComponent()
         }

@@ -5,6 +5,12 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
+#include <QNetworkRequest>
+#include <QNetworkReply>
+#include <QNetworkAccessManager>
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QFileInfo>
@@ -32,6 +38,18 @@ static QLabel *text(const QString &s, QWidget *parent = nullptr) {
     auto *l = new QLabel(s, parent); l->setWordWrap(true); l->setTextFormat(Qt::PlainText); return l;
 }
 static void title(QLabel *l, int size) { auto f = l->font(); f.setPointSize(size); f.setWeight(QFont::DemiBold); l->setFont(f); }
+// True when the release tag is actually newer, so the updater never offers
+// a downgrade when the branch is ahead of the published releases.
+static bool versionIsNewer(const QString &latest, const QString &current) {
+    const auto lp = latest.split('.');
+    const auto cp = current.split('.');
+    for (int i = 0; i < qMax(lp.size(), cp.size()); i++) {
+        int l = i < lp.size() ? lp[i].toInt() : 0;
+        int c = i < cp.size() ? cp[i].toInt() : 0;
+        if (l != c) return l > c;
+    }
+    return false;
+}
 #ifdef Q_OS_MACOS
 static void addMacGlass(QWidget *surface, QtLiquidGlass::Material material, double radius) {
     // Tests and screenshots use Qt's offscreen platform, which deliberately
@@ -47,12 +65,12 @@ static void addMacGlass(QWidget *surface, QtLiquidGlass::Material material, doub
 }
 #endif
 Window::Window(bool preview) : previewMode(preview) {
-    setWindowTitle("GRID0 Relay"); resize(740, 720); setMinimumSize(640, 590);
-    auto *appMenu = menuBar()->addMenu("GRID0 Relay");
+    setWindowTitle(QString("GRID0-ofw %1").arg(QString::fromLatin1(LANPLAY_VERSION).section('-', -1))); resize(740, 720); setMinimumSize(640, 590);
+    auto *appMenu = menuBar()->addMenu(QString::fromLatin1(LANPLAY_VERSION).section('-', -1));
     auto *preferencesAction = appMenu->addAction("Settings…");
     preferencesAction->setMenuRole(QAction::PreferencesRole); preferencesAction->setShortcut(QKeySequence::Preferences);
     connect(preferencesAction, &QAction::triggered, this, [this] { selectPage(1); });
-    auto *quit = appMenu->addAction("Quit GRID0 Relay"); quit->setMenuRole(QAction::QuitRole); quit->setShortcut(QKeySequence::Quit);
+    auto *quit = appMenu->addAction("Quit GRID0-ofw"); quit->setMenuRole(QAction::QuitRole); quit->setShortcut(QKeySequence::Quit);
     connect(quit, &QAction::triggered, this, &QWidget::close);
     if (!preview) preferences.load(settings);
     const QString bundled = bundledRelayPath();
@@ -60,20 +78,34 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *central = new QWidget; setCentralWidget(central);
     auto *layout = new QVBoxLayout(central); layout->setContentsMargins(24, 22, 24, 20); layout->setSpacing(16);
     auto *brand = new QHBoxLayout;
-    auto *logo = new QLabel;
-    logo->setPixmap(QPixmap(":/branding/grid0-logo.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    logo->setFixedSize(44, 44);
-    logo->setAlignment(Qt::AlignCenter);
-    brand->addWidget(logo);
-    auto *heading = text("GRID0 Relay"); title(heading, 23); brand->addWidget(heading);
+    brand->setSpacing(8);
     brand->addStretch();
+    headerIcon = new QLabel;
+    headerIcon->setPixmap(QPixmap(":/branding/windows-circle.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    headerIcon->setFixedSize(44, 44);
+    headerIcon->setAlignment(Qt::AlignCenter);
+    brand->addWidget(headerIcon);
+    headerText = new QLabel;
+    headerText->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    brand->addWidget(headerText);
+    auto *ofwLabel = new QLabel("ofw");
+    QFont ofwFont; ofwFont.setPointSize(28); ofwFont.setWeight(QFont::Bold);
+    ofwLabel->setFont(ofwFont);
+    ofwLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    brand->addWidget(ofwLabel);
+    headerOfw = ofwLabel;
+    brand->addStretch();
+    systemPalette = QApplication::palette();
+    updateHeaderTheme();
     layout->addLayout(brand);
-    layout->addWidget(text("Nintendo Switch LAN play over ZeroTier"));
+    auto *subtitle = text("Nintendo Switch LAN play over ZeroTier");
+    subtitle->setAlignment(Qt::AlignCenter);
+    layout->addWidget(subtitle);
     // Let QMacStyle draw its native rounded tabs. Document mode intentionally
     // uses square browser/editor tabs, inappropriate for this utility.
     tabs = new QTabWidget; layout->addWidget(tabs);
 
-    auto *play = new QWidget; auto *playLayout = new QVBoxLayout(play); playLayout->setContentsMargins(16, 24, 16, 12); playLayout->setSpacing(18);
+    auto *play = new QWidget; auto *playLayout = new QVBoxLayout(play); playLayout->setContentsMargins(16, 24, 16, 12); playLayout->setSpacing(8);
     auto *summary = new QFrame; summary->setObjectName("relaySummary");
     auto *summaryLayout = new QVBoxLayout(summary); summaryLayout->setContentsMargins(16, 14, 16, 14); summaryLayout->setSpacing(8);
     status = text("Ready to connect"); status->setObjectName("relayStatus"); title(status, 18); summaryLayout->addWidget(status);
@@ -83,23 +115,35 @@ Window::Window(bool preview) : previewMode(preview) {
     // back to a rectangular bezel rather than the standard macOS button.
     start = new QPushButton("Start relay"); start->setAutoDefault(true); start->setDefault(true);
     stop = new QPushButton("Stop relay");
-    actions->addWidget(start); actions->addWidget(stop); actions->addStretch(); summaryLayout->addLayout(actions); playLayout->addWidget(summary);
+    manualMode = new QRadioButton("Manual"); autoMode = new QRadioButton("Automatic");
+    manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode");
+    actions->addWidget(start); actions->addWidget(stop); actions->addStretch();
+    actions->addWidget(manualMode); actions->addWidget(autoMode);
+    summaryLayout->addLayout(actions); playLayout->addWidget(summary);
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
-    auto *modeRow = new QHBoxLayout;
-    manualMode = new QRadioButton("Manual IP settings"); autoMode = new QRadioButton("Automatic (DHCP)");
-    manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode");
-    modeRow->addWidget(manualMode); modeRow->addWidget(autoMode); modeRow->addStretch();
-    playLayout->addLayout(modeRow);
+    auto *autoGroup = new QGroupBox("Windows Hotspot Setup");
+    auto *autoLayout = new QVBoxLayout(autoGroup);
+    autoLayout->setContentsMargins(18, 22, 18, 18);
+    autoSettingsGroup = autoGroup;
+    auto *dnsLabel = new QLabel("90DNS");
+    dnsLabel->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
+    dnsUsFirst = new QRadioButton("US (207.246.121.77)"); dnsFrFirst = new QRadioButton("France (163.172.141.219)");
+    for (auto *r : {dnsUsFirst, dnsFrFirst}) { auto f = r->font(); f.setPointSize(14); f.setWeight(QFont::DemiBold); r->setFont(f); }
+    dnsUsFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
+    dnsFrFirst->setToolTip("Pick whichever is closer to you. Only changes which server is tried first.");
     group->setObjectName("switchSettings");
     form->setSizeConstraint(QLayout::SetMinimumSize);
     group->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
     form->setColumnStretch(1, 1);
+    form->setColumnStretch(3, 1);
     form->setHorizontalSpacing(20);
     form->setContentsMargins(18, 22, 18, 18); form->setVerticalSpacing(14);
-    address = text("—"); mask = text("—"); gatewayValue = text("—");
+    address = text("-"); mask = text("-"); gatewayValue = text("-");
+    dnsAmerica = text("207.246.121.77"); dnsEurope = text("163.172.141.219");
     address->setObjectName("switchIP"); mask->setObjectName("switchMask"); gatewayValue->setObjectName("switchGateway");
-    for (auto *l : {address, mask, gatewayValue}) { l->setTextInteractionFlags(Qt::TextSelectableByMouse); title(l, 14); }
+    dnsAmerica->setObjectName("switchDnsAmerica"); dnsEurope->setObjectName("switchDnsEurope");
+    for (auto *l : {address, mask, gatewayValue, dnsAmerica, dnsEurope}) { l->setTextInteractionFlags(Qt::TextSelectableByMouse); title(l, 14); }
     int row = 0;
     for (auto pair : {qMakePair(QString("IP address"), address), qMakePair(QString("Subnet mask"), mask), qMakePair(QString("Gateway"), gatewayValue)}) {
         auto *label = new QLabel(pair.first);
@@ -108,9 +152,30 @@ Window::Window(bool preview) : previewMode(preview) {
         pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
         form->addWidget(label, row, 0); form->addWidget(pair.second, row++, 1);
     }
+    auto *dnsHeader = new QLabel();
+    dnsHeader->setText("DNS (<a href=\"https://gbatemp.net/threads/90dns-dns-server-for-blocking-all-nintendo-servers.516234/\">90dns</a>, for an easier setup use 8.8.8.8)");
+    dnsHeader->setTextFormat(Qt::RichText);
+    dnsHeader->setTextInteractionFlags(Qt::TextBrowserInteraction);
+    dnsHeader->setOpenExternalLinks(true);
+    title(dnsHeader, 10);
+    form->addWidget(dnsHeader, 0, 2, 1, 2);
+    int dnsLine = 1;
+    for (auto pair : {qMakePair(QString("America"), dnsAmerica), qMakePair(QString("Europe"), dnsEurope)}) {
+        auto *label = new QLabel(pair.first);
+        pair.second->setWordWrap(false);
+        pair.second->setMinimumHeight(pair.second->fontMetrics().height() + 4);
+        pair.second->setMinimumWidth(pair.second->fontMetrics().horizontalAdvance("255.255.255.255") + 12);
+        form->addWidget(label, dnsLine, 2); form->addWidget(pair.second, dnsLine++, 3);
+    }
     auto *copy = new QPushButton("Copy Switch settings");
-    auto *copyRow = new QHBoxLayout; copyRow->addWidget(copy); copyRow->addStretch();
-    form->addLayout(copyRow, 3, 0, 1, 2); playLayout->addWidget(group);
+    auto *dnsNotice = text("Set the closest as Primary, other as Secondary");
+    dnsNotice->setWordWrap(false);
+    auto *dnsHintRow = new QHBoxLayout;
+    dnsHintRow->addWidget(copy);
+    dnsHintRow->addStretch();
+    dnsHintRow->addWidget(dnsNotice);
+    form->addLayout(dnsHintRow, 3, 0, 1, 4);
+    playLayout->addWidget(group);
 #ifdef Q_OS_MACOS
     // A QFrame gives the native effect an independent host. QGroupBox uses a
     // shared Qt backing view, which would place the AppKit layer over its text.
@@ -118,21 +183,35 @@ Window::Window(bool preview) : previewMode(preview) {
     addMacGlass(summary, QtLiquidGlass::Material::ClearGlass, 16.0);
 #endif
     connect(copy, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText("IP address: " + address->text() + "\nSubnet mask: " + mask->text() + "\nGateway: " + gatewayValue->text());
+        QApplication::clipboard()->setText("IP address: " + address->text() + "\nSubnet mask: " + mask->text() + "\nGateway: " + gatewayValue->text() + "\nAmerica DNS: " + dnsAmerica->text() + "\nEurope DNS: " + dnsEurope->text());
     });
-    settingsHint = text("Use the exact subnet mask shown here. After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
+    settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
-    dhcpHint = text("Set your Switch to Automatic and connect it to this PC's mobile hotspot. When the relay starts it runs a DHCP server on the hotspot that gives each Nintendo console a ZeroTier-subnet address, nothing to type in.");
-    playLayout->addWidget(dhcpHint);
-    hotspotStatus = text(""); hotspotStatus->setWordWrap(true);
-    playLayout->addWidget(hotspotStatus);
+    auto *hotspotTopRow = new QHBoxLayout;
+    auto *hotspotName = new QLabel("PC Hotspot");
+    hotspotState = new QLabel("OFF"); title(hotspotState, 14);
+    hotspotDot = new QLabel("●"); title(hotspotDot, 20);
+    hotspotTopRow->addWidget(hotspotName);
+    hotspotTopRow->addWidget(hotspotState);
+    hotspotTopRow->addWidget(hotspotDot);
+    hotspotTopRow->addSpacing(24);
+#ifdef Q_OS_WIN
+    auto *fwName = new QLabel("DHCP Guard");
+    fwState = new QLabel("OFF"); title(fwState, 14);
+    fwDot = new QLabel("●"); title(fwDot, 20);
+    hotspotTopRow->addWidget(fwName);
+    hotspotTopRow->addWidget(fwState);
+    hotspotTopRow->addWidget(fwDot);
+#endif
+    hotspotTopRow->addStretch();
+    hotspotHint = text("");
+    { auto f = hotspotHint->font(); f.setPointSize(9); hotspotHint->setFont(f); }
 #ifdef Q_OS_WIN
     hotspotSetup = new QPushButton("Set up PC hotspot…");
     hotspotSetup->setToolTip("Opens Windows' Mobile hotspot settings. Turn the hotspot on, then come back and the relay picks it up on its own.");
-    playLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
     connect(hotspotSetup, &QPushButton::clicked, this, [this] {
         QDesktopServices::openUrl(QUrl("ms-settings:network-mobilehotspot"));
-        // The user flips the toggle in Settings; poll until the new adapter shows up.
+        // The user flips the toggle in Settings. Poll until the new adapter shows up.
         auto *timer = new QTimer(this);
         auto *tries = new int(0);
         connect(timer, &QTimer::timeout, this, [this, timer, tries] {
@@ -144,10 +223,24 @@ Window::Window(bool preview) : previewMode(preview) {
         timer->start(3000);
     });
 #endif
+    // Automatic mode gets its own boxed section like the manual one.
+    autoLayout->addLayout(hotspotTopRow);
+    autoLayout->addWidget(hotspotHint);
+#ifdef Q_OS_WIN
+    autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
+#endif
+    autoLayout->addSpacing(32);
+    auto *dnsBottomRow = new QHBoxLayout;
+    dnsBottomRow->addWidget(dnsLabel);
+    dnsBottomRow->addWidget(dnsUsFirst);
+    dnsBottomRow->addWidget(dnsFrFirst);
+    dnsBottomRow->addStretch();
+    autoLayout->addLayout(dnsBottomRow);
+    playLayout->addWidget(autoGroup);
     validation = text(""); playLayout->addWidget(validation);
     auto *configure = new QPushButton("Connection settings…"); playLayout->addWidget(configure, 0, Qt::AlignLeft);
-    connect(configure, &QPushButton::clicked, this, [this] { tabs->setCurrentIndex(1); });
     playLayout->addStretch();
+    connect(configure, &QPushButton::clicked, this, [this] { selectPage(1, 0); });
     playLayout->setSizeConstraint(QLayout::SetMinimumSize);
     auto *playScroll = new QScrollArea; playScroll->setWidgetResizable(true);
     playScroll->setFrameShape(QFrame::NoFrame); playScroll->setWidget(play);
@@ -169,7 +262,7 @@ Window::Window(bool preview) : previewMode(preview) {
 #ifdef Q_OS_WIN
     network->addWidget(text("Install Npcap and ZeroTier before starting. For Automatic (DHCP) mode, turn on the PC mobile hotspot from the Play tab first."));
 #endif
-    // Replaced by checkDependencies() at startup; this is what previews and
+    // Replaced by checkDependencies() at startup. This is what previews and
     // screenshots show, so it must not be an empty button.
     requirements = text("Checking for ZeroTier and packet capture support…"); network->addWidget(requirements);
     setupRequirements = new QPushButton("Check required software"); setupRequirements->setEnabled(false);
@@ -180,6 +273,11 @@ Window::Window(bool preview) : previewMode(preview) {
     av->addWidget(text("Troubleshooting & reports"));
     diagnostics = new QCheckBox("Detailed traffic diagnostics"); capture = new QCheckBox("Save packet captures for the next relay session"); discovery = new QCheckBox("Find the Switch automatically");
     av->addWidget(diagnostics); av->addWidget(capture); av->addWidget(discovery);
+    auto *themeRow = new QHBoxLayout; themeRow->addWidget(new QLabel("Appearance:"));
+    theme = new QComboBox; theme->addItems({"System", "Dark", "Light", "Special"}); theme->setCurrentIndex(preferences.theme);
+    themeRow->addWidget(theme); themeRow->addStretch(); av->addLayout(themeRow);
+    auto *updateRow = new QHBoxLayout; auto *checkUpdates = new QPushButton("Check for updates"); updateRow->addWidget(checkUpdates); updateRow->addStretch(); av->addLayout(updateRow);
+    connect(checkUpdates, &QPushButton::clicked, this, [this] { checkForUpdates(); });
     av->addWidget(text("Packet captures include game payloads and network addresses. Reports stay on this computer until you choose to share them."));
     auto *binaryRow = new QHBoxLayout; executable = new QLineEdit; executable->setPlaceholderText("Bundled relay (recommended)"); executable->setClearButtonEnabled(true); auto *choose = new QPushButton("Choose…");
     binaryRow->addWidget(executable); binaryRow->addWidget(choose); av->addWidget(text("Relay executable")); av->addLayout(binaryRow);
@@ -190,6 +288,7 @@ Window::Window(bool preview) : previewMode(preview) {
     settingsTabs->addTab(advanced, "Advanced");
     gateway->setText(preferences.gateway); executable->setText(preferences.relayPath == bundled ? QString() : preferences.relayPath);
     diagnostics->setChecked(preferences.diagnostics); capture->setChecked(preferences.capture); discovery->setChecked(preferences.discover);
+    connect(theme, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int i) { preferences.theme = i; updateHeaderTheme(); save(); });
     connect(refresh, &QPushButton::clicked, this, &Window::refreshAdapters);
     connect(setupRequirements, &QPushButton::clicked, this, &Window::setupDependencies);
     connect(&dependencies, &DependencyInstaller::progress, requirements, &QLabel::setText);
@@ -207,7 +306,16 @@ Window::Window(bool preview) : previewMode(preview) {
     for (auto *edit : {gateway, executable}) connect(edit, &QLineEdit::textChanged, this, [this] { save(); });
     for (auto *check : {diagnostics, capture, discovery}) connect(check, &QCheckBox::toggled, this, [this] { save(); });
     manualMode->setChecked(!preferences.dhcp); autoMode->setChecked(preferences.dhcp);
-    for (auto *mode : {manualMode, autoMode}) connect(mode, &QRadioButton::toggled, this, [this] { save(); });
+    for (auto *mode : {manualMode, autoMode}) connect(mode, &QRadioButton::toggled, this, [this] {
+        if (loading) return;
+        preferences.dhcp = autoMode->isChecked();
+        preferences.autoSelectLocalAdapter(adapters);
+        const int li = local->findData(preferences.localInterface);
+        if (li >= 0) local->setCurrentIndex(li);
+        save();
+    });
+    dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
+    for (auto *dns : {dnsUsFirst, dnsFrFirst}) connect(dns, &QRadioButton::toggled, this, [this] { save(); });
     connect(choose, &QPushButton::clicked, this, [this] {
         if (relay.busy()) return;
         auto path = QFileDialog::getOpenFileName(this, "Choose relay executable", executable->text());
@@ -222,7 +330,7 @@ Window::Window(bool preview) : previewMode(preview) {
     connect(stop, &QPushButton::clicked, &relay, &RelayController::stop);
     connect(&relay, &RelayController::lineReceived, log, &QPlainTextEdit::appendPlainText);
     // The relay's DHCP server reports "GRID0_DHCP <kind> <ip> <mac>" events in
-    // its output; surface them as the Switch connection status.
+    // its output. Surface them as the Switch connection status.
     connect(&relay, &RelayController::lineReceived, this, [this](const QString &line) {
         int at = line.indexOf("GRID0_DHCP ");
         if (at < 0) return;
@@ -249,6 +357,245 @@ Window::Window(bool preview) : previewMode(preview) {
     // Missing ZeroTier or Npcap is reported once the window is up, not silently
     // left in Settings: without them Start cannot work at all.
     if (!previewMode) QTimer::singleShot(0, this, [this] { checkDependencies(); promptForDependencies(); });
+    // Check for updates on launch. Quiet: only asks if an update is actually available.
+    if (!previewMode) QTimer::singleShot(2000, this, [this] { checkForUpdates(true); });
+#ifdef Q_OS_WIN
+    if (!previewMode) {
+        auto *hotspotTimer = new QTimer(this);
+        connect(hotspotTimer, &QTimer::timeout, this, [this] {
+            refreshAdapters();
+            updateState();
+        });
+        hotspotTimer->start(5000);
+    }
+#endif
+}
+void Window::updateHeaderTheme() {
+    int t = preferences.theme;
+    const bool systemDark = systemPalette.color(QPalette::Window).lightness() < 128;
+    bool dark = t == 1 || (t == 0 && systemDark);
+    if (t == 0) {
+        qApp->setStyleSheet(QString());
+        qApp->setPalette(systemPalette);
+    } else if (dark) {
+        // The stylesheets paint the main surfaces, but plain containers
+        // (the Play scroll area, plain widgets and frames) fall back to the
+        // palette. Pin the background roles too, or a dark system theme
+        // leaks through when Light is picked.
+        QPalette pal = systemPalette;
+        pal.setColor(QPalette::Window, QColor(0x1e, 0x1e, 0x1e));
+        pal.setColor(QPalette::Base, QColor(0x2d, 0x2d, 0x2d));
+        pal.setColor(QPalette::WindowText, Qt::white);
+        pal.setColor(QPalette::Text, Qt::white);
+        pal.setColor(QPalette::ButtonText, Qt::white);
+        qApp->setPalette(pal);
+        qApp->setStyleSheet(
+            "QMainWindow, QDialog { background-color: #1e1e1e; }"
+            "QTabWidget::pane { background-color: #1e1e1e; }"
+            
+            "QLabel { color: #ffffff; }"
+                        "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px; }"
+            "QComboBox { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 4px 8px; }"
+            "QComboBox QAbstractItemView { background-color: #2d2d2d; color: #ffffff; selection-background-color: #3a3a3a; border: 1px solid #555555; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #555555; }"
+            "QComboBox::down-arrow { image: url(:/branding/combo-arrow-white.png); width: 12px; height: 12px; }"
+            "QPushButton { background-color: #3a3a3a; color: #ffffff; border: 1px solid #555555; border-radius: 6px; padding: 6px 14px; outline: none; }"
+            "QPushButton:hover { background-color: #4a4a4a; }"
+            "QPushButton:pressed { background-color: #2a2a2a; }"
+            "QPushButton:disabled { background-color: #252525; color: #777777; border: 1px solid #444444; }"
+            "QTabWidget::pane { border: 1px solid #555555; background-color: #1e1e1e; }"
+            "QTabBar::tab { background-color: #1e1e1e; color: #aaaaaa; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
+            "QTabBar::tab:selected { background-color: #3a3a3a; color: #ffffff; }"
+            "QGroupBox { color: #ffffff; border: 1px solid #555555; border-radius: 6px; margin-top: 12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+            
+
+            "QMenuBar, QMenu { background-color: #2d2d2d; color: #ffffff; }""QMenuBar::item { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #3a3a3a; }"
+        );
+    } else {
+        QPalette pal = systemPalette;
+        pal.setColor(QPalette::Window, QColor(0xf0, 0xf0, 0xf0));
+        pal.setColor(QPalette::Base, Qt::white);
+        pal.setColor(QPalette::WindowText, Qt::black);
+        pal.setColor(QPalette::Text, Qt::black);
+        pal.setColor(QPalette::ButtonText, Qt::black);
+        qApp->setPalette(pal);
+        qApp->setStyleSheet(
+            "QMainWindow, QDialog { background-color: #f0f0f0; }"
+            "QTabWidget::pane { background-color: #f0f0f0; }"
+            
+            "QLabel { color: #000000; }"
+                        "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px; }"
+            "QComboBox { background-color: #ffffff; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 4px 8px; }"
+            "QComboBox QAbstractItemView { background-color: #ffffff; color: #000000; selection-background-color: #e0e0e0; border: 1px solid #aaaaaa; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #aaaaaa; }"
+            "QComboBox::down-arrow { image: url(:/branding/combo-arrow-black.png); width: 12px; height: 12px; }"
+            "QPushButton { background-color: #e0e0e0; color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; padding: 6px 14px; }"
+            "QPushButton:hover { background-color: #d0d0d0; }"
+            "QPushButton:pressed { background-color: #c0c0c0; }"
+            "QPushButton:disabled { background-color: #f5f5f5; color: #aaaaaa; border: 1px solid #cccccc; }"
+            "QTabWidget::pane { border: 1px solid #aaaaaa; background-color: #f0f0f0; }"
+            "QTabBar::tab { background-color: #f0f0f0; color: #666666; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
+            "QTabBar::tab:selected { background-color: #ffffff; color: #000000; }"
+            "QGroupBox { color: #000000; border: 1px solid #aaaaaa; border-radius: 6px; margin-top: 12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+            
+
+            "QMenuBar, QMenu { background-color: #f0f0f0; color: #000000; }""QMenuBar::item { background-color: #f0f0f0; color: #000000; border: 1px solid #aaaaaa; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #e0e0e0; }"
+        );
+    }
+    if (t == 3) {
+        QPalette pal = systemPalette;
+        pal.setColor(QPalette::Window, QColor(0x32, 0x00, 0x04));
+        pal.setColor(QPalette::Base, QColor(0x20, 0x00, 0x03));
+        pal.setColor(QPalette::WindowText, Qt::white);
+        pal.setColor(QPalette::Text, Qt::white);
+        pal.setColor(QPalette::ButtonText, Qt::white);
+        qApp->setPalette(pal);
+        qApp->setStyleSheet(
+            "QMainWindow, QDialog { background-color: #320004; }"
+            "QTabWidget::pane { background-color: #320004; }"
+            "QLabel { color: #ffffff; }"
+            "QLineEdit, QTextEdit, QPlainTextEdit, QListView { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px; }"
+            "QComboBox { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 4px 8px; }"
+            "QComboBox QAbstractItemView { background-color: #200003; color: #ffffff; selection-background-color: #280004; border: 1px solid #1e0002; }"
+            "QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border-left: 1px solid #1e0002; }"
+            "QComboBox::down-arrow { image: url(:/branding/combo-arrow-white.png); width: 12px; height: 12px; }"
+            "QPushButton { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; padding: 6px 14px; outline: none; }"
+            "QPushButton:hover { background-color: #280004; }"
+            "QPushButton:pressed { background-color: #320004; }"
+            "QPushButton:disabled { background-color: #2a0203; color: #885555; border: 1px solid #5a1a1e; }"
+            "QTabWidget::pane { border: 1px solid #1e0002; background-color: #320004; }"
+            "QTabBar::tab { background-color: #320004; color: #cc9999; padding: 8px 16px; border-top-left-radius: 6px; border-top-right-radius: 6px; }"
+            "QTabBar::tab:selected { background-color: #280004; color: #ffffff; }"
+            "QGroupBox { color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; margin-top: 12px; }"
+            "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
+            "QMenuBar, QMenu { background-color: #200003; color: #ffffff; }""QMenuBar::item { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #280004; }"
+        );
+    }
+    const bool useDarkAssets = dark || t == 3;
+    const QString path = useDarkAssets ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
+    headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
+    headerOfw->setStyleSheet(useDarkAssets ? "color: #cccccc; background: transparent;" : "color: #333333; background: transparent;");
+}
+void Window::checkForUpdates(bool quiet) {
+    auto *manager = new QNetworkAccessManager(this);
+    QNetworkRequest req(QUrl("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest"));
+    req.setHeader(QNetworkRequest::UserAgentHeader, "GRID0-ofw");
+    auto *reply = manager->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, quiet]() {
+        reply->deleteLater();
+        if (reply->error() != QNetworkReply::NoError) {
+            if (!quiet) QMessageBox::warning(this, "Update check",
+                QString("Could not check for updates: %1").arg(reply->errorString()));
+            return;
+        }
+        auto doc = QJsonDocument::fromJson(reply->readAll());
+        QString tag = doc["tag_name"].toString();
+        if (tag.isEmpty()) {
+            if (!quiet) QMessageBox::warning(this, "Update check", "Could not parse release info.");
+            return;
+        }
+        QString current = QString::fromLatin1(LANPLAY_VERSION);
+        QString currentTag = current.section('-', -1);
+        QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
+        if (currentTag == latestTag) {
+            if (!quiet) QMessageBox::information(this, "Update check", QString("You are on the latest version (%1).").arg(current));
+            return;
+        }
+        if (!versionIsNewer(latestTag, currentTag)) {
+            if (!quiet) QMessageBox::information(this, "Update check",
+                QString("No newer release available (you have %1, latest release is %2).").arg(current, tag));
+            return;
+        }
+        auto btn = QMessageBox::question(this, "Update available",
+            QString("Version %1 is available (you have %2). Download and install?").arg(tag, current),
+            QMessageBox::Yes | QMessageBox::No);
+        if (btn != QMessageBox::Yes) return;
+        QString assetName;
+#ifdef Q_OS_WIN
+        assetName = "Windows";
+#elif defined(Q_OS_MACOS)
+#ifdef Q_PROCESSOR_ARM_64
+        assetName = "macOS-arm64";
+#else
+        assetName = "macOS-x64";
+#endif
+#else
+        assetName = "AppImage";
+#endif
+        QString dlUrl;
+        for (auto a : doc["assets"].toArray()) {
+            QString name = a.toObject()["name"].toString();
+            if (name.contains(assetName)) { dlUrl = a.toObject()["browser_download_url"].toString(); break; }
+        }
+        if (dlUrl.isEmpty()) {
+            QDesktopServices::openUrl(QUrl("https://github.com/GRID0-net/GRID0-ofw/releases"));
+            return;
+        }
+        QMessageBox::information(this, "Update", "Downloading update. The app will close and replace itself.");
+        auto *dlManager = new QNetworkAccessManager(this);
+        auto *dlReply = dlManager->get(QNetworkRequest(QUrl(dlUrl)));
+        connect(dlReply, &QNetworkReply::finished, this, [this, dlReply, tag]() {
+            dlReply->deleteLater();
+            if (dlReply->error() != QNetworkReply::NoError) {
+                QMessageBox::warning(this, "Update", "Download failed.");
+                return;
+            }
+            QByteArray data = dlReply->readAll();
+            if (data.size() < 1024 * 1024) {
+                QMessageBox::warning(this, "Update", "Download failed (empty file).");
+                return;
+            }
+            QString appDir = QCoreApplication::applicationDirPath();
+            QString tmp = appDir + "/grid0-update.zip";
+            QFile f(tmp);
+            if (!f.open(QIODevice::WriteOnly) || f.write(data) < 0) {
+                QMessageBox::warning(this, "Update", "Could not save update.");
+                return;
+            }
+            f.close();
+#ifdef Q_OS_WIN
+            QString script = appDir + "/grid0-update.bat";
+            QFile s(script);
+            if (s.open(QIODevice::WriteOnly | QIODevice::Text)) {
+                QTextStream ts(&s);
+                ts << "@echo off\n";
+                ts << "setlocal\n";
+                ts << QString("set \"APPDIR=%1\"\n").arg(appDir);
+                // Wait for this app to fully exit so none of its files are locked.
+                ts << QString("powershell -NoProfile -Command \"while (Get-Process -Id %1 -ErrorAction SilentlyContinue) { Start-Sleep -Milliseconds 500 }\"\n")
+                          .arg(QCoreApplication::applicationPid());
+                // Delete everything in the app folder except the zip and this script.
+                ts << "for %%F in (\"%APPDIR%\\*\") do (\n";
+                ts << "  if /i not \"%%~nxF\"==\"grid0-update.zip\" if /i not \"%%~nxF\"==\"grid0-update.bat\" (\n";
+                ts << "    if exist \"%%F\\\" (rmdir /s /q \"%%F\") else (del /f /q \"%%F\")\n";
+                ts << "  )\n";
+                ts << ")\n";
+                // Extract the update in place.
+                ts << "powershell -NoProfile -Command \"Expand-Archive -Path '%APPDIR%\\grid0-update.zip' -DestinationPath '%APPDIR%' -Force\"\n";
+                ts << "if errorlevel 1 (\n";
+                ts << "  echo Extraction failed. > \"%APPDIR%\\grid0-update-failed.txt\"\n";
+                ts << "  exit /b 1\n";
+                ts << ")\n";
+                // The release zip nests the app under GRID0-ofw/app. Find the exe
+                // wherever it landed and lift its folder contents up.
+                ts << "powershell -NoProfile -Command \"$exe = Get-ChildItem -Path '%APPDIR%' -Recurse -Filter 'GRID0-ofw.exe' | Select-Object -First 1; if ($exe -and $exe.DirectoryName -ne '%APPDIR%') { Copy-Item ($exe.DirectoryName + '\\*') '%APPDIR%' -Recurse -Force; Remove-Item $exe.DirectoryName -Recurse -Force }\"\n";
+                ts << "if exist \"%APPDIR%\\GRID0-ofw\" rmdir /s /q \"%APPDIR%\\GRID0-ofw\"\n";
+                ts << "del \"%APPDIR%\\grid0-update.zip\"\n";
+                // Replace the parent-folder shortcut too. The new app recreates it on launch.
+                ts << "del \"%APPDIR%\\..\\GRID0-ofw.lnk\" 2>nul\n";
+                ts << "start \"\" \"%APPDIR%\\GRID0-ofw.exe\"\n";
+                ts << "del \"%~f0\"\n";
+                s.close();
+            }
+            QProcess::startDetached("cmd.exe", {"/c", script});
+#else
+            QDesktopServices::openUrl(QUrl::fromLocalFile(tmp));
+#endif
+            qApp->quit();
+        });
+    });
 }
 void Window::selectPage(int page, int sub) { tabs->setCurrentIndex(page); settingsTabs->setCurrentIndex(sub); }
 void Window::refreshAdapters() {
@@ -259,19 +606,11 @@ void Window::refreshAdapters() {
         if (preferences.localInterface.isEmpty() && a.up && !a.overlay && (a.wifi || a.name == "en0")) preferences.localInterface = a.name;
         if (preferences.overlayInterface.isEmpty() && a.up && a.overlay) preferences.overlayInterface = a.name;
     }
-    // Automatic (DHCP) mode is built around the PC hotspot: prefer its adapter whenever it is up.
-    if (preferences.dhcp) {
-        bool currentIsHotspot = false;
-        for (const auto &a : adapters) if (a.name == preferences.localInterface && a.hotspot && a.up) currentIsHotspot = true;
-        if (!currentIsHotspot) {
-            for (const auto &a : adapters) if (a.hotspot && a.up && !a.overlay) { preferences.localInterface = a.name; break; }
-        }
-    }
     for (auto pair : {qMakePair(local, preferences.localInterface), qMakePair(overlay, preferences.overlayInterface)}) {
         pair.first->clear(); pair.first->addItem("Choose an adapter", QString());
         for (const auto &a : adapters) {
             const QString label = a.label.isEmpty() ? a.name : a.label;
-            pair.first->addItem(label + " — " + a.ip + (a.up ? "" : " (offline)"), a.name);
+            pair.first->addItem(label + " - " + a.ip + (a.up ? "" : " (offline)"), a.name);
             pair.first->setItemData(pair.first->count() - 1, a.name, Qt::ToolTipRole);
         }
         int index = pair.first->findData(pair.second);
@@ -288,6 +627,7 @@ void Window::save() {
     if (preferences.relayPath.isEmpty()) preferences.relayPath = bundled;
     preferences.diagnostics = diagnostics->isChecked(); preferences.capture = capture->isChecked(); preferences.discover = discovery->isChecked();
     preferences.dhcp = autoMode->isChecked();
+    preferences.dnsFranceFirst = dnsFrFirst->isChecked();
     if (!previewMode) {
         auto stored = preferences;
         if (stored.relayPath == bundled) stored.relayPath.clear(); // Moving the app must not leave a stale path.
@@ -297,41 +637,53 @@ void Window::save() {
 }
 void Window::updateState() {
     auto a = preferences.overlay(adapters);
-    address->setText(a.ip.isEmpty() ? "—" : a.ip); mask->setText(a.mask.isEmpty() ? "—" : a.mask);
-    gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "—" : a.gateway) : preferences.gateway);
-    auto error = preferences.validate(adapters); validation->setText(error);
+    address->setText(a.ip.isEmpty() ? "-" : a.ip); mask->setText(a.mask.isEmpty() ? "-" : a.mask);
+    gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "-" : a.gateway) : preferences.gateway);
+    auto error = preferences.validate(adapters);
+    validation->setText(error);
+    validation->setVisible(!error.isEmpty());
     switchSettingsGroup->setVisible(!preferences.dhcp);
+    autoSettingsGroup->setVisible(preferences.dhcp);
     settingsHint->setVisible(!preferences.dhcp);
-    dhcpHint->setVisible(preferences.dhcp);
     QString hotspotIp;
     for (const auto &ad : adapters) if (ad.hotspot && ad.up) { hotspotIp = ad.ip; break; }
-    if (hotspotStatus) {
-        hotspotStatus->setVisible(preferences.dhcp);
+    const bool hotspotOn = !hotspotIp.isEmpty();
+    if (hotspotState && hotspotDot && hotspotHint) {
         if (preferences.dhcp) {
+            hotspotState->setText(hotspotOn ? "ON" : "OFF");
+            hotspotDot->setStyleSheet(hotspotOn ? "color: #27ae60;" : "color: #e74c3c;");
 #ifdef Q_OS_WIN
-            hotspotStatus->setText(hotspotIp.isEmpty()
-                ? "PC hotspot: off. Turn it on with the button below, then connect your Switch to it."
-                : ("PC hotspot: on (" + hotspotIp + "), connect your Switch to it."));
+            if (fwState && fwDot) {
+                QProcess netsh;
+                netsh.start("netsh", {"advfirewall", "firewall", "show", "rule", "name=GRID0 - block hotspot DHCP"});
+                netsh.waitForFinished(5000);
+                const bool fwOn = netsh.readAllStandardOutput().contains("GRID0 - block hotspot DHCP");
+                fwState->setText(fwOn ? "ON" : "OFF");
+                fwDot->setStyleSheet(fwOn ? "color: #27ae60;" : "color: #e74c3c;");
+            }
+            hotspotHint->setText(hotspotOn
+                ? "Start the relay then connect your Switch to the hotspot."
+                : "Turn it on with the button below, start the relay, then connect your Switch to the hotspot.");
 #else
-            hotspotStatus->setText(hotspotIp.isEmpty()
-                ? "Automatic mode works best with a PC-hosted hotspot."
-                : ("Hotspot network detected (" + hotspotIp + ")."));
+            hotspotHint->setText(hotspotOn
+                ? "Hotspot network detected."
+                : "Automatic mode works best with a PC-hosted hotspot.");
 #endif
         }
     }
-    if (hotspotSetup) hotspotSetup->setVisible(preferences.dhcp && hotspotIp.isEmpty());
+    if (hotspotSetup) hotspotSetup->setVisible(!hotspotOn);
     if (!relay.busy()) status->setText(error.isEmpty() ? "Ready to connect" : "Finish connection setup");
     start->setEnabled(!relay.busy() && error.isEmpty()); stop->setEnabled(relay.busy() && relay.state() != RelayController::Stopping);
     stop->setText(relay.state() == RelayController::Authorizing ? "Cancel" : "Stop relay");
     configuration->setEnabled(!relay.busy());
-    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode}) w->setEnabled(!relay.busy());
+    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode, dnsUsFirst, dnsFrFirst}) w->setEnabled(!relay.busy());
 }
 void Window::checkDependencies() {
     if (!requirements || !setupRequirements) return;
     const DependencyStatus state = dependencies.status();
 #ifdef Q_OS_WIN
     if (state.winPcap) {
-        requirements->setText("WinPcap is installed. Remove it before installing Npcap, then reopen GRID0 Relay.");
+        requirements->setText("WinPcap is installed. Remove it before installing Npcap, then reopen GRID0-ofw.");
         setupRequirements->setText("Open Apps & Features…"); setupRequirements->setEnabled(true);
         return;
     }
@@ -364,7 +716,7 @@ void Window::checkDependencies() {
         setupRequirements->setText("Get ZeroTier for Linux…"); setupRequirements->setEnabled(true);
     } else {
         requirements->setText("libpcap is missing. Install your distribution's package "
-            "(libpcap0.8 on Debian and Ubuntu, libpcap on Fedora and Arch), then reopen GRID0 Relay.");
+            "(libpcap0.8 on Debian and Ubuntu, libpcap on Fedora and Arch), then reopen GRID0-ofw.");
         setupRequirements->setText("Install libpcap with your package manager"); setupRequirements->setEnabled(false);
     }
 #else
@@ -376,10 +728,10 @@ void Window::promptForDependencies() {
     const DependencyStatus state = dependencies.status();
 #ifdef Q_OS_WIN
     if (state.winPcap) {
-        QMessageBox box(QMessageBox::Warning, "GRID0 Relay needs Npcap",
-            "WinPcap is installed on this PC. Npcap cannot be installed beside it, and GRID0 Relay "
+        QMessageBox box(QMessageBox::Warning, "GRID0-ofw needs Npcap",
+            "WinPcap is installed on this PC. Npcap cannot be installed beside it, and GRID0-ofw "
             "needs Npcap to see your Switch's traffic.\n\nRemove WinPcap in Apps & Features, then reopen "
-            "GRID0 Relay and it will offer the Npcap installer.", QMessageBox::NoButton, this);
+            "GRID0-ofw and it will offer the Npcap installer.", QMessageBox::NoButton, this);
         auto *open = box.addButton("Open Apps & Features…", QMessageBox::AcceptRole);
         box.addButton("Not now", QMessageBox::RejectRole);
         box.setDefaultButton(open);
@@ -393,7 +745,7 @@ void Window::promptForDependencies() {
     if (!state.npcap) missing << "Npcap";
     const bool several = missing.size() > 1;
     QMessageBox box(QMessageBox::Warning, "Required software missing",
-        "GRID0 Relay cannot start the relay without " + missing.join(" and ") + ".\n\n"
+        "GRID0-ofw cannot start the relay without " + missing.join(" and ") + ".\n\n"
         "ZeroTier carries your Switch's LAN traffic to your friends, and Npcap lets the relay read and "
         "send that traffic on this PC.", QMessageBox::NoButton, this);
     box.setInformativeText("Installing downloads the official installer" + QString(several ? "s" : "") +
@@ -408,7 +760,7 @@ void Window::promptForDependencies() {
 #elif defined(Q_OS_MACOS)
     if (state.zeroTier) return;
     QMessageBox box(QMessageBox::Warning, "ZeroTier is required",
-        "GRID0 Relay cannot start the relay without the ZeroTier client.\n\nZeroTier carries your "
+        "GRID0-ofw cannot start the relay without the ZeroTier client.\n\nZeroTier carries your "
         "Switch's LAN traffic to your friends. macOS already includes libpcap, so nothing else is needed.",
         QMessageBox::NoButton, this);
     auto *download = box.addButton("Get ZeroTier…", QMessageBox::AcceptRole);
@@ -422,12 +774,12 @@ void Window::promptForDependencies() {
     if (!state.zeroTier) missing << "the ZeroTier client";
     if (!state.npcap) missing << "libpcap";
     QMessageBox box(QMessageBox::Warning, "Required software missing",
-        "GRID0 Relay cannot start the relay without " + missing.join(" and ") + ".\n\n"
+        "GRID0-ofw cannot start the relay without " + missing.join(" and ") + ".\n\n"
         "ZeroTier carries your Switch's LAN traffic to your friends, and libpcap lets the relay read and "
         "send that traffic on this computer.", QMessageBox::NoButton, this);
     if (!state.npcap)
         box.setInformativeText("libpcap comes from your distribution: install libpcap0.8 on Debian and "
-            "Ubuntu, or libpcap on Fedora and Arch, then reopen GRID0 Relay.");
+            "Ubuntu, or libpcap on Fedora and Arch, then reopen GRID0-ofw.");
     QPushButton *download = state.zeroTier ? nullptr : box.addButton("Get ZeroTier…", QMessageBox::AcceptRole);
     auto *dismiss = box.addButton(download ? "Not now" : "OK", QMessageBox::RejectRole);
     box.setDefaultButton(download ? download : dismiss);
@@ -439,9 +791,9 @@ void Window::setupDependencies() {
     const DependencyStatus state = dependencies.status();
 #ifdef Q_OS_WIN
     if (state.winPcap) {
-        if (QMessageBox::question(this, "Remove WinPcap", "GRID0 Relay needs Npcap and cannot install it beside WinPcap. Open Apps & Features to remove WinPcap now?") == QMessageBox::Yes) {
+        if (QMessageBox::question(this, "Remove WinPcap", "GRID0-ofw needs Npcap and cannot install it beside WinPcap. Open Apps & Features to remove WinPcap now?") == QMessageBox::Yes) {
             QDesktopServices::openUrl(QUrl("ms-settings:appsfeatures"));
-            QMessageBox::information(this, "Reopen GRID0 Relay", "After removing WinPcap, close and reopen GRID0 Relay. It will then offer the Npcap installer.");
+            QMessageBox::information(this, "Reopen GRID0-ofw", "After removing WinPcap, close and reopen GRID0-ofw. It will then offer the Npcap installer.");
         }
         return;
     }
@@ -449,7 +801,7 @@ void Window::setupDependencies() {
     QStringList missing;
     if (!state.zeroTier) missing << "ZeroTier One";
     if (!state.npcap) missing << "Npcap";
-    const QString prompt = "GRID0 Relay will download the official " + missing.join(" and ") +
+    const QString prompt = "GRID0-ofw will download the official " + missing.join(" and ") +
         " installer" + (missing.size() == 1 ? QString() : "s") +
         ", validate each Windows signature, and start installation. Npcap opens its own installation screen so you can approve its driver terms. Windows administrator permission is required. Continue?";
     if (QMessageBox::question(this, "Install required software", prompt) == QMessageBox::Yes) dependencies.installMissing();
@@ -466,7 +818,7 @@ void Window::exportReport() {
     QString source = relay.reportDirectory();
     if (source.isEmpty()) { QMessageBox::information(this, "No session report yet", "Start a relay session first. Earlier reports are available in the reports folder."); return; }
     QString parent = QFileDialog::getExistingDirectory(this, "Export report to folder"); if (parent.isEmpty()) return;
-    QString dest = parent + "/Grid0-Relay-report-" + QFileInfo(source).fileName();
+    QString dest = parent + "/GRID0-ofw-report-" + QFileInfo(source).fileName();
     if (QFileInfo::exists(dest) || !QDir().mkdir(dest)) { QMessageBox::warning(this, "Cannot export", "Choose a folder without an existing copy of this report."); return; }
     for (const auto &name : QDir(source).entryList(QDir::Files)) {
         if (!QFile::copy(source + "/" + name, dest + "/" + name)) {
