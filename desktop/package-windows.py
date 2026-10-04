@@ -10,39 +10,6 @@ import zipfile
 import sys
 from pathlib import Path
 from windows_pe import PE, audit, is_system
-import struct
-
-
-def _write_relative_lnk(link_path: Path, target_rel: str, workdir_rel: str):
-    """Write a Windows .lnk with relative target path, ID list, and LinkInfo."""
-    header = bytearray(76)
-    struct.pack_into('<I', header, 0, 76)
-    header[4:20] = bytes.fromhex('0102140000000000C000000000000046')
-    struct.pack_into('<I', header, 20, 0x01 | 0x02 | 0x08 | 0x10 | 0x80)
-    struct.pack_into('<I', header, 24, 0x20)
-    struct.pack_into('<I', header, 60, 1)
-    def enc(s: str) -> bytes:
-        e = s.encode('utf-16le') + b'\x00\x00'
-        return struct.pack('<H', len(s) + 1) + e
-    idlist = struct.pack('<H', 0)
-    suffix = target_rel.encode('ascii') + b'\x00'
-    linkinfo_header_size = 28
-    suffix_offset = linkinfo_header_size
-    linkinfo_size = linkinfo_header_size + len(suffix)
-    linkinfo = struct.pack('<I', linkinfo_size)
-    linkinfo += struct.pack('<I', linkinfo_header_size)
-    linkinfo += struct.pack('<I', 0x02)
-    linkinfo += struct.pack('<I', 0)
-    linkinfo += struct.pack('<I', 0)
-    linkinfo += struct.pack('<I', 0)
-    linkinfo += struct.pack('<I', suffix_offset)
-    linkinfo += suffix
-    with open(link_path, 'wb') as f:
-        f.write(header)
-        f.write(idlist)
-        f.write(linkinfo)
-        f.write(enc(target_rel))
-        f.write(enc(workdir_rel))
 
 
 def main():
@@ -74,7 +41,7 @@ def main():
     if not any((directory / 'libstdc++-6.dll').is_file() for directory in search[:-1]):
         parser.error('Cannot locate the selected MinGW compiler runtime (libstdc++-6.dll). Checked: ' +
                      ', '.join(str(directory) for directory in search[:-1]))
-    app = args.output / 'GRID0-ofw' / 'app'
+    app = args.output / 'GRID0-ofw'
     app.mkdir(parents=True)
     for name in ['GRID0-ofw.exe', 'GRID0-ofw-cli.exe'] + (['zll-desktop-tests.exe', 'zll-test-relay.exe', 'zll-startup-test.exe', 'zll-layout-tests.exe'] if args.include_tests else []):
         packaged = name
@@ -128,17 +95,6 @@ def main():
     }, indent=2) + '\n', encoding='utf-8')
     checksums = {str(p.relative_to(app)): hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(app.rglob('*')) if p.is_file()}
     (app / 'SHA256SUMS.txt').write_text(''.join(f'{digest}  {name}\n' for name, digest in checksums.items()), encoding='utf-8')
-    # Create a relative-path shortcut in the parent folder so the user can
-    # launch the app without digging into app/. Windows resolves the relative
-    # target against the shortcut's own location.
-    # Create a relative-path shortcut in the parent folder so the user can
-    # launch the app without digging into app/. Windows resolves the relative
-    # target against the shortcut's own location. We write the .lnk binary
-    # directly because WScript.Shell stores a machine-specific ID list instead
-    # of a portable relative path.
-    pkg_root = args.output / 'GRID0-ofw'
-    link_path = pkg_root / 'GRID0-ofw.lnk'
-    _write_relative_lnk(link_path, 'app\\GRID0-ofw.exe', 'app')
     archive = args.output / 'GRID0-ofw-Windows-x64.zip'
     with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zip:
         for path in sorted((args.output / 'GRID0-ofw').rglob('*')):
