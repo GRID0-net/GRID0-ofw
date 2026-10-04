@@ -3,21 +3,12 @@
 # GRID0 ofw
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
-=====
 
-GRID0 is a way to play Switch games online with friends over a virtual LAN. This is the OFW (original firmware) version, for normal unmodded Switch 1 and Switch 2 consoles. For more info see the main repo at [GRID0-net/GRID0](https://github.com/GRID0-net/GRID0).
+Play Switch games online with friends over a virtual LAN. OFW build for stock Switch 1 and 2. More info at [GRID0-net/GRID0](https://github.com/GRID0-net/GRID0).
 
-A modern replacement to the old LAN-play relay servers resulting in:
-- Much more stability across the board
-- Much faster speeds
-- A method for unmodded Switches to play online with either [sys-zerotier](https://github.com/redluigi323/sys-zerotier) users or emulator users
-- An easier setup for all
+Replaces the old LAN-play relays with better stability, faster speeds, and an easier setup. Works with [sys-zerotier](https://github.com/redluigi323/sys-zerotier) and emulator users. Fork of switch-lan-play, runs on ZeroTier.
 
-<sub>Fork of Switch-lan-play, meant to be used in conjunction with ZeroTier</sub>
-
-Currently has support for Windows PC, Mac (Apple Silicon and Intel), and Linux.
-
-There's both a CLI you can use, and a native Qt GUI with either macOS theming or Windows 11 theming.
+Windows, macOS (Intel and Apple Silicon), and Linux. CLI and Qt GUI included.
 
 
 ## Setup Guide
