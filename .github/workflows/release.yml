@@ -19,7 +19,7 @@ jobs:
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5
           cmake --build build --parallel 4
-          ./build/src/GRID0-ofw --version
+          ./build/src/GRID0-ofw-cli --version
       - name: Relay forwarding and host-socket tests
         run: python3 tests/run_native_tests.py
       - name: Name the CLI for its platform
