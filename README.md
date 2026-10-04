@@ -10,15 +10,14 @@ GRID0 is a way to play Switch games online with friends over a virtual LAN. This
 A modern replacement to the old LAN-play relay servers resulting in:
 - Much more stability across the board
 - Much faster speeds
-- A method for unmodded Switches to play online with either 
-[sys-zerotier](https://github.com/redluigi323/sys-zerotier) users or emulator users
+- A method for unmodded Switches to play online with either [sys-zerotier](https://github.com/redluigi323/sys-zerotier) users or emulator users
 - An easier setup for all
 
-<sub>Fork of Switch-lan-play, meant to be used in conjuction with ZeroTier<sub>
+<sub>Fork of Switch-lan-play, meant to be used in conjunction with ZeroTier</sub>
 
 Currently has support for Windows PC, Mac (Apple Silicon and Intel), and Linux.
 
-Theres both a cli you can use, and a Native QT gui with either macOS theming or Windows 11 theming.
+There's both a CLI you can use, and a native Qt GUI with either macOS theming or Windows 11 theming.
 
 
 ## Setup Guide
@@ -60,4 +59,4 @@ Stock consoles cannot execute background custom modules. `GRID0-ofw` runs on a P
 Then just start the relay and play with your friends over LAN!
 =====
 
-<sub>Built by 3 humans with limited AI assistance, tested on real Switches over many days and restless nights. A fork of switch-lan-play, networking via ZeroTier.<sub>
+<sub>Built by 3 humans with limited AI assistance, tested on real Switches over many days and restless nights. A fork of switch-lan-play, networking via ZeroTier.</sub>
