@@ -100,7 +100,7 @@ DependencyStatus DependencyInstaller::status() const {
         result.npcap = QFile::exists(npcap);
     }
     // Npcap's service is named "npcap". NPF and the legacy uninstall key are
-    // WinPcap markers; do not offer a side-by-side driver install.
+    // WinPcap markers. Do not offer a side-by-side driver install.
     result.winPcap = !result.npcap && (serviceExists(L"NPF") || winPcapRegistryPresent());
 #elif defined(Q_OS_MACOS)
     for (const auto &adapter : QNetworkInterface::allInterfaces()) {

@@ -19,7 +19,7 @@
 static volatile sig_atomic_t interrupted = 0;
 static void stop(int) { interrupted = 1; }
 
-// glibc has no getpeereid; Linux reports the peer's credentials through
+// glibc has no getpeereid. Linux reports the peer's credentials through
 // SO_PEERCRED instead. Either way the GUI is identified by the kernel, not by
 // anything it sends us.
 static int peer_uid(int fd, uid_t *uid)
