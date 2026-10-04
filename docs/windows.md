@@ -1,4 +1,4 @@
-# Windows preview — GRID0-ofw
+# Windows preview - GRID0-ofw
 
 This is a Windows x64 build of the Qt desktop app and the native ZeroTier relay. The macOS version has been tested successfully with Splatoon 3 hosting and room discovery. This Windows port has been cross-compiled and its packaged DLL imports audited; Windows gameplay, adapter injection and UAC behavior still need hardware testing. It is an unsigned development build.
 

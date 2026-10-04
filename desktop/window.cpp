@@ -139,7 +139,7 @@ Window::Window(bool preview) : previewMode(preview) {
     form->setColumnStretch(3, 1);
     form->setHorizontalSpacing(20);
     form->setContentsMargins(18, 22, 18, 18); form->setVerticalSpacing(14);
-    address = text("—"); mask = text("—"); gatewayValue = text("—");
+    address = text("-"); mask = text("-"); gatewayValue = text("-");
     dnsAmerica = text("207.246.121.77"); dnsEurope = text("163.172.141.219");
     address->setObjectName("switchIP"); mask->setObjectName("switchMask"); gatewayValue->setObjectName("switchGateway");
     dnsAmerica->setObjectName("switchDnsAmerica"); dnsEurope->setObjectName("switchDnsEurope");
@@ -211,7 +211,7 @@ Window::Window(bool preview) : previewMode(preview) {
     hotspotSetup->setToolTip("Opens Windows' Mobile hotspot settings. Turn the hotspot on, then come back and the relay picks it up on its own.");
     connect(hotspotSetup, &QPushButton::clicked, this, [this] {
         QDesktopServices::openUrl(QUrl("ms-settings:network-mobilehotspot"));
-        // The user flips the toggle in Settings; poll until the new adapter shows up.
+        // The user flips the toggle in Settings. Poll until the new adapter shows up.
         auto *timer = new QTimer(this);
         auto *tries = new int(0);
         connect(timer, &QTimer::timeout, this, [this, timer, tries] {
@@ -262,7 +262,7 @@ Window::Window(bool preview) : previewMode(preview) {
 #ifdef Q_OS_WIN
     network->addWidget(text("Install Npcap and ZeroTier before starting. For Automatic (DHCP) mode, turn on the PC mobile hotspot from the Play tab first."));
 #endif
-    // Replaced by checkDependencies() at startup; this is what previews and
+    // Replaced by checkDependencies() at startup. This is what previews and
     // screenshots show, so it must not be an empty button.
     requirements = text("Checking for ZeroTier and packet capture support…"); network->addWidget(requirements);
     setupRequirements = new QPushButton("Check required software"); setupRequirements->setEnabled(false);
@@ -330,7 +330,7 @@ Window::Window(bool preview) : previewMode(preview) {
     connect(stop, &QPushButton::clicked, &relay, &RelayController::stop);
     connect(&relay, &RelayController::lineReceived, log, &QPlainTextEdit::appendPlainText);
     // The relay's DHCP server reports "GRID0_DHCP <kind> <ip> <mac>" events in
-    // its output; surface them as the Switch connection status.
+    // its output. Surface them as the Switch connection status.
     connect(&relay, &RelayController::lineReceived, this, [this](const QString &line) {
         int at = line.indexOf("GRID0_DHCP ");
         if (at < 0) return;
@@ -583,7 +583,7 @@ void Window::checkForUpdates(bool quiet) {
                 ts << "powershell -NoProfile -Command \"$exe = Get-ChildItem -Path '%APPDIR%' -Recurse -Filter 'GRID0-ofw.exe' | Select-Object -First 1; if ($exe -and $exe.DirectoryName -ne '%APPDIR%') { Copy-Item ($exe.DirectoryName + '\\*') '%APPDIR%' -Recurse -Force; Remove-Item $exe.DirectoryName -Recurse -Force }\"\n";
                 ts << "if exist \"%APPDIR%\\GRID0-ofw\" rmdir /s /q \"%APPDIR%\\GRID0-ofw\"\n";
                 ts << "del \"%APPDIR%\\grid0-update.zip\"\n";
-                // Replace the parent-folder shortcut too; the new app recreates it on launch.
+                // Replace the parent-folder shortcut too. The new app recreates it on launch.
                 ts << "del \"%APPDIR%\\..\\GRID0-ofw.lnk\" 2>nul\n";
                 ts << "start \"\" \"%APPDIR%\\GRID0-ofw.exe\"\n";
                 ts << "del \"%~f0\"\n";
@@ -610,7 +610,7 @@ void Window::refreshAdapters() {
         pair.first->clear(); pair.first->addItem("Choose an adapter", QString());
         for (const auto &a : adapters) {
             const QString label = a.label.isEmpty() ? a.name : a.label;
-            pair.first->addItem(label + " — " + a.ip + (a.up ? "" : " (offline)"), a.name);
+            pair.first->addItem(label + " - " + a.ip + (a.up ? "" : " (offline)"), a.name);
             pair.first->setItemData(pair.first->count() - 1, a.name, Qt::ToolTipRole);
         }
         int index = pair.first->findData(pair.second);
@@ -637,8 +637,8 @@ void Window::save() {
 }
 void Window::updateState() {
     auto a = preferences.overlay(adapters);
-    address->setText(a.ip.isEmpty() ? "—" : a.ip); mask->setText(a.mask.isEmpty() ? "—" : a.mask);
-    gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "—" : a.gateway) : preferences.gateway);
+    address->setText(a.ip.isEmpty() ? "-" : a.ip); mask->setText(a.mask.isEmpty() ? "-" : a.mask);
+    gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "-" : a.gateway) : preferences.gateway);
     auto error = preferences.validate(adapters);
     validation->setText(error);
     validation->setVisible(!error.isEmpty());
