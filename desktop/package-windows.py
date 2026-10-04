@@ -14,18 +14,33 @@ import struct
 
 
 def _write_relative_lnk(link_path: Path, target_rel: str, workdir_rel: str):
-    """Write a Windows .lnk with a relative target path."""
+    """Write a Windows .lnk with relative target path, ID list, and LinkInfo."""
     header = bytearray(76)
     struct.pack_into('<I', header, 0, 76)
     header[4:20] = bytes.fromhex('0102140000000000C000000000000046')
-    struct.pack_into('<I', header, 20, 0x98)
-    struct.pack_into('<I', header, 24, 0x80)
+    struct.pack_into('<I', header, 20, 0x01 | 0x02 | 0x08 | 0x10 | 0x80)
+    struct.pack_into('<I', header, 24, 0x20)
     struct.pack_into('<I', header, 60, 1)
     def enc(s: str) -> bytes:
         e = s.encode('utf-16le') + b'\x00\x00'
         return struct.pack('<H', len(s) + 1) + e
+    idlist = struct.pack('<H', 0)
+    suffix = target_rel.encode('ascii') + b'\x00'
+    linkinfo_header_size = 28
+    suffix_offset = linkinfo_header_size
+    linkinfo_size = linkinfo_header_size + len(suffix)
+    linkinfo = struct.pack('<I', linkinfo_size)
+    linkinfo += struct.pack('<I', linkinfo_header_size)
+    linkinfo += struct.pack('<I', 0x02)
+    linkinfo += struct.pack('<I', 0)
+    linkinfo += struct.pack('<I', 0)
+    linkinfo += struct.pack('<I', 0)
+    linkinfo += struct.pack('<I', suffix_offset)
+    linkinfo += suffix
     with open(link_path, 'wb') as f:
         f.write(header)
+        f.write(idlist)
+        f.write(linkinfo)
         f.write(enc(target_rel))
         f.write(enc(workdir_rel))
 
