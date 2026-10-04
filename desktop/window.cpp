@@ -66,7 +66,7 @@ static void addMacGlass(QWidget *surface, QtLiquidGlass::Material material, doub
 #endif
 Window::Window(bool preview) : previewMode(preview) {
     setWindowTitle(QString("GRID0-ofw %1").arg(QString::fromLatin1(LANPLAY_VERSION).section('-', -1))); resize(740, 720); setMinimumSize(640, 590);
-    auto *appMenu = menuBar()->addMenu("GRID0-ofw");
+    auto *appMenu = menuBar()->addMenu(QString::fromLatin1(LANPLAY_VERSION).section('-', -1));
     auto *preferencesAction = appMenu->addAction("Settings…");
     preferencesAction->setMenuRole(QAction::PreferencesRole); preferencesAction->setShortcut(QKeySequence::Preferences);
     connect(preferencesAction, &QAction::triggered, this, [this] { selectPage(1); });
@@ -410,7 +410,7 @@ void Window::updateHeaderTheme() {
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
             
 
-            "QMenuBar, QMenu { background-color: #2d2d2d; color: #ffffff; }"
+            "QMenuBar, QMenu { background-color: #2d2d2d; color: #ffffff; }""QMenuBar::item { background-color: #2d2d2d; color: #ffffff; border: 1px solid #555555; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #3a3a3a; }"
         );
     } else {
         QPalette pal = systemPalette;
@@ -441,7 +441,7 @@ void Window::updateHeaderTheme() {
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
             
 
-            "QMenuBar, QMenu { background-color: #f0f0f0; color: #000000; }"
+            "QMenuBar, QMenu { background-color: #f0f0f0; color: #000000; }""QMenuBar::item { background-color: #f0f0f0; color: #000000; border: 1px solid #aaaaaa; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #e0e0e0; }"
         );
     }
     if (t == 3) {
@@ -470,7 +470,7 @@ void Window::updateHeaderTheme() {
             "QTabBar::tab:selected { background-color: #280004; color: #ffffff; }"
             "QGroupBox { color: #ffffff; border: 1px solid #1e0002; border-radius: 6px; margin-top: 12px; }"
             "QGroupBox::title { subcontrol-origin: margin; left: 8px; }"
-            "QMenuBar, QMenu { background-color: #200003; color: #ffffff; }"
+            "QMenuBar, QMenu { background-color: #200003; color: #ffffff; }""QMenuBar::item { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #280004; }"
         );
     }
     const bool useDarkAssets = dark || t == 3;
