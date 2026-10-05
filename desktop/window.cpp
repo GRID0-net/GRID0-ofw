@@ -81,7 +81,7 @@ Window::Window(bool preview) : previewMode(preview) {
     brand->setSpacing(8);
     brand->addStretch();
     headerBadge = new QLabel;
-    const QPixmap badge = QPixmap(":/branding/ofw-badge.png").scaledToHeight(56, Qt::SmoothTransformation);
+    const QPixmap badge = QPixmap(":/branding/ofw-badge.png").scaledToHeight(70, Qt::SmoothTransformation);
     headerBadge->setPixmap(badge);
     headerBadge->setFixedSize(badge.size());
     headerBadge->setAlignment(Qt::AlignCenter);
@@ -466,8 +466,8 @@ void Window::updateHeaderTheme() {
         );
     }
     const QString badgeBorder = t == 3 ? "#5a1a1e" : (dark ? "#555555" : "#aaaaaa");
-    const int badgeRadius = 56 * 80 / 182;
-    headerBadge->setStyleSheet(QString("QLabel { border: 2px solid %1; border-radius: %2px; background: transparent; }").arg(badgeBorder).arg(badgeRadius));
+    const int badgeRadius = 70 * 80 / 182;
+    headerBadge->setStyleSheet(QString("QLabel { border: 4px solid %1; border-radius: %2px; background: transparent; }").arg(badgeBorder).arg(badgeRadius));
 }
 void Window::checkForUpdates(bool quiet) {
     auto *manager = new QNetworkAccessManager(this);
