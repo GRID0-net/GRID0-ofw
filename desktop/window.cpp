@@ -80,20 +80,12 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *brand = new QHBoxLayout;
     brand->setSpacing(8);
     brand->addStretch();
-    headerIcon = new QLabel;
-    headerIcon->setPixmap(QPixmap(":/branding/windows-circle.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    headerIcon->setFixedSize(44, 44);
-    headerIcon->setAlignment(Qt::AlignCenter);
-    brand->addWidget(headerIcon);
-    headerText = new QLabel;
-    headerText->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    brand->addWidget(headerText);
-    auto *ofwLabel = new QLabel("ofw");
-    QFont ofwFont; ofwFont.setPointSize(28); ofwFont.setWeight(QFont::Bold);
-    ofwLabel->setFont(ofwFont);
-    ofwLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    brand->addWidget(ofwLabel);
-    headerOfw = ofwLabel;
+    headerBadge = new QLabel;
+    const QPixmap badge = QPixmap(":/branding/ofw-badge.png").scaledToHeight(56, Qt::SmoothTransformation);
+    headerBadge->setPixmap(badge);
+    headerBadge->setFixedSize(badge.size());
+    headerBadge->setAlignment(Qt::AlignCenter);
+    brand->addWidget(headerBadge);
     brand->addStretch();
     systemPalette = QApplication::palette();
     updateHeaderTheme();
@@ -473,10 +465,9 @@ void Window::updateHeaderTheme() {
             "QMenuBar, QMenu { background-color: #200003; color: #ffffff; }""QMenuBar::item { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #280004; }"
         );
     }
-    const bool useDarkAssets = dark || t == 3;
-    const QString path = useDarkAssets ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
-    headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
-    headerOfw->setStyleSheet(useDarkAssets ? "color: #cccccc; background: transparent;" : "color: #333333; background: transparent;");
+    const QString badgeBorder = t == 3 ? "#5a1a1e" : (dark ? "#555555" : "#aaaaaa");
+    const int badgeRadius = 56 * 80 / 182;
+    headerBadge->setStyleSheet(QString("QLabel { border: 2px solid %1; border-radius: %2px; background: transparent; }").arg(badgeBorder).arg(badgeRadius));
 }
 void Window::checkForUpdates(bool quiet) {
     auto *manager = new QNetworkAccessManager(this);

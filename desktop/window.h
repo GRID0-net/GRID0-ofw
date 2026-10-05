@@ -39,7 +39,7 @@ private:
     QLineEdit *gateway, *executable;
     QCheckBox *diagnostics, *capture, *discovery;
     QComboBox *theme;
-    QLabel *headerIcon, *headerText, *headerOfw;
+    QLabel *headerBadge;
     QPalette systemPalette;
     QRadioButton *manualMode, *autoMode;
     QRadioButton *dnsUsFirst, *dnsFrFirst;
