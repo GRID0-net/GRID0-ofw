@@ -81,7 +81,7 @@ Window::Window(bool preview) : previewMode(preview) {
     brand->setSpacing(8);
     brand->addStretch();
     headerBadge = new QLabel;
-    const QPixmap badge = QPixmap(":/branding/ofw-badge.png").scaledToHeight(70, Qt::SmoothTransformation);
+    const QPixmap badge = QPixmap(":/branding/ofw-badge.png").scaledToHeight(88, Qt::SmoothTransformation);
     headerBadge->setPixmap(badge);
     headerBadge->setFixedSize(badge.size());
     headerBadge->setAlignment(Qt::AlignCenter);
@@ -90,9 +90,6 @@ Window::Window(bool preview) : previewMode(preview) {
     systemPalette = QApplication::palette();
     updateHeaderTheme();
     layout->addLayout(brand);
-    auto *subtitle = text("Nintendo Switch LAN play over ZeroTier");
-    subtitle->setAlignment(Qt::AlignCenter);
-    layout->addWidget(subtitle);
     // Let QMacStyle draw its native rounded tabs. Document mode intentionally
     // uses square browser/editor tabs, inappropriate for this utility.
     tabs = new QTabWidget; layout->addWidget(tabs);
@@ -465,9 +462,6 @@ void Window::updateHeaderTheme() {
             "QMenuBar, QMenu { background-color: #200003; color: #ffffff; }""QMenuBar::item { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #280004; }"
         );
     }
-    const QString badgeBorder = t == 3 ? "#5a1a1e" : (dark ? "#555555" : "#aaaaaa");
-    const int badgeRadius = 70 * 80 / 182;
-    headerBadge->setStyleSheet(QString("QLabel { border: 4px solid %1; border-radius: %2px; background: transparent; }").arg(badgeBorder).arg(badgeRadius));
 }
 void Window::checkForUpdates(bool quiet) {
     auto *manager = new QNetworkAccessManager(this);
