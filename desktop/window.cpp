@@ -80,27 +80,16 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *brand = new QHBoxLayout;
     brand->setSpacing(8);
     brand->addStretch();
-    headerIcon = new QLabel;
-    headerIcon->setPixmap(QPixmap(":/branding/windows-circle.png").scaled(44, 44, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-    headerIcon->setFixedSize(44, 44);
-    headerIcon->setAlignment(Qt::AlignCenter);
-    brand->addWidget(headerIcon);
-    headerText = new QLabel;
-    headerText->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    brand->addWidget(headerText);
-    auto *ofwLabel = new QLabel("ofw");
-    QFont ofwFont; ofwFont.setPointSize(28); ofwFont.setWeight(QFont::Bold);
-    ofwLabel->setFont(ofwFont);
-    ofwLabel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
-    brand->addWidget(ofwLabel);
-    headerOfw = ofwLabel;
+    headerBadge = new QLabel;
+    const QPixmap badge = QPixmap(":/branding/ofw-badge.png").scaledToHeight(88, Qt::SmoothTransformation);
+    headerBadge->setPixmap(badge);
+    headerBadge->setFixedSize(badge.size());
+    headerBadge->setAlignment(Qt::AlignCenter);
+    brand->addWidget(headerBadge);
     brand->addStretch();
     systemPalette = QApplication::palette();
     updateHeaderTheme();
     layout->addLayout(brand);
-    auto *subtitle = text("Nintendo Switch LAN play over ZeroTier");
-    subtitle->setAlignment(Qt::AlignCenter);
-    layout->addWidget(subtitle);
     // Let QMacStyle draw its native rounded tabs. Document mode intentionally
     // uses square browser/editor tabs, inappropriate for this utility.
     tabs = new QTabWidget; layout->addWidget(tabs);
@@ -473,10 +462,6 @@ void Window::updateHeaderTheme() {
             "QMenuBar, QMenu { background-color: #200003; color: #ffffff; }""QMenuBar::item { background-color: #200003; color: #ffffff; border: 1px solid #1e0002; border-radius: 4px; padding: 4px 10px; margin: 2px; }""QMenuBar::item:selected { background-color: #280004; }"
         );
     }
-    const bool useDarkAssets = dark || t == 3;
-    const QString path = useDarkAssets ? ":/branding/grid-text-dark.png" : ":/branding/grid-text-light.png";
-    headerText->setPixmap(QPixmap(path).scaledToHeight(56, Qt::SmoothTransformation));
-    headerOfw->setStyleSheet(useDarkAssets ? "color: #cccccc; background: transparent;" : "color: #333333; background: transparent;");
 }
 void Window::checkForUpdates(bool quiet) {
     auto *manager = new QNetworkAccessManager(this);
