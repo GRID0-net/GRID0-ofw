@@ -4,51 +4,51 @@
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
 
-**Play Switch games online with friends over a virtual LAN.<br>
-Original Firm-Ware (ofw) build for stock Switch 1 and 2, for Unmodded Switch Users.**
+**通过虚拟局域网与朋友在线玩 Switch 游戏。<br>
+适用于未改装的 Switch 1 和 Switch 2 的原厂固件 (ofw) 版本。**
 
-<sub>Replaces the old LAN-play relays with better stability, faster speeds, and an easier setup.</sub><br>
-<sub>Works for cross-play with banned switch users and emulator users. Fork of switch-lan-play, runs on ZeroTier. More info at [GRID0](https://github.com/GRID0-net/GRID0).</sub>
+<sub>以更好的稳定性、更快的速度和更简单的设置取代旧的 LAN-play 中继。</sub><br>
+<sub>支持与被封禁的 Switch 用户和模拟器用户跨平台联机。switch-lan-play 的分支，基于 ZeroTier 运行。更多信息请访问 [GRID0](https://github.com/GRID0-net/GRID0)。</sub>
 
 
-## Setup Guide
+## 设置指南
 
-Stock consoles cannot execute background custom modules. `GRID0-ofw` runs on a PC connected to the same home network, capturing and translating LAN-Play packets automatically.
+未改装的主机无法在后台运行自定义模块。`GRID0-ofw` 运行在连接到同一家庭网络的 PC 上，自动捕获并转换 LAN-Play 数据包。
 
-1. Download the latest release from the **[releases page](https://github.com/GRID0-net/GRID0-ofw/releases)** and open `GRID0-ofw`.
-2. `GRID0-ofw` will automatically install ZeroTier One and npcap.
-   <small><details><summary>For certainty:</summary>Make sure they are installed (it should say ZeroTier One and npcap are installed in the `GRID0-ofw` settings).<br>
-   <img src="img/relay-connection.gif" width="300" alt="Choosing the ZeroTier adapter in the relay Settings tab">
+1. 从**[版本发布页面](https://github.com/GRID0-net/GRID0-ofw/releases)**下载最新版本并打开 `GRID0-ofw`。
+2. `GRID0-ofw` 会自动安装 ZeroTier One 和 npcap。
+   <small><details><summary>确认一下：</summary>确保它们已安装（`GRID0-ofw` 的设置中应显示 ZeroTier One 和 npcap 已安装）。<br>
+   <img src="img/relay-connection.gif" width="300" alt="在中继的 Settings 选项卡中选择 ZeroTier 适配器">
    </details></small>
-3. `GRID0-ofw` will automatically launch ZeroTier and connect to the GRID0 network.
-   <small><details><summary>For certainty:</summary>**Windows:** Click the Up arrow at the bottom right of your screen and right-click the ZeroTier tray icon, make sure the status is OK in `8bd5124fd68185ec` GRID0.<br>
-   <img src="img/tray-video.gif" width="300" alt="Windows tray ZeroTier config for the PC app and the relay">
+3. `GRID0-ofw` 会自动启动 ZeroTier 并连接到 GRID0 网络。
+   <small><details><summary>确认一下：</summary>**Windows：** 点击屏幕右下角的向上箭头，右键点击 ZeroTier 托盘图标，确保在 `8bd5124fd68185ec` GRID0 中的状态为 OK。<br>
+   <img src="img/tray-video.gif" width="300" alt="PC 应用和中继的 Windows 托盘 ZeroTier 配置">
    </details></small>
-4. `GRID0-ofw` will automatically select the correct ZeroTier adapter.
-   <small><details><summary>For certainty:</summary>In `GRID0-ofw`, open **Settings**, the relay will automatically connect to the presumed ZeroTier connection, but make sure the ZeroTier connection selected looks like the correct one (should be named something similar to ZeroTier).<br>
-   <img src="img/relay-choose-adapter.gif" width="300" alt="The relay Settings tab with the ZeroTier adapter selected">
+4. `GRID0-ofw` 会自动选择正确的 ZeroTier 适配器。
+   <small><details><summary>确认一下：</summary>在 `GRID0-ofw` 中打开 **Settings**，中继会自动连接到检测到的 ZeroTier 连接，但请确保所选的 ZeroTier 连接看起来是正确的（名称应类似于 ZeroTier）。<br>
+   <img src="img/relay-choose-adapter.gif" width="300" alt="已选择 ZeroTier 适配器的中继 Settings 选项卡">
    </details></small>
 
-<small><details><summary>Automatic Mode (Easier, Windows and Hotspot Capable Only):</summary>
+<small><details><summary>自动模式（更简单，仅限 Windows 且支持热点）：</summary>
 
-5. Go back to the **Play** section of `GRID0-ofw`, make sure **Automatic (DHCP)** is selected, click **Set up PC hotspot** if it isn't already set up and click **Start relay**.
+5. 回到 `GRID0-ofw` 的 **Play** 部分，确保已选择 **Automatic (DHCP)**，如果尚未设置 PC 热点，请点击 **Set up PC hotspot**，然后点击 **Start relay**。
 
-[image: the relay Play tab with Automatic (DHCP) selected and Start relay visible]
+[image: 中继的 Play 选项卡，已选择 Automatic (DHCP)，可见 Start relay]
 
-6. Connect your Switch or Switch 2 to the PC Hotspot normally. If your Switch or Switch 2 was already connected, simply turn on and off either **Sleep Mode** or **Airplane Mode** (both work).
+6. 将 Switch 或 Switch 2 正常连接到 PC 热点。如果 Switch 或 Switch 2 已经连接，只需开关一下 **Sleep Mode** 或 **Airplane Mode**（两种都可以）。
 </details></small>
 
-<small><details><summary>Manual Mode:</summary>
+<small><details><summary>手动模式：</summary>
 
-5. Go back to the **Play** section of `GRID0-ofw`, make sure **Manual IP settings** is selected, click **Start relay** and notice the Switch IP settings it provides you.
-6. On your Switch or Switch 2, enter **Network Settings**, **Change Settings** on the same network your PC is connected to, and enter the provided IP settings. (Primary DNS can be set to **8.8.8.8** and Secondary DNS can be left blank).
+5. 回到 `GRID0-ofw` 的 **Play** 部分，确保已选择 **Manual IP settings**，点击 **Start relay**，并记下它为 Switch 提供的 IP 设置。
+6. 在 Switch 或 Switch 2 上，进入 **Network Settings**，在与 PC 相同的网络上选择 **Change Settings**，然后输入所提供的 IP 设置。（首选 DNS 可设为 **8.8.8.8**，备用 DNS 可留空）。
 
-[image: the Switch internet settings screen with the manual IP, subnet, gateway, and DNS fields filled in]
-7. Make sure to save and connect to the network.
+[image: Switch 网络设置界面，已填写手动 IP、子网掩码、网关和 DNS]
+7. 确保保存并连接到该网络。
 </details></small>
 
-Then just start the relay and play with your friends over LAN!
+然后只需启动中继，即可通过 LAN 与朋友一起玩！
 
 ---
 
-<sub>Built by 3 humans with limited AI assistance, tested on real Switches over many days and restless nights.
+<sub>由 3 位人类在有限的 AI 协助下构建，在真实的 Switch 上经过多个日夜的测试。
