@@ -1,54 +1,54 @@
 ![Banner](img/banner.png)
 
-# GRID0 ofw | گرد زیرو (اصل فرم ویئر)
+# GRID0 ofw
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
 
-**ورچوئل LAN کے ذریعے دوستوں کے ساتھ آن لائن سوئچ (Switch) گیمز کھیلیں۔<br>
-اسٹاک (غیر ترمیم شدہ) Switch 1 اور 2 کے لیے اصل فرم ویئر (OFW) بلڈ، ان صارفین کے لیے جن کے کنسول میں کوئی ترمیم (mod) نہیں کی گئی ہے۔٭٭
+**ورچوئل LAN پر دوستوں کے ساتھ آن لائن سوئچ گیمز کھیلیں۔<br>
+اسٹاک سوئچ 1 اور 2 کے لیے اوریجنل فرم ویئر (ofw) بلڈ، بغیر موڈ والے سوئچ صارفین کے لیے۔**
 
-<sub>یہ پرانے ریلے کی جگہ بہتر استحکام، تیز رفتار اور آسان سیٹ اپ کی سہولت فراہم کرتا ہے۔</sub><br>
-<sub>ممنوعہ سوئچ صارفین اور ایمولیٹر صارفین کے ساتھ کراس پلے کے لیے کام کرتا ہے۔ سوئچ لین پلے کا فورک، زیرو ٹیر پر چلتا ہے۔ مزید معلومات لنک پر.</sub>
-<sub>[GRID0](https://github.com/GRID0-net/GRID0).</sub>
+<sub>پرانے LAN-play ریلے کی جگہ بہتر استحکام، تیز رفتار اور آسان سیٹ اپ کے ساتھ۔</sub><br>
+<sub>بینڈ سوئچ صارفین اور ایمولیٹر صارفین کے ساتھ کراس پلے کے لیے کام کرتا ہے۔ switch-lan-play کا فورک ہے، ZeroTier پر چلتا ہے۔ مزید معلومات [GRID0](https://github.com/GRID0-net/GRID0) پر۔</sub>
 
-## Setup Guide
 
-اسٹاک کنسولز پسِ پردہ (background) کسٹم ماڈیولز کو چلانے کی صلاحیت نہیں رکھتے۔ `GRID0-ofw` اسی ہوم نیٹ ورک سے منسلک ایک پی سی (PC) پر چلتا ہے اور خودکار طور پر LAN-Play پیکٹس کو کیپچر اور ٹرانسلیٹ کرتا ہے۔
+## سیٹ اپ گائیڈ
 
-1. **[ریلیزز کے صفحے](https://github.com/GRID0-net/GRID0-ofw/releases)** سے تازہ ترین ریلیز ڈاؤن لوڈ کریں اور `GRID0-ofw` کو کھولیں۔
-2. `GRID0-ofw` will automatically install ZeroTier One and npcap.
-   <small><details><summary>For certainty:</summary>Make sure they are installed (it should say ZeroTier One and npcap are installed in the `GRID0-ofw` settings).<br>
-   <img src="img/relay-connection.gif" width="300" alt="Choosing the ZeroTier adapter in the relay Settings tab">
+اسٹاک کنسولز پس منظر میں کسٹم ماڈیولز نہیں چلا سکتے۔ `GRID0-ofw` اسی ہوم نیٹ ورک سے منسلک PC پر چلتا ہے، LAN-Play پیکٹس کو خودکار طور پر کیپچر اور ترجمہ کرتا ہے۔
+
+1. **[ریلیز پیج](https://github.com/GRID0-net/GRID0-ofw/releases)** سے تازہ ترین ریلیز ڈاؤن لوڈ کریں اور `GRID0-ofw` کھولیں۔
+2. `GRID0-ofw` خودکار طور پر ZeroTier One اور npcap انسٹال کرے گا۔
+   <small><details><summary>یقین کے لیے:</summary>یقینی بنائیں کہ وہ انسٹال ہیں (`GRID0-ofw` کی سیٹنگز میں لکھا ہونا چاہیے کہ ZeroTier One اور npcap انسٹال ہیں)۔<br>
+   <img src="img/relay-connection.gif" width="300" alt="ریلے کے Settings ٹیب میں ZeroTier اڈاپٹر کا انتخاب">
    </details></small>
-3. `GRID0-ofw` will automatically launch ZeroTier and connect to the GRID0 network.
-   <small><details><summary>For certainty:</summary>**Windows:** Click the Up arrow at the bottom right of your screen and right-click the ZeroTier tray icon, make sure the status is OK in `8bd5124fd68185ec` GRID0.<br>
-   <img src="img/tray-video.gif" width="300" alt="Windows tray ZeroTier config for the PC app and the relay">
+3. `GRID0-ofw` خودکار طور پر ZeroTier لانچ کرے گا اور GRID0 نیٹ ورک سے منسلک ہوگا۔
+   <small><details><summary>یقین کے لیے:</summary>**ونڈوز:** اسکرین کے نیچے دائیں جانب اوپر والے تیر پر کلک کریں اور ZeroTier ٹرے آئیکن پر رائٹ کلک کریں، یقینی بنائیں کہ `8bd5124fd68185ec` GRID0 میں اسٹیٹس OK ہے۔<br>
+   <img src="img/tray-video.gif" width="300" alt="PC ایپ اور ریلے کے لیے ونڈوز ٹرے میں ZeroTier کنفیگریشن">
    </details></small>
-4. `GRID0-ofw` will automatically select the correct ZeroTier adapter.
-   <small><details><summary>For certainty:</summary>In `GRID0-ofw`, open **Settings**, the relay will automatically connect to the presumed ZeroTier connection, but make sure the ZeroTier connection selected looks like the correct one (should be named something similar to ZeroTier).<br>
-   <img src="img/relay-choose-adapter.gif" width="300" alt="The relay Settings tab with the ZeroTier adapter selected">
+4. `GRID0-ofw` خودکار طور پر درست ZeroTier اڈاپٹر منتخب کرے گا۔
+   <small><details><summary>یقین کے لیے:</summary>`GRID0-ofw` میں **Settings** کھولیں، ریلے خودکار طور پر متوقع ZeroTier کنکشن سے منسلک ہوگا، لیکن یقینی بنائیں کہ منتخب کردہ ZeroTier کنکشن درست لگ رہا ہے (اس کا نام ZeroTier جیسا ہونا چاہیے)۔<br>
+   <img src="img/relay-choose-adapter.gif" width="300" alt="منتخب کردہ ZeroTier اڈاپٹر کے ساتھ ریلے کا Settings ٹیب">
    </details></small>
 
-<small><details><summary>Automatic Mode (Easier, Windows and Hotspot Capable Only):</summary>
+<small><details><summary>خودکار موڈ (آسان، صرف ونڈوز اور ہاٹ اسپاٹ کی صلاحیت والا):</summary>
 
-5. Go back to the **Play** section of `GRID0-ofw`, make sure **Automatic (DHCP)** is selected, click **Set up PC hotspot** if it isn't already set up and click **Start relay**.
+5. `GRID0-ofw` کے **Play** سیکشن میں واپس جائیں، یقینی بنائیں کہ **Automatic (DHCP)** منتخب ہے، اگر PC ہاٹ اسپاٹ پہلے سے سیٹ اپ نہیں ہے تو **Set up PC hotspot** پر کلک کریں اور **Start relay** پر کلک کریں۔
 
-[image: the relay Play tab with Automatic (DHCP) selected and Start relay visible]
+[image: ریلے کا Play ٹیب جس میں Automatic (DHCP) منتخب ہے اور Start relay نظر آرہا ہے]
 
-6. Connect your Switch or Switch 2 to the PC Hotspot normally. If your Switch or Switch 2 was already connected, simply turn on and off either **Sleep Mode** or **Airplane Mode** (both work).
+6. اپنے سوئچ یا سوئچ 2 کو عام طریقے سے PC ہاٹ اسپاٹ سے منسلک کریں۔ اگر آپ کا سوئچ یا سوئچ 2 پہلے سے منسلک تھا، تو بس **Sleep Mode** یا **Airplane Mode** کو آن اور آف کریں (دونوں کام کرتے ہیں)۔
 </details></small>
 
-<small><details><summary>Manual Mode:</summary>
+<small><details><summary>دستی موڈ:</summary>
 
-5. Go back to the **Play** section of `GRID0-ofw`, make sure **Manual IP settings** is selected, click **Start relay** and notice the Switch IP settings it provides you.
-6. On your Switch or Switch 2, enter **Network Settings**, **Change Settings** on the same network your PC is connected to, and enter the provided IP settings. (Primary DNS can be set to **8.8.8.8** and Secondary DNS can be left blank).
+5. `GRID0-ofw` کے **Play** سیکشن میں واپس جائیں، یقینی بنائیں کہ **Manual IP settings** منتخب ہے، **Start relay** پر کلک کریں اور سوئچ کی IP سیٹنگز دیکھیں جو وہ آپ کو فراہم کرتا ہے۔
+6. اپنے سوئچ یا سوئچ 2 پر **Network Settings** میں جائیں، اسی نیٹ ورک پر **Change Settings** جس سے آپ کا PC منسلک ہے، اور فراہم کردہ IP سیٹنگز درج کریں۔ (پرائمری DNS **8.8.8.8** رکھا جا سکتا ہے اور سیکنڈری DNS خالی چھوڑا جا سکتا ہے)۔
 
-[image: the Switch internet settings screen with the manual IP, subnet, gateway, and DNS fields filled in]
-7. Make sure to save and connect to the network.
+[image: سوئچ کی انٹرنیٹ سیٹنگز اسکرین جس میں دستی IP، سب نیٹ، گیٹ وے اور DNS فیلڈز بھرے ہوئے ہیں]
+7. محفوظ کرنا اور نیٹ ورک سے منسلک ہونا یقینی بنائیں۔
 </details></small>
 
-Then just start the relay and play with your friends over LAN!
+پھر بس ریلے شروع کریں اور LAN پر اپنے دوستوں کے ساتھ کھیلیں!
 
 ---
 
-<sub>Built by 3 humans with limited AI assistance, tested on real Switches over many days and restless nights.
+<sub>3 انسانوں کی جانب سے محدود AI مدد کے ساتھ بنایا گیا، کئی دنوں اور بے خواب راتوں میں اصلی سوئچز پر ٹیسٹ کیا گیا۔
