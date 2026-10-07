@@ -1,21 +1,21 @@
 ![Banner](img/banner.png)
 
-# GRID0 ofw
+# GRID0 ofw | گرد زیرو (اصل فرم ویئر)
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
 
-**Play Switch games online with friends over a virtual LAN.<br>
-Original Firm-Ware (ofw) build for stock Switch 1 and 2, for Unmodded Switch Users.**
+**ورچوئل LAN کے ذریعے دوستوں کے ساتھ آن لائن سوئچ (Switch) گیمز کھیلیں۔<br>
+اسٹاک (غیر ترمیم شدہ) Switch 1 اور 2 کے لیے اصل فرم ویئر (OFW) بلڈ، ان صارفین کے لیے جن کے کنسول میں کوئی ترمیم (mod) نہیں کی گئی ہے۔٭٭
 
-<sub>Replaces the old LAN-play relays with better stability, faster speeds, and an easier setup.</sub><br>
-<sub>Works for cross-play with banned switch users and emulator users. Fork of switch-lan-play, runs on ZeroTier. More info at [GRID0](https://github.com/GRID0-net/GRID0).</sub>
-
+<sub>یہ پرانے ریلے کی جگہ بہتر استحکام، تیز رفتار اور آسان سیٹ اپ کی سہولت فراہم کرتا ہے۔</sub><br>
+<sub>ممنوعہ سوئچ صارفین اور ایمولیٹر صارفین کے ساتھ کراس پلے کے لیے کام کرتا ہے۔ سوئچ لین پلے کا فورک، زیرو ٹیر پر چلتا ہے۔ مزید معلومات لنک پر.</sub>
+<sub>[GRID0](https://github.com/GRID0-net/GRID0).</sub>
 
 ## Setup Guide
 
-Stock consoles cannot execute background custom modules. `GRID0-ofw` runs on a PC connected to the same home network, capturing and translating LAN-Play packets automatically.
+اسٹاک کنسولز پسِ پردہ (background) کسٹم ماڈیولز کو چلانے کی صلاحیت نہیں رکھتے۔ `GRID0-ofw` اسی ہوم نیٹ ورک سے منسلک ایک پی سی (PC) پر چلتا ہے اور خودکار طور پر LAN-Play پیکٹس کو کیپچر اور ٹرانسلیٹ کرتا ہے۔
 
-1. Download the latest release from the **[releases page](https://github.com/GRID0-net/GRID0-ofw/releases)** and open `GRID0-ofw`.
+1. **[ریلیزز کے صفحے](https://github.com/GRID0-net/GRID0-ofw/releases)** سے تازہ ترین ریلیز ڈاؤن لوڈ کریں اور `GRID0-ofw` کو کھولیں۔
 2. `GRID0-ofw` will automatically install ZeroTier One and npcap.
    <small><details><summary>For certainty:</summary>Make sure they are installed (it should say ZeroTier One and npcap are installed in the `GRID0-ofw` settings).<br>
    <img src="img/relay-connection.gif" width="300" alt="Choosing the ZeroTier adapter in the relay Settings tab">
