@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Chat on Discord](https://img.shields.io/badge/Discord-5865f2?logo=discord&logoColor=white)](https://discordapp.com/invite/splatfest)
 
-**Play Switch games online with friends over a virtual LAN.<br>
+**Play Switch games online with friends over a virtual LAN (GRID0).<br>
 Original Firm-Ware (ofw) build for stock Switch 1 and 2, for Unmodded Switch Users.**
 
 <sub>Replaces the old LAN-play relays with better stability, faster speeds, and an easier setup.</sub><br>
