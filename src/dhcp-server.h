@@ -29,7 +29,7 @@ struct lan_play;
 
 #define DHCP_LEASE_COUNT 8
 #define DHCP_LEASE_TIME 3600 /* seconds */
-#define DHCP_OFFER_TIME 120  /* seconds a DISCOVER offer is held */
+#define DHCP_OFFER_TIME 3600  /* seconds a DISCOVER offer is held (Option 2: longer to prevent sync issues) */
 #define DHCP_MIN_LEN 300     /* BOOTP minimum payload */
 
 #define DHCP_MSG_DISCOVER 1
@@ -85,6 +85,12 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
 size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const struct dhcp_request *req, uint8_t msg_type,
                           const uint8_t yiaddr[4], uint8_t *out);
+
+/* Send one DHCP reply via pcap injection (correct source IP). Returns 0 on
+ * success. Used by the socket fast path for sending after fast receiving. */
+int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
+                    const struct dhcp_request *req, uint8_t msg_type,
+                    const uint8_t yiaddr[4]);
 
 /* Record a reply after the transport send. send_rc is 0 on success.
  * Updates counters and emits the UI events. */

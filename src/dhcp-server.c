@@ -181,13 +181,6 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
     if (msg_type != DHCP_MSG_NAK) {
         off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->packet_ctx.ip, 4);
-        uint8_t lease_be[4];
-        uint32_t lease = DHCP_LEASE_TIME;
-        lease_be[0] = (lease >> 24) & 0xff;
-        lease_be[1] = (lease >> 16) & 0xff;
-        lease_be[2] = (lease >> 8) & 0xff;
-        lease_be[3] = lease & 0xff;
-        off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
         /* The Switch must believe it lives on the ZeroTier subnet: mask,
          * router and broadcast all come from the overlay network. */
         off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->zerotier_netmask, 4);
@@ -201,6 +194,13 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
         memcpy(dns_90dns + 4, options.dns_france_first ? dns_us : dns_fr, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_90dns, 8);
         off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, lp->zerotier_broadcast_ip, 4);
+        uint8_t lease_be[4];
+        uint32_t lease = DHCP_LEASE_TIME;
+        lease_be[0] = (lease >> 24) & 0xff;
+        lease_be[1] = (lease >> 16) & 0xff;
+        lease_be[2] = (lease >> 8) & 0xff;
+        lease_be[3] = lease & 0xff;
+        off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
     }
     dhcp[off++] = DHCP_OPT_END;
     return DHCP_MIN_LEN;
@@ -208,9 +208,9 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
 
 static uint16_t dhcp_ip_id = 0;
 
-static int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
-                           const struct dhcp_request *req, uint8_t msg_type,
-                           const uint8_t yiaddr[4])
+int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
+                      const struct dhcp_request *req, uint8_t msg_type,
+                      const uint8_t yiaddr[4])
 {
     /* Ethernet is added by lan_play_dhcp_send; build the IPv4 packet here. */
     uint8_t ip[ETHER_MTU];
