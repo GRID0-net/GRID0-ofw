@@ -208,9 +208,9 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
 
 static uint16_t dhcp_ip_id = 0;
 
-static int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
-                           const struct dhcp_request *req, uint8_t msg_type,
-                           const uint8_t yiaddr[4])
+int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
+                      const struct dhcp_request *req, uint8_t msg_type,
+                      const uint8_t yiaddr[4])
 {
     /* Ethernet is added by lan_play_dhcp_send; build the IPv4 packet here. */
     uint8_t ip[ETHER_MTU];
