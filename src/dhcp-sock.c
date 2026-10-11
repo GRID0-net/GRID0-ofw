@@ -25,7 +25,7 @@ static void dhcp_sock_sent(uv_udp_send_t *req, int status)
 {
     struct dhcp_sock_send *s = (struct dhcp_sock_send *)req;
     uint64_t us = (uv_hrtime() - s->t_recv) / 1000;
-    LLOG("DHCP: socket reply took %llu us", (unsigned long long)us);
+    LLOG(LLOG_INFO, "DHCP: socket reply took %llu us", (unsigned long long)us);
     dhcp_account_reply(s->lp, s->mac, s->msg, s->yiaddr, status);
     free(s);
 }
