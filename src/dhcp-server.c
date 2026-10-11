@@ -183,7 +183,8 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     if (msg_type != DHCP_MSG_NAK) {
         off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->packet_ctx.ip, 4);
         uint8_t lease_be[4];
-        uint32_t lease = DHCP_LEASE_TIME;
+        /* TESTING: 60 like Python. */
+        uint32_t lease = 60;
         lease_be[0] = (lease >> 24) & 0xff;
         lease_be[1] = (lease >> 16) & 0xff;
         lease_be[2] = (lease >> 8) & 0xff;
