@@ -29,7 +29,7 @@ struct lan_play;
 
 #define DHCP_LEASE_COUNT 8
 #define DHCP_LEASE_TIME 3600 /* seconds */
-#define DHCP_OFFER_TIME 120  /* seconds a DISCOVER offer is held */
+#define DHCP_OFFER_TIME 3600  /* seconds a DISCOVER offer is held (Option 2: longer to prevent sync issues) */
 #define DHCP_MIN_LEN 300     /* BOOTP minimum payload */
 
 #define DHCP_MSG_DISCOVER 1
