@@ -179,7 +179,11 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
 
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
-    if (msg_type != DHCP_MSG_NAK) {
+    if (msg_type == DHCP_MSG_NAK && req->has_requested_ip &&
+        req->requested_ip[0] == 192 && req->requested_ip[1] == 168 && req->requested_ip[2] == 2) {
+        static const uint8_t router_ip[4] = {192, 168, 2, 1};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, router_ip, 4);
+    } else if (msg_type != DHCP_MSG_NAK) {
         off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->packet_ctx.ip, 4);
         /* The Switch must believe it lives on the ZeroTier subnet: mask,
          * router and broadcast all come from the overlay network. */
@@ -228,10 +232,21 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(ip, IPV4_OFF_ID, ++dhcp_ip_id);
     ip[IPV4_OFF_TTL] = 64;
     ip[IPV4_OFF_PROTOCOL] = IPV4_PROTOCOL_UDP;
-    CPY_IPV4(ip + IPV4_OFF_SRC, lp->packet_ctx.ip);
+    static const uint8_t router_ip[4] = {192, 168, 2, 1};
+    bool spoofed_nak = (msg_type == DHCP_MSG_NAK && req->has_requested_ip &&
+                        req->requested_ip[0] == 192 && req->requested_ip[1] == 168 &&
+                        req->requested_ip[2] == 2);
+    if (spoofed_nak) {
+        CPY_IPV4(ip + IPV4_OFF_SRC, router_ip);
+    } else {
+        CPY_IPV4(ip + IPV4_OFF_SRC, lp->packet_ctx.ip);
+    }
     static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     const uint8_t *eth_dst;
-    if (req->flags & 0x8000) {
+    if (spoofed_nak) {
+        memset(ip + IPV4_OFF_DST, 0xff, 4);
+        eth_dst = bcast_mac;
+    } else if (req->flags & 0x8000) {
         memset(ip + IPV4_OFF_DST, 0xff, 4);
         eth_dst = bcast_mac;
     } else {
@@ -377,13 +392,15 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
             return DHCP_MSG_NAK;
         }
         if (has_want) {
-            /* The console took another DHCP server's offer (home router,
-             * Windows' own hotspot DHCP). Stay silent: never NAK someone
-             * else's client. The UI uses the event to suggest a retry. */
+            /* The console is renewing a router IP (e.g., waking from sleep
+             * with 192.168.2.x). NAK spoofed as the router so it restarts
+             * DHCP and discovers our 10.147.17.x offer. */
             st->lost_races++;
             dhcp_event("lost", mac, want);
-            LLOG(LLOG_INFO, "DHCP: console took %u.%u.%u.%u from another server; toggle its Wi-Fi to retry",
+            LLOG(LLOG_INFO, "DHCP: NAKing router IP %u.%u.%u.%u to force rediscover",
                  want[0], want[1], want[2], want[3]);
+            memset(yiaddr, 0, 4);
+            return DHCP_MSG_NAK;
         }
         return 0;
     }
