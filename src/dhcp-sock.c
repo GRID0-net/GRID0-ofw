@@ -111,7 +111,14 @@ static void dhcp_raw_reply(struct lan_play *lp, const struct dhcp_request *req,
 static void dhcp_sock_reply(struct lan_play *lp, const struct dhcp_request *req,
                             uint8_t msg, const uint8_t yiaddr[4])
 {
-    bool is_phase1 = (yiaddr[0] == 192 && yiaddr[1] == 168 && yiaddr[2] == 2);
+    bool in_wifi = true;
+    for (int i = 0; i < 4; i++) {
+        if ((yiaddr[i] & lp->wifi_netmask[i]) != (lp->wifi_ip[i] & lp->wifi_netmask[i])) {
+            in_wifi = false;
+            break;
+        }
+    }
+    bool is_phase1 = in_wifi;
 
     if (is_phase1) {
 #ifdef _WIN32
