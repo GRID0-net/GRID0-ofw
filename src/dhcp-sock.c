@@ -105,6 +105,26 @@ static void dhcp_raw_reply(struct lan_play *lp, const struct dhcp_request *req,
 static void dhcp_sock_reply(struct lan_play *lp, const struct dhcp_request *req,
                             uint8_t msg, const uint8_t yiaddr[4])
 {
+    static const uint8_t phase1_ip[4] = {192, 168, 2, 250};
+    bool is_phase1 = (yiaddr[0] == 192 && yiaddr[1] == 168 && yiaddr[2] == 2);
+
+    if (is_phase1) {
+        struct dhcp_sock_send *s = malloc(sizeof(*s));
+        if (!s) return;
+        s->lp = lp;
+        s->msg = msg;
+        CPY_MAC(s->mac, req->chaddr);
+        CPY_IPV4(s->yiaddr, yiaddr);
+        dhcp_build_phase1_payload(lp, req->chaddr, req, msg, yiaddr, s->payload);
+        struct sockaddr_in dst;
+        uv_ip4_addr("255.255.255.255", 68, &dst);
+        uv_buf_t buf = uv_buf_init((char *)s->payload, DHCP_MIN_LEN);
+        if (uv_udp_send(&s->req, &lp->dhcp_sock, &buf, 1,
+                        (const struct sockaddr *)&dst, dhcp_sock_sent) != 0)
+            free(s);
+        return;
+    }
+
 #ifndef _WIN32
     dhcp_raw_reply(lp, req, msg, yiaddr);
 #else
