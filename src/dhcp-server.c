@@ -191,7 +191,9 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
         off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
         /* The Switch must believe it lives on the ZeroTier subnet: mask,
          * router and broadcast all come from the overlay network. */
-        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->zerotier_netmask, 4);
+        /* TESTING: use /16 like the working Python test. */
+        static const uint8_t mask16[4] = {255, 255, 0, 0};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, mask16, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->packet_ctx.ip, 4);
         /* 90DNS so the Switch can't phone home to Nintendo. The user picks which
          * server is closest to them, that one goes first. */
