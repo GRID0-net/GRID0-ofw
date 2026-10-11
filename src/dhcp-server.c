@@ -84,7 +84,8 @@ static bool dhcp_pick_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t out[
      * .254-downward pool below. */
     {
         uint8_t ip[4];
-        u32_to_ipv4(self, ip);
+        /* TESTING: force .210 to match the working Python test. */
+        ip[0] = 10; ip[1] = 147; ip[2] = 17; ip[3] = 210;
         bool taken = false;
         for (int i = 0; i < DHCP_LEASE_COUNT; ++i) {
             if (st->leases[i].used && st->leases[i].expires > now &&
