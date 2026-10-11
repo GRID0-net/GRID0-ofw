@@ -11,6 +11,12 @@
 #include <unistd.h>
 #endif
 
+#ifdef _WIN32
+static SOCKET dhcp_block_sock = INVALID_SOCKET;
+#else
+static int dhcp_block_sock = -1;
+#endif
+
 struct dhcp_sock_send {
     uv_udp_send_t req;
     struct lan_play *lp;
@@ -105,10 +111,32 @@ static void dhcp_raw_reply(struct lan_play *lp, const struct dhcp_request *req,
 static void dhcp_sock_reply(struct lan_play *lp, const struct dhcp_request *req,
                             uint8_t msg, const uint8_t yiaddr[4])
 {
-    static const uint8_t phase1_ip[4] = {192, 168, 2, 250};
     bool is_phase1 = (yiaddr[0] == 192 && yiaddr[1] == 168 && yiaddr[2] == 2);
 
     if (is_phase1) {
+#ifdef _WIN32
+        bool have_block = (dhcp_block_sock != INVALID_SOCKET);
+#else
+        bool have_block = (dhcp_block_sock >= 0);
+#endif
+        if (have_block) {
+            uint8_t payload[DHCP_MIN_LEN];
+            dhcp_build_phase1_payload(lp, req->chaddr, req, msg, yiaddr, payload);
+            struct sockaddr_in dst;
+            memset(&dst, 0, sizeof(dst));
+            dst.sin_family = AF_INET;
+            dst.sin_port = htons(68);
+            dst.sin_addr.s_addr = htonl(0xffffffff);
+#ifdef _WIN32
+            int rc = sendto(dhcp_block_sock, (char *)payload, DHCP_MIN_LEN, 0,
+                            (struct sockaddr *)&dst, sizeof(dst));
+#else
+            ssize_t rc = sendto(dhcp_block_sock, payload, DHCP_MIN_LEN, 0,
+                                (struct sockaddr *)&dst, sizeof(dst));
+#endif
+            dhcp_account_reply(lp, req->chaddr, msg, yiaddr, rc < 0 ? -1 : 0);
+            return;
+        }
         struct dhcp_sock_send *s = malloc(sizeof(*s));
         if (!s) return;
         s->lp = lp;
@@ -174,6 +202,39 @@ int dhcp_sock_start(struct lan_play *lp)
 
     lp->dhcp_sock_active = true;
     LLOG(LLOG_INFO, "DHCP: socket fast path active on UDP/67 (server-id = Wi-Fi IP)");
+
+#ifdef _WIN32
+    dhcp_block_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (dhcp_block_sock != INVALID_SOCKET) {
+        struct sockaddr_in baddr;
+        baddr.sin_family = AF_INET;
+        baddr.sin_port = htons(0);
+        memcpy(&baddr.sin_addr, lp->wifi_ip, 4);
+        if (bind(dhcp_block_sock, (struct sockaddr *)&baddr, sizeof(baddr)) != 0) {
+            closesocket(dhcp_block_sock);
+            dhcp_block_sock = INVALID_SOCKET;
+        } else {
+            BOOL bcast = TRUE;
+            setsockopt(dhcp_block_sock, SOL_SOCKET, SO_BROADCAST, (char *)&bcast, sizeof(bcast));
+            LLOG(LLOG_INFO, "DHCP: blocking send socket ready on Wi-Fi IP");
+        }
+    }
+#else
+    dhcp_block_sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (dhcp_block_sock >= 0) {
+        struct sockaddr_in baddr;
+        baddr.sin_family = AF_INET;
+        baddr.sin_port = htons(0);
+        memcpy(&baddr.sin_addr, lp->wifi_ip, 4);
+        if (bind(dhcp_block_sock, (struct sockaddr *)&baddr, sizeof(baddr)) != 0) {
+            close(dhcp_block_sock);
+            dhcp_block_sock = -1;
+        } else {
+            int bcast = 1;
+            setsockopt(dhcp_block_sock, SOL_SOCKET, SO_BROADCAST, &bcast, sizeof(bcast));
+        }
+    }
+#endif
     return 0;
 
 fail:
@@ -186,4 +247,15 @@ void dhcp_sock_stop(struct lan_play *lp)
     if (!lp->dhcp_sock_active) return;
     lp->dhcp_sock_active = false;
     uv_close((uv_handle_t *)&lp->dhcp_sock, NULL);
+#ifdef _WIN32
+    if (dhcp_block_sock != INVALID_SOCKET) {
+        closesocket(dhcp_block_sock);
+        dhcp_block_sock = INVALID_SOCKET;
+    }
+#else
+    if (dhcp_block_sock >= 0) {
+        close(dhcp_block_sock);
+        dhcp_block_sock = -1;
+    }
+#endif
 }
