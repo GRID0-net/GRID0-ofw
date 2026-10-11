@@ -95,6 +95,22 @@ int send_arp_request(
 
 int arp_request(struct packet_ctx *self, const struct arp *arp)
 {
+    /* If the target is our gateway IP (10.147.17.1), answer it even when it is
+     * not in this interface's subnet. On home Wi-Fi the Switch has 10.147.17.x
+     * but ARPs on the Wi-Fi interface, whose subnet is 192.168.2.0/24. */
+    if (self->arg && CMP_IPV4(arp->target_ip, self->arg->packet_ctx.ip)) {
+        if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
+            return 0;
+        }
+        return send_arp(
+            self,
+            ARP_OPCODE_REPLY,
+            self->mac,
+            arp->target_ip,
+            arp->sender_mac,
+            arp->sender_ip
+        );
+    }
     if (IS_SUBNET(arp->target_ip, self->subnet_net, self->subnet_mask)) {
         if (CMP_IPV4(arp->target_ip, arp->sender_ip)) {
             return 0;
