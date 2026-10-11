@@ -182,14 +182,6 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
     if (msg_type != DHCP_MSG_NAK) {
         off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->packet_ctx.ip, 4);
-        uint8_t lease_be[4];
-        /* TESTING: 60 like Python. */
-        uint32_t lease = 60;
-        lease_be[0] = (lease >> 24) & 0xff;
-        lease_be[1] = (lease >> 16) & 0xff;
-        lease_be[2] = (lease >> 8) & 0xff;
-        lease_be[3] = lease & 0xff;
-        off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
         /* The Switch must believe it lives on the ZeroTier subnet: mask,
          * router and broadcast all come from the overlay network. */
         /* Using /16: the Switch rejects /24 but accepts /16. The ZeroTier
@@ -200,6 +192,14 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
         /* TESTING: single DNS like Python test. */
         off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, lp->packet_ctx.ip, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, lp->zerotier_broadcast_ip, 4);
+        /* TESTING: lease last like Python. */
+        uint8_t lease_be[4];
+        uint32_t lease = 60;
+        lease_be[0] = (lease >> 24) & 0xff;
+        lease_be[1] = (lease >> 16) & 0xff;
+        lease_be[2] = (lease >> 8) & 0xff;
+        lease_be[3] = lease & 0xff;
+        off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
     }
     dhcp[off++] = DHCP_OPT_END;
     return DHCP_MIN_LEN;
