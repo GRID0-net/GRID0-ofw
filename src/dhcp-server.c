@@ -156,7 +156,8 @@ static size_t dhcp_opt(uint8_t *p, size_t off, uint8_t code, const void *data, s
 
 size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const struct dhcp_request *req, uint8_t msg_type,
-                          const uint8_t yiaddr[4], uint8_t *dhcp)
+                          const uint8_t yiaddr[4], const uint8_t server_ip[4],
+                          uint8_t *dhcp)
 {
     memset(dhcp, 0, DHCP_MIN_LEN);
     dhcp[0] = DHCP_OP_BOOTREPLY;
@@ -167,12 +168,8 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     WRITE_NET16(dhcp, 6, (uint16_t)(req->xid & 0xffff));
     WRITE_NET16(dhcp, 10, req->flags);
     if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
-    /* siaddr: the server identifier the client unicasts to. This must be our
-     * relay gateway address on the ZeroTier subnet: renewals unicast here are
-     * proxy-ARPed to us and answered. Pointing it at the Wi-Fi address would
-     * send renewals to the hotspot's own DHCP server, which NAKs our lease
-     * and knocks the Switch offline mid-session. */
-    CPY_IPV4(dhcp + 20, lp->packet_ctx.ip);
+    /* siaddr: server IP, must match the source IP of the packet. */
+    CPY_IPV4(dhcp + 20, server_ip);
     CPY_MAC(dhcp + 28, dst_mac);
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
@@ -184,7 +181,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
         static const uint8_t router_ip[4] = {192, 168, 2, 1};
         off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, router_ip, 4);
     } else if (msg_type != DHCP_MSG_NAK) {
-        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->packet_ctx.ip, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, server_ip, 4);
         /* The Switch must believe it lives on the ZeroTier subnet: mask,
          * router and broadcast all come from the overlay network. */
         off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->zerotier_netmask, 4);
@@ -224,7 +221,7 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     if (ip_len > sizeof(ip)) return -1;
     memset(ip, 0, ip_len);
 
-    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr,
+    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr, lp->packet_ctx.ip,
                        ip + IPV4_HEADER_LEN + UDP_OFF_END);
 
     ip[IPV4_OFF_VER_LEN] = 0x45;
