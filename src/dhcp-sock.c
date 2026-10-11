@@ -6,6 +6,7 @@
 struct dhcp_sock_send {
     uv_udp_send_t req;
     struct lan_play *lp;
+    uint64_t t_recv;
     uint8_t msg;
     uint8_t mac[6];
     uint8_t yiaddr[4];
@@ -23,16 +24,19 @@ static void dhcp_sock_alloc(uv_handle_t *handle, size_t suggested, uv_buf_t *buf
 static void dhcp_sock_sent(uv_udp_send_t *req, int status)
 {
     struct dhcp_sock_send *s = (struct dhcp_sock_send *)req;
+    uint64_t us = (uv_hrtime() - s->t_recv) / 1000;
+    LLOG("DHCP: socket reply took %llu us", (unsigned long long)us);
     dhcp_account_reply(s->lp, s->mac, s->msg, s->yiaddr, status);
     free(s);
 }
 
 static void dhcp_sock_reply(struct lan_play *lp, const struct dhcp_request *req,
-                            uint8_t msg, const uint8_t yiaddr[4])
+                            uint8_t msg, const uint8_t yiaddr[4], uint64_t t_recv)
 {
     struct dhcp_sock_send *s = malloc(sizeof(*s));
     if (!s) return;
     s->lp = lp;
+    s->t_recv = t_recv;
     s->msg = msg;
     CPY_MAC(s->mac, req->chaddr);
     CPY_IPV4(s->yiaddr, yiaddr);
@@ -55,10 +59,11 @@ static void dhcp_sock_recv(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf,
     if (nread >= 240) {
         struct dhcp_request req;
         if (dhcp_parse_payload((const uint8_t *)buf->base, (size_t)nread, &req)) {
+            uint64_t t_recv = uv_hrtime();
             uint8_t yiaddr[4] = {0, 0, 0, 0};
             uint8_t msg = dhcp_decide(lp, req.chaddr, &req, yiaddr);
             if (msg)
-                dhcp_sock_reply(lp, &req, msg, yiaddr);
+                dhcp_sock_reply(lp, &req, msg, yiaddr, t_recv);
         }
     }
     free(buf->base);
