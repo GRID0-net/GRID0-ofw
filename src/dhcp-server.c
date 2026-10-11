@@ -191,7 +191,10 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
         off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
         /* The Switch must believe it lives on the ZeroTier subnet: mask,
          * router and broadcast all come from the overlay network. */
-        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->zerotier_netmask, 4);
+        /* Using /16: the Switch rejects /24 but accepts /16. The ZeroTier
+         * network may be /16 despite the adapter showing /24. */
+        static const uint8_t mask16[4] = {255, 255, 0, 0};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, mask16, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->packet_ctx.ip, 4);
         /* TESTING: single DNS like Python test. */
         off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, lp->packet_ctx.ip, 4);
