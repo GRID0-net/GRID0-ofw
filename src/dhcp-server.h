@@ -81,10 +81,12 @@ bool dhcp_parse_payload(const uint8_t *payload, size_t len, struct dhcp_request 
 uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
                     const struct dhcp_request *req, uint8_t yiaddr[4]);
 
-/* Build one DHCP reply payload (BOOTP minimum length). Returns the length. */
+/* Build one DHCP reply payload (BOOTP minimum length). Returns the length.
+ * server_ip is used for siaddr and server-id option (the DHCP server identity). */
 size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const struct dhcp_request *req, uint8_t msg_type,
-                          const uint8_t yiaddr[4], uint8_t *out);
+                          const uint8_t yiaddr[4], const uint8_t server_ip[4],
+                          uint8_t *out);
 
 /* Send one DHCP reply via pcap injection (correct source IP). Returns 0 on
  * success. Used by the socket fast path for sending after fast receiving. */
