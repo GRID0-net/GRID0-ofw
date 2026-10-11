@@ -84,8 +84,7 @@ static bool dhcp_pick_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t out[
      * .254-downward pool below. */
     {
         uint8_t ip[4];
-        /* TESTING: .210 like Python. */
-        ip[0] = 10; ip[1] = 147; ip[2] = 17; ip[3] = 210;
+        u32_to_ipv4(self, ip);
         bool taken = false;
         for (int i = 0; i < DHCP_LEASE_COUNT; ++i) {
             if (st->leases[i].used && st->leases[i].expires > now &&
@@ -184,17 +183,19 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
         off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->packet_ctx.ip, 4);
         /* The Switch must believe it lives on the ZeroTier subnet: mask,
          * router and broadcast all come from the overlay network. */
-        /* Using /16: the Switch rejects /24 but accepts /16. The ZeroTier
-         * network may be /16 despite the adapter showing /24. */
-        static const uint8_t mask16[4] = {255, 255, 0, 0};
-        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, mask16, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->zerotier_netmask, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->packet_ctx.ip, 4);
-        /* TESTING: single DNS like Python test. */
-        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, lp->packet_ctx.ip, 4);
+        /* 90DNS so the Switch can't phone home to Nintendo. The user picks which
+         * server is closest to them, that one goes first. */
+        static const uint8_t dns_us[4] = {207,246,121,77};
+        static const uint8_t dns_fr[4] = {163,172,141,219};
+        uint8_t dns_90dns[8];
+        memcpy(dns_90dns, options.dns_france_first ? dns_fr : dns_us, 4);
+        memcpy(dns_90dns + 4, options.dns_france_first ? dns_us : dns_fr, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_90dns, 8);
         off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, lp->zerotier_broadcast_ip, 4);
-        /* TESTING: lease last like Python. */
         uint8_t lease_be[4];
-        uint32_t lease = 60;
+        uint32_t lease = DHCP_LEASE_TIME;
         lease_be[0] = (lease >> 24) & 0xff;
         lease_be[1] = (lease >> 16) & 0xff;
         lease_be[2] = (lease >> 8) & 0xff;
