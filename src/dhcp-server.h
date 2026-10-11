@@ -86,6 +86,12 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const struct dhcp_request *req, uint8_t msg_type,
                           const uint8_t yiaddr[4], uint8_t *out);
 
+/* Send one DHCP reply via pcap injection (correct source IP). Returns 0 on
+ * success. Used by the socket fast path for sending after fast receiving. */
+int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
+                    const struct dhcp_request *req, uint8_t msg_type,
+                    const uint8_t yiaddr[4]);
+
 /* Record a reply after the transport send. send_rc is 0 on success.
  * Updates counters and emits the UI events. */
 void dhcp_account_reply(struct lan_play *lp, const uint8_t *mac, uint8_t msg,
