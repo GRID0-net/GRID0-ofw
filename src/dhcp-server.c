@@ -241,7 +241,8 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(udp, UDP_OFF_CHECKSUM, udp_checksum(ip, IPV4_HEADER_LEN, ip_len));
 
     static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    return lan_play_dhcp_send(lp, bcast_mac, ip, (uint16_t)ip_len);
+    const uint8_t *eth_dst = (req->flags & 0x8000) ? bcast_mac : req->chaddr;
+    return lan_play_dhcp_send(lp, eth_dst, ip, (uint16_t)ip_len);
 }
 
 bool dhcp_parse_payload(const uint8_t *dhcp, size_t len, struct dhcp_request *req)
