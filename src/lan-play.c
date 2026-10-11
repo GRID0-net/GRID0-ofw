@@ -960,10 +960,12 @@ int lan_play_init(struct lan_play *lan_play)
      * wins the race against home routers that the pcap path loses. Falls
      * back to pcap injection when the port is unavailable. */
     if (options.dhcp_server && lan_play->wifi_subnet_known) {
-        if (dhcp_sock_start(lan_play) == 0)
+        if (dhcp_sock_start(lan_play) == 0) {
             LLOG(LLOG_INFO, "DHCP: socket fast path active on UDP/67");
-        else
+            winfw_set_hotspot_dhcp_block(false);
+        } else {
             LLOG(LLOG_INFO, "DHCP: UDP/67 unavailable, answering via pcap injection");
+        }
     }
 
     return ret;
