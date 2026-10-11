@@ -243,9 +243,9 @@ size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
         off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gateway, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gateway, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, broadcast, 4);
-        uint8_t lease_be[4] = {0, 0, 0, 2};
+        uint8_t lease_be[4] = {0, 0, 14, 16};
         off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
-        uint8_t t1_be[4] = {0, 0, 0, 1};
+        uint8_t t1_be[4] = {0, 0, 7, 8};
         off = dhcp_opt(dhcp, off, DHCP_OPT_T1, t1_be, 4);
     }
     dhcp[off++] = DHCP_OPT_END;
@@ -422,18 +422,11 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
         const bool has_want = req->has_requested_ip || !CMP_IPV4(req->ciaddr, "\0\0\0\0");
 
         if (has_want && CMP_IPV4(want, phase1_ip)) {
-            if (req->has_requested_ip) {
-                CPY_IPV4(yiaddr, phase1_ip);
-                LLOG(LLOG_INFO, "DHCP: Phase 1 ACK %u.%u.%u.%u",
-                     phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3]);
-                return DHCP_MSG_ACK;
-            } else {
-                if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
-                if (!dhcp_claim(lp, mac, yiaddr, false)) return 0;
-                LLOG(LLOG_INFO, "DHCP: Phase 2 migrate to %u.%u.%u.%u",
-                     yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3]);
-                return DHCP_MSG_ACK;
-            }
+            CPY_IPV4(yiaddr, phase1_ip);
+            dhcp_claim(lp, mac, yiaddr, false);
+            LLOG(LLOG_INFO, "DHCP: ACK %u.%u.%u.%u (home subnet, long lease)",
+                 phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3]);
+            return DHCP_MSG_ACK;
         }
 
         struct dhcp_lease *lease = dhcp_find_mac(st, mac);
