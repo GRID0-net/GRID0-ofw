@@ -88,6 +88,12 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const uint8_t yiaddr[4], const uint8_t server_ip[4],
                           uint8_t *out);
 
+/* Build Phase 1 payload: offers 192.168.2.x with short lease, for the
+ * two-phase migration. Server is the Wi-Fi IP, gateway is the real router. */
+size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
+                                 const struct dhcp_request *req, uint8_t msg_type,
+                                 const uint8_t yiaddr[4], uint8_t *out);
+
 /* Send one DHCP reply via pcap injection (correct source IP). Returns 0 on
  * success. Used by the socket fast path for sending after fast receiving. */
 int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
