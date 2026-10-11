@@ -229,7 +229,15 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     ip[IPV4_OFF_TTL] = 64;
     ip[IPV4_OFF_PROTOCOL] = IPV4_PROTOCOL_UDP;
     CPY_IPV4(ip + IPV4_OFF_SRC, lp->packet_ctx.ip);
-    memset(ip + IPV4_OFF_DST, 0xff, 4);
+    static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    const uint8_t *eth_dst;
+    if (req->flags & 0x8000) {
+        memset(ip + IPV4_OFF_DST, 0xff, 4);
+        eth_dst = bcast_mac;
+    } else {
+        CPY_IPV4(ip + IPV4_OFF_DST, yiaddr);
+        eth_dst = req->chaddr;
+    }
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, 0);
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, ipv4_header_checksum(ip, IPV4_HEADER_LEN));
 
@@ -240,8 +248,6 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(udp, UDP_OFF_CHECKSUM, 0);
     WRITE_NET16(udp, UDP_OFF_CHECKSUM, udp_checksum(ip, IPV4_HEADER_LEN, ip_len));
 
-    static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    const uint8_t *eth_dst = (req->flags & 0x8000) ? bcast_mac : req->chaddr;
     return lan_play_dhcp_send(lp, eth_dst, ip, (uint16_t)ip_len);
 }
 
