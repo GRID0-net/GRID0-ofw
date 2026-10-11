@@ -19,6 +19,8 @@
 #define DHCP_OPT_ROUTER 3
 #define DHCP_OPT_DNS 6
 #define DHCP_OPT_BROADCAST 28
+#define DHCP_OPT_T1 58
+#define DHCP_OPT_T2 59
 #define DHCP_OPT_END 255
 
 #define DHCP_MAGIC 0x63825363u
@@ -207,6 +209,43 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     return DHCP_MIN_LEN;
 }
 
+size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
+                                 const struct dhcp_request *req, uint8_t msg_type,
+                                 const uint8_t yiaddr[4], uint8_t *dhcp)
+{
+    memset(dhcp, 0, DHCP_MIN_LEN);
+    dhcp[0] = DHCP_OP_BOOTREPLY;
+    dhcp[1] = DHCP_HTYPE_ETHER;
+    dhcp[2] = 6;
+    dhcp[3] = 0;
+    WRITE_NET16(dhcp, 4, (uint16_t)(req->xid >> 16));
+    WRITE_NET16(dhcp, 6, (uint16_t)(req->xid & 0xffff));
+    WRITE_NET16(dhcp, 10, req->flags);
+    if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
+    CPY_IPV4(dhcp + 20, lp->wifi_ip);
+    CPY_MAC(dhcp + 28, dst_mac);
+    WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
+    WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
+
+    size_t off = 240;
+    off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
+    if (msg_type != DHCP_MSG_NAK) {
+        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->wifi_ip, 4);
+        static const uint8_t mask[4] = {255, 255, 255, 0};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, mask, 4);
+        static const uint8_t router[4] = {192, 168, 2, 1};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, router, 4);
+        static const uint8_t dns[4] = {192, 168, 2, 1};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns, 4);
+        uint8_t lease_be[4] = {0, 0, 0, 2};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
+        uint8_t t1_be[4] = {0, 0, 0, 1};
+        off = dhcp_opt(dhcp, off, DHCP_OPT_T1, t1_be, 4);
+    }
+    dhcp[off++] = DHCP_OPT_END;
+    return DHCP_MIN_LEN;
+}
+
 static uint16_t dhcp_ip_id = 0;
 
 int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
@@ -360,22 +399,34 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
     }
 
     if (req->msg_type == DHCP_MSG_DISCOVER) {
-        if (!dhcp_pick_ip(lp, mac, yiaddr)) {
-            LLOG(LLOG_WARNING, "DHCP: address pool exhausted; DISCOVER ignored");
-            return 0;
-        }
-        if (!dhcp_claim(lp, mac, yiaddr, true)) {
-            LLOG(LLOG_WARNING, "DHCP: no free lease slot; DISCOVER ignored");
-            return 0;
-        }
+        static const uint8_t phase1_ip[4] = {192, 168, 2, 250};
+        CPY_IPV4(yiaddr, phase1_ip);
+        LLOG(LLOG_INFO, "DHCP: Phase 1 offer 192.168.2.250 for %02x:%02x:%02x:%02x:%02x:%02x",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         return DHCP_MSG_OFFER;
     }
 
     if (req->msg_type == DHCP_MSG_REQUEST) {
-        struct dhcp_lease *lease = dhcp_find_mac(st, mac);
-        const time_t now = time(NULL);
+        static const uint8_t phase1_ip[4] = {192, 168, 2, 250};
         const uint8_t *want = req->has_requested_ip ? req->requested_ip : req->ciaddr;
         const bool has_want = req->has_requested_ip || !CMP_IPV4(req->ciaddr, "\0\0\0\0");
+
+        if (has_want && CMP_IPV4(want, phase1_ip)) {
+            if (req->has_requested_ip) {
+                CPY_IPV4(yiaddr, phase1_ip);
+                LLOG(LLOG_INFO, "DHCP: Phase 1 ACK 192.168.2.250");
+                return DHCP_MSG_ACK;
+            } else {
+                if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
+                if (!dhcp_claim(lp, mac, yiaddr, false)) return 0;
+                LLOG(LLOG_INFO, "DHCP: Phase 2 migrate to %u.%u.%u.%u",
+                     yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3]);
+                return DHCP_MSG_ACK;
+            }
+        }
+
+        struct dhcp_lease *lease = dhcp_find_mac(st, mac);
+        const time_t now = time(NULL);
         if (lease && lease->expires > now && has_want && CMP_IPV4(want, lease->ip)) {
             /* Our client, our lease: the race is won. */
             dhcp_claim(lp, mac, lease->ip, false);
