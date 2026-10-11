@@ -3,12 +3,51 @@
 #include "dhcp-server.h"
 #include "dhcp-sock.h"
 
+struct dhcp_sock_send {
+    uv_udp_send_t req;
+    struct lan_play *lp;
+    uint64_t t_recv;
+    uint8_t msg;
+    uint8_t mac[6];
+    uint8_t yiaddr[4];
+    uint8_t payload[DHCP_MIN_LEN];
+};
+
 static void dhcp_sock_alloc(uv_handle_t *handle, size_t suggested, uv_buf_t *buf)
 {
     (void)handle;
     (void)suggested;
     buf->base = malloc(576);
     buf->len = buf->base ? 576 : 0;
+}
+
+static void dhcp_sock_sent(uv_udp_send_t *req, int status)
+{
+    struct dhcp_sock_send *s = (struct dhcp_sock_send *)req;
+    uint64_t us = (uv_hrtime() - s->t_recv) / 1000;
+    LLOG(LLOG_INFO, "DHCP: socket reply took %llu us", (unsigned long long)us);
+    dhcp_account_reply(s->lp, s->mac, s->msg, s->yiaddr, status);
+    free(s);
+}
+
+static void dhcp_sock_reply(struct lan_play *lp, const struct dhcp_request *req,
+                            uint8_t msg, const uint8_t yiaddr[4], uint64_t t_recv)
+{
+    struct dhcp_sock_send *s = malloc(sizeof(*s));
+    if (!s) return;
+    s->lp = lp;
+    s->t_recv = t_recv;
+    s->msg = msg;
+    CPY_MAC(s->mac, req->chaddr);
+    CPY_IPV4(s->yiaddr, yiaddr);
+    dhcp_build_payload(lp, req->chaddr, req, msg, yiaddr, s->payload);
+
+    struct sockaddr_in dst;
+    uv_ip4_addr("255.255.255.255", 68, &dst);
+    uv_buf_t buf = uv_buf_init((char *)s->payload, DHCP_MIN_LEN);
+    if (uv_udp_send(&s->req, &lp->dhcp_sock, &buf, 1,
+                    (const struct sockaddr *)&dst, dhcp_sock_sent) != 0)
+        free(s);
 }
 
 static void dhcp_sock_recv(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf,
@@ -23,16 +62,8 @@ static void dhcp_sock_recv(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf,
             uint64_t t_recv = uv_hrtime();
             uint8_t yiaddr[4] = {0, 0, 0, 0};
             uint8_t msg = dhcp_decide(lp, req.chaddr, &req, yiaddr);
-            if (msg) {
-                /* Send via pcap injection (not the UDP socket) so the IP
-                 * source is 10.147.17.1, matching the DHCP server-id. The
-                 * socket's source would be 192.168.2.136, which the Switch
-                 * rejects as a mismatch. */
-                int rc = dhcp_send_reply(lp, req.chaddr, &req, msg, yiaddr);
-                uint64_t us = (uv_hrtime() - t_recv) / 1000;
-                LLOG(LLOG_INFO, "DHCP: socket reply took %llu us", (unsigned long long)us);
-                dhcp_account_reply(lp, req.chaddr, msg, yiaddr, rc);
-            }
+            if (msg)
+                dhcp_sock_reply(lp, &req, msg, yiaddr, t_recv);
         }
     }
     free(buf->base);
