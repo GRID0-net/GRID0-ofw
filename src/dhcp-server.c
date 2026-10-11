@@ -227,16 +227,22 @@ size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
 
+    uint8_t subnet[4], gateway[4], broadcast[4];
+    for (int i = 0; i < 4; i++) {
+        subnet[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
+        broadcast[i] = subnet[i] | (uint8_t)~lp->wifi_netmask[i];
+    }
+    memcpy(gateway, subnet, 4);
+    gateway[3] |= 1;
+
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
     if (msg_type != DHCP_MSG_NAK) {
         off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->wifi_ip, 4);
-        static const uint8_t mask[4] = {255, 255, 255, 0};
-        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, mask, 4);
-        static const uint8_t router[4] = {192, 168, 2, 1};
-        off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, router, 4);
-        static const uint8_t dns[4] = {192, 168, 2, 1};
-        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->wifi_netmask, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gateway, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gateway, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, broadcast, 4);
         uint8_t lease_be[4] = {0, 0, 0, 2};
         off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
         uint8_t t1_be[4] = {0, 0, 0, 1};
@@ -398,23 +404,28 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
         return 0;
     }
 
+    uint8_t phase1_ip[4];
+    for (int i = 0; i < 4; i++)
+        phase1_ip[i] = (uint8_t)(lp->wifi_ip[i] & lp->wifi_netmask[i]);
+    phase1_ip[3] |= 250;
+
     if (req->msg_type == DHCP_MSG_DISCOVER) {
-        static const uint8_t phase1_ip[4] = {192, 168, 2, 250};
         CPY_IPV4(yiaddr, phase1_ip);
-        LLOG(LLOG_INFO, "DHCP: Phase 1 offer 192.168.2.250 for %02x:%02x:%02x:%02x:%02x:%02x",
+        LLOG(LLOG_INFO, "DHCP: Phase 1 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
+             phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3],
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
         return DHCP_MSG_OFFER;
     }
 
     if (req->msg_type == DHCP_MSG_REQUEST) {
-        static const uint8_t phase1_ip[4] = {192, 168, 2, 250};
         const uint8_t *want = req->has_requested_ip ? req->requested_ip : req->ciaddr;
         const bool has_want = req->has_requested_ip || !CMP_IPV4(req->ciaddr, "\0\0\0\0");
 
         if (has_want && CMP_IPV4(want, phase1_ip)) {
             if (req->has_requested_ip) {
                 CPY_IPV4(yiaddr, phase1_ip);
-                LLOG(LLOG_INFO, "DHCP: Phase 1 ACK 192.168.2.250");
+                LLOG(LLOG_INFO, "DHCP: Phase 1 ACK %u.%u.%u.%u",
+                     phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3]);
                 return DHCP_MSG_ACK;
             } else {
                 if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
