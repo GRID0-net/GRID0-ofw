@@ -108,20 +108,7 @@ static void dhcp_sock_reply(struct lan_play *lp, const struct dhcp_request *req,
 #ifndef _WIN32
     dhcp_raw_reply(lp, req, msg, yiaddr);
 #else
-    struct dhcp_sock_send *s = malloc(sizeof(*s));
-    if (!s) return;
-    s->lp = lp;
-    s->msg = msg;
-    CPY_MAC(s->mac, req->chaddr);
-    CPY_IPV4(s->yiaddr, yiaddr);
-    dhcp_build_payload(lp, req->chaddr, req, msg, yiaddr, lp->wifi_ip, s->payload);
-
-    struct sockaddr_in dst;
-    uv_ip4_addr("255.255.255.255", 68, &dst);
-    uv_buf_t buf = uv_buf_init((char *)s->payload, DHCP_MIN_LEN);
-    if (uv_udp_send(&s->req, &lp->dhcp_sock, &buf, 1,
-                    (const struct sockaddr *)&dst, dhcp_sock_sent) != 0)
-        free(s);
+    dhcp_send_reply(lp, req->chaddr, req, msg, yiaddr);
 #endif
 }
 
