@@ -172,7 +172,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
      * proxy-ARPed to us and answered. Pointing it at the Wi-Fi address would
      * send renewals to the hotspot's own DHCP server, which NAKs our lease
      * and knocks the Switch offline mid-session. */
-    CPY_IPV4(dhcp + 20, lp->packet_ctx.ip);
+    CPY_IPV4(dhcp + 20, lp->zerotier_ip);
     CPY_MAC(dhcp + 28, dst_mac);
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
@@ -180,7 +180,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
     if (msg_type != DHCP_MSG_NAK) {
-        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->packet_ctx.ip, 4);
+        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->zerotier_ip, 4);
         uint8_t lease_be[4];
         uint32_t lease = DHCP_LEASE_TIME;
         lease_be[0] = (lease >> 24) & 0xff;
@@ -228,7 +228,7 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(ip, IPV4_OFF_ID, ++dhcp_ip_id);
     ip[IPV4_OFF_TTL] = 64;
     ip[IPV4_OFF_PROTOCOL] = IPV4_PROTOCOL_UDP;
-    CPY_IPV4(ip + IPV4_OFF_SRC, lp->packet_ctx.ip);
+    CPY_IPV4(ip + IPV4_OFF_SRC, lp->zerotier_ip);
     memset(ip + IPV4_OFF_DST, 0xff, 4);
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, 0);
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, ipv4_header_checksum(ip, IPV4_HEADER_LEN));
