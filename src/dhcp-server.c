@@ -189,12 +189,12 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->wifi_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->wifi_netmask, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->wifi_ip, 4);
-    static const uint8_t dns_us[4] = {207,246,121,77};
-    static const uint8_t dns_fr[4] = {163,172,141,219};
-    uint8_t dns_90dns[8];
-    memcpy(dns_90dns, options.dns_france_first ? dns_fr : dns_us, 4);
-    memcpy(dns_90dns + 4, options.dns_france_first ? dns_us : dns_fr, 4);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_90dns, 8);
+    uint8_t dns_router[4];
+    for (int i = 0; i < 4; i++) {
+        dns_router[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
+    }
+    dns_router[3] |= 1;
+    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_router, 4);
     if (options.dhcp_option121) {
         uint8_t routes[16];
         size_t roff = 0;
