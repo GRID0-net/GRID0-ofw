@@ -8,10 +8,12 @@
 
 /* Minimal DHCP server for Automatic/DHCP Switch consoles.
  *
- * The stock Switch only learns its network from manual entry or DHCP. When
- * the relay runs this server on the local Wi-Fi interface, a Switch left on
- * Automatic receives a ZeroTier-subnet address, so its broadcast address
- * matches the overlay network and Splatoon's PIA authentication succeeds.
+ * Single-phase M4 design: the Switch keeps a home-subnet address for the
+ * whole session. Our OFFER sets the Router option to this PC's Wi-Fi IP, so
+ * the PC becomes the Switch's gateway: 10.147.17.0/24 game traffic routes
+ * into ZeroTier and everything else is NATed out the real uplink by the
+ * user-space gateway in gateway.cpp. No hotspot mode, no router changes,
+ * no second phase.
  *
  * Two answer paths share the lease logic below. The socket fast path
  * (dhcp-sock.c) hears DISCOVERs straight from a UDP/67 socket and wins the
@@ -38,6 +40,11 @@ struct lan_play;
 #define DHCP_MSG_ACK 5
 #define DHCP_MSG_NAK 6
 #define DHCP_MSG_RELEASE 7
+
+/* True when this MAC holds an unexpired lease for this IP. Used by the
+ * Switch learner to tell our own offer apart from the router's. */
+bool dhcp_is_our_lease(struct lan_play *lp, const uint8_t mac[6],
+                       const uint8_t ip[4]);
 
 /* Parsed from one client packet. */
 struct dhcp_request {
@@ -81,18 +88,10 @@ bool dhcp_parse_payload(const uint8_t *payload, size_t len, struct dhcp_request 
 uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
                     const struct dhcp_request *req, uint8_t yiaddr[4]);
 
-/* Build one DHCP reply payload (BOOTP minimum length). Returns the length.
- * server_ip is used for siaddr and server-id option (the DHCP server identity). */
+/* Build one DHCP reply payload (BOOTP minimum length). Returns the length. */
 size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const struct dhcp_request *req, uint8_t msg_type,
-                          const uint8_t yiaddr[4], const uint8_t server_ip[4],
-                          uint8_t *out);
-
-/* Build Phase 1 payload: offers 192.168.2.x with short lease, for the
- * two-phase migration. Server is the Wi-Fi IP, gateway is the real router. */
-size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
-                                 const struct dhcp_request *req, uint8_t msg_type,
-                                 const uint8_t yiaddr[4], uint8_t *out);
+                          const uint8_t yiaddr[4], uint8_t *out);
 
 /* Send one DHCP reply via pcap injection (correct source IP). Returns 0 on
  * success. Used by the socket fast path for sending after fast receiving. */
