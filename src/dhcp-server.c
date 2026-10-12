@@ -146,6 +146,8 @@ static struct dhcp_lease *dhcp_claim(struct lan_play *lp, const uint8_t mac[6],
     lease->used = true;
     if (!offered && lp->switch_seen && CMP_MAC(mac, lp->switch_mac) &&
         !CMP_IPV4(lp->switch_ip, ip)) {
+        LLOG(LLOG_INFO, "DHCP: updating switch_ip to %u.%u.%u.%u",
+             ip[0], ip[1], ip[2], ip[3]);
         CPY_IPV4(lp->switch_ip, ip);
         arp_set(&lp->packet_ctx, mac, ip);
     }
