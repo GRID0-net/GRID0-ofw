@@ -125,12 +125,17 @@ static bool is_nintendo_lan_broadcast(const struct lan_play *lp, const uint8_t i
 {
     if (ip[0] == 10 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255) return true;
     if (ip[0] == 255 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255) return true;
-    bool wifi_bcast = true;
-    for (int i = 0; i < 4; i++) {
-        uint8_t expected = (uint8_t)((lp->wifi_ip[i] & lp->wifi_netmask[i]) | ~lp->wifi_netmask[i]);
-        if (ip[i] != expected) { wifi_bcast = false; break; }
+    if (lp->wifi_subnet_known) {
+        bool wifi_bcast = true;
+        for (int i = 0; i < 4; i++) {
+            const uint8_t expected = (uint8_t)((lp->wifi_ip[i] & lp->wifi_netmask[i]) | ~lp->wifi_netmask[i]);
+            if (ip[i] != expected) {
+                wifi_bcast = false;
+                break;
+            }
+        }
+        if (wifi_bcast) return true;
     }
-    if (wifi_bcast) return true;
     return false;
 }
 
@@ -235,16 +240,8 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
 
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
-    bool is_bcast = is_nintendo_lan_broadcast(lan_play, original_dst);
-    bool is_zt = is_zerotier_destination(lan_play, original_dst);
-    if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
-        LLOG(LLOG_DEBUG, "Relay Wi-Fi UDP %u.%u.%u.%u -> %u.%u.%u.%u bcast=%d zt=%d",
-             ip[IPV4_OFF_SRC], ip[IPV4_OFF_SRC+1], ip[IPV4_OFF_SRC+2], ip[IPV4_OFF_SRC+3],
-             original_dst[0], original_dst[1], original_dst[2], original_dst[3],
-             is_bcast, is_zt);
-    }
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
-        (!is_bcast && !is_zt) ||
+        (!is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst)) ||
         CMP_IPV4(original_dst, lan_play->packet_ctx.ip)) return false;
 
     /* Never forward the console's ICMP "port unreachable" replies to overlay
@@ -287,8 +284,7 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
             lan_play->zerotier_netmask[2], lan_play->zerotier_netmask[3]);
     }
     if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
-        !(READ_NET16(ip, IPV4_OFF_FLAGS_FRAG_OFFSET) & 0x1fff) && ip_len >= header_len + 8 &&
-        !is_nintendo_lan_broadcast(lan_play, original_dst)) {
+        !(READ_NET16(ip, IPV4_OFF_FLAGS_FRAG_OFFSET) & 0x1fff) && ip_len >= header_len + 8) {
         const uint16_t port = READ_NET16(ip, header_len);
         int ret = native_udp_guard_reserve(lan_play->udp_guard, port);
         if (ret != 0) {
@@ -678,8 +674,11 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
             LLOG(LLOG_INFO, "Switch candidate carries a Nintendo vendor prefix; treating as console");
         }
         if (dhcp) {
-            if (options.dhcp_server)
-                LLOG(LLOG_WARNING, "Switch took address %u.%u.%u.%u from the hotspot's own DHCP instead of the relay's 10.147.17.x pool: room joins will fail. On the Switch go to System Settings > Internet > Internet Settings > this network > Delete Settings, then rejoin while the relay is running (restart the relay too), and confirm the Switch shows a 10.147.17.x address.",
+            if (options.dhcp_server && dhcp_is_our_lease(lp, frame + 6, ip))
+                LLOG(LLOG_INFO, "Switch took our DHCP offer %u.%u.%u.%u; this PC is its gateway",
+                    ip[0], ip[1], ip[2], ip[3]);
+            else if (options.dhcp_server)
+                LLOG(LLOG_WARNING, "Switch took address %u.%u.%u.%u from the home router instead of the relay; LAN play needs our offer. Toggle the Switch Wi-Fi off and on while the relay runs to retry the race.",
                     ip[0], ip[1], ip[2], ip[3]);
             else
                 LLOG(LLOG_INFO, "Switch candidate uses a DHCP/Automatic address on the Wi-Fi subnet");
