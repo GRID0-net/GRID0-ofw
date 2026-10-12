@@ -6,7 +6,6 @@
 #include <stdio.h>
 
 #define FW_RULE_NAME "GRID0 - block hotspot DHCP"
-#define FW_ALLOW_RULE_NAME "GRID0 - allow DHCP server"
 
 /* Runs netsh without flashing a console window. */
 static void run_netsh(const char *args)
@@ -36,14 +35,6 @@ void winfw_set_hotspot_dhcp_block(bool enable)
     run_netsh("delete rule name=\"" FW_RULE_NAME "\"");
     if (enable) {
         run_netsh("add rule name=\"" FW_RULE_NAME "\" dir=out protocol=udp localport=67 action=block");
-    }
-}
-
-void winfw_set_dhcp_allow(bool enable)
-{
-    run_netsh("delete rule name=\"" FW_ALLOW_RULE_NAME "\"");
-    if (enable) {
-        run_netsh("add rule name=\"" FW_ALLOW_RULE_NAME "\" dir=in protocol=udp localport=67 action=allow");
     }
 }
 

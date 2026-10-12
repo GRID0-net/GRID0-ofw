@@ -185,23 +185,17 @@ void Preferences::autoSelectOverlayAdapter(const QList<Adapter> &adapters, const
 }
 
 // Picks the Switch-side adapter the same way the overlay adapter is picked:
-// the PC hotspot in Automatic (DHCP) mode when it is up (no DHCP race
-// there), otherwise the plain Wi-Fi adapter (the socket fast path wins the
-// race against the home router). A saved choice that is still up and fits
-// the current mode is left alone.
+// the PC hotspot in Automatic (DHCP) mode, the Wi-Fi adapter otherwise.
+// A saved choice that is still up and fits the current mode is left alone.
 void Preferences::autoSelectLocalAdapter(const QList<Adapter> &adapters) {
     for (const auto &a : adapters) {
         if (a.name != localInterface || !a.up || a.overlay) continue;
-        if (dhcp && (a.hotspot || a.wifi)) return;
+        if (dhcp && a.hotspot) return;
         if (!dhcp && !a.hotspot && (a.wifi || a.name == "en0")) return;
     }
     for (const auto &a : adapters) {
         if (!a.up || a.overlay) continue;
         if (dhcp && a.hotspot) { localInterface = a.name; return; }
-    }
-    for (const auto &a : adapters) {
-        if (!a.up || a.overlay) continue;
-        if (dhcp && a.wifi) { localInterface = a.name; return; }
         if (!dhcp && (a.wifi || a.name == "en0")) { localInterface = a.name; return; }
     }
 }
@@ -238,14 +232,12 @@ QString Preferences::validate(const QList<Adapter> &all) const {
     for (const auto &a : all) if (a.name == localInterface && a.up) local = true;
     if (!local) return "The saved local adapter is unavailable. Check Settings.";
 #ifdef Q_OS_WIN
-    // Automatic (DHCP) mode no longer requires the PC hotspot: the socket
-    // fast path wins the race against the home router, so plain Wi-Fi works.
-    // Hotspot is still fine (no race at all there).
+    // Automatic (DHCP) mode is built around the PC hotspot: the relay is the
+    // only DHCP server there, so there is no race to lose.
     if (dhcp) {
-        bool wifi = false;
-        for (const auto &a : all)
-            if (a.name == localInterface && (a.hotspot || a.wifi)) wifi = true;
-        if (!wifi) return "Automatic (DHCP) mode needs a Wi-Fi adapter. Pick one in Settings.";
+        bool hotspotUp = false;
+        for (const auto &a : all) if (a.hotspot && a.up) hotspotUp = true;
+        if (!hotspotUp) return "Turn on the PC mobile hotspot first (Play tab), then refresh adapters.";
     }
 #endif
     const auto a = overlay(all);

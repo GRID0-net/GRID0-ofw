@@ -85,8 +85,6 @@ struct lan_play {
     bool warned_broadcast_mismatch;
     bool warned_direct_switch_delivery;
     struct dhcp_server_state dhcp_state;
-    uv_udp_t dhcp_sock;
-    bool dhcp_sock_active;
     struct packet_ctx zerotier_neighbors;
     struct native_udp_guard *udp_guard;
     bool wifi_delivery_probe_sent;

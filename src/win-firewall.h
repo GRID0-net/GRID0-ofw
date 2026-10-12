@@ -12,12 +12,7 @@
 void winfw_set_hotspot_dhcp_block(bool enable);
 /* True if the block rule currently exists. */
 bool winfw_hotspot_dhcp_block_active(void);
-/* Inbound allow for the relay's socket DHCP server (UDP/67). The pcap path
- * bypasses the firewall via Npcap injection, but the socket fast path goes
- * through the host stack. Requires admin (the relay already needs it). */
-void winfw_set_dhcp_allow(bool enable);
 #else
 static inline void winfw_set_hotspot_dhcp_block(bool enable) { (void)enable; }
 static inline bool winfw_hotspot_dhcp_block_active(void) { return false; }
-static inline void winfw_set_dhcp_allow(bool enable) { (void)enable; }
 #endif

@@ -2,7 +2,6 @@ set(src
     main.c
     lan-play.c
     dhcp-server.c
-    dhcp-sock.c
     native-udp.c
     pcaploop.cpp
     packet.c
