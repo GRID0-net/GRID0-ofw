@@ -245,13 +245,8 @@ size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
         off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, broadcast, 4);
         uint8_t lease_be[4];
         uint8_t t1_be[4];
-        if (options.dhcp_home_wifi_mode) {
-            lease_be[0] = 0; lease_be[1] = 0; lease_be[2] = 14; lease_be[3] = 16;
-            t1_be[0] = 0; t1_be[1] = 0; t1_be[2] = 7; t1_be[3] = 8;
-        } else {
-            lease_be[0] = 0; lease_be[1] = 0; lease_be[2] = 0; lease_be[3] = 2;
-            t1_be[0] = 0; t1_be[1] = 0; t1_be[2] = 0; t1_be[3] = 1;
-        }
+        lease_be[0] = 0; lease_be[1] = 0; lease_be[2] = 0; lease_be[3] = 2;
+        t1_be[0] = 0; t1_be[1] = 0; t1_be[2] = 0; t1_be[3] = 1;
         off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
         off = dhcp_opt(dhcp, off, DHCP_OPT_T1, t1_be, 4);
     }
@@ -429,10 +424,10 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
         const bool has_want = req->has_requested_ip || !CMP_IPV4(req->ciaddr, "\0\0\0\0");
 
         if (has_want && CMP_IPV4(want, phase1_ip)) {
-            if (!options.dhcp_home_wifi_mode && !req->has_requested_ip) {
+            if (!req->has_requested_ip) {
                 if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
                 if (!dhcp_claim(lp, mac, yiaddr, false)) return 0;
-                LLOG(LLOG_INFO, "DHCP: migrate to %u.%u.%u.%u (hotspot mode)",
+                LLOG(LLOG_INFO, "DHCP: migrate to %u.%u.%u.%u",
                      yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3]);
                 return DHCP_MSG_ACK;
             }
