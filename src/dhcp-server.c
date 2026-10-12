@@ -144,6 +144,11 @@ static struct dhcp_lease *dhcp_claim(struct lan_play *lp, const uint8_t mac[6],
     lease->offered = offered;
     lease->expires = now + (offered ? DHCP_OFFER_TIME : DHCP_LEASE_TIME);
     lease->used = true;
+    if (!offered && lp->switch_seen && CMP_MAC(mac, lp->switch_mac) &&
+        !CMP_IPV4(lp->switch_ip, ip)) {
+        CPY_IPV4(lp->switch_ip, ip);
+        arp_set(&lp->packet_ctx, mac, ip);
+    }
     return lease;
 }
 
