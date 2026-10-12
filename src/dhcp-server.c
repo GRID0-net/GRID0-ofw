@@ -1,7 +1,10 @@
 /* Minimal DHCP server for Automatic/DHCP Switch consoles.
  *
- * Lease logic shared by the socket fast path (dhcp-sock.c) and the pcap
- * injection path (dhcp_server_consume below). See dhcp-server.h.
+ * Single-phase M4: the Switch keeps a home-subnet address; our OFFER/ACK
+ * sets Router to this PC's Wi-Fi IP so the PC NATs the Switch's internet
+ * and routes 10.147.17.0/24 into ZeroTier. Lease logic shared by the
+ * socket fast path (dhcp-sock.c) and the pcap injection path
+ * (dhcp_server_consume below). See dhcp-server.h.
  */
 #include "lan-play.h"
 #include "dhcp-server.h"
@@ -19,8 +22,7 @@
 #define DHCP_OPT_ROUTER 3
 #define DHCP_OPT_DNS 6
 #define DHCP_OPT_BROADCAST 28
-#define DHCP_OPT_T1 58
-#define DHCP_OPT_T2 59
+#define DHCP_OPT_CLASSLESS_ROUTE 121
 #define DHCP_OPT_END 255
 
 #define DHCP_MAGIC 0x63825363u
@@ -62,9 +64,37 @@ static void u32_to_ipv4(uint32_t v, uint8_t ip[4])
     ip[3] = v & 0xff;
 }
 
-/* Pick a free ZeroTier-subnet address for this MAC, preferring the top of
- * the subnet where manually configured consoles rarely live. */
-static bool dhcp_pick_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t out[4])
+static bool dhcp_parse_ipv4(const char *s, uint8_t out[4])
+{
+    for (int i = 0; i < 4; i++) {
+        if (!s || *s < '0' || *s > '9') return false;
+        unsigned v = 0;
+        while (*s >= '0' && *s <= '9') {
+            v = v * 10 + (unsigned)(*s - '0');
+            if (v > 255) return false;
+            s++;
+        }
+        out[i] = (uint8_t)v;
+        if (i < 3) {
+            if (*s != '.') return false;
+            s++;
+        }
+    }
+    return *s == '\0';
+}
+
+static void dhcp_get_router_ip(struct lan_play *lp, uint8_t out[4])
+{
+    if (options.dhcp_router && dhcp_parse_ipv4(options.dhcp_router, out)) return;
+    if (lp->dhcp_router_known) {
+        CPY_IPV4(out, lp->dhcp_router_ip);
+        return;
+    }
+    for (int i = 0; i < 4; i++)
+        out[i] = (uint8_t)((lp->wifi_ip[i] & lp->wifi_netmask[i]) | (i == 3 ? 1 : 0));
+}
+
+static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t out[4])
 {
     struct dhcp_server_state *st = &lp->dhcp_state;
     const time_t now = time(NULL);
@@ -74,40 +104,20 @@ static bool dhcp_pick_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t out[
         return true;
     }
 
-    uint32_t net = ipv4_to_u32(lp->zerotier_ip) & ipv4_to_u32(lp->zerotier_netmask);
-    uint32_t bcast = ipv4_to_u32(lp->zerotier_broadcast_ip);
-    uint32_t gw = ipv4_to_u32(lp->packet_ctx.ip);
-    uint32_t self = ipv4_to_u32(lp->zerotier_ip);
-
-    /* Prefer the relay's own ZeroTier address for the first console. A
-     * unified overlay identity (console == relay) keeps the beacon payload
-     * and the rewritten packet headers consistent, which peer game logic
-     * requires to accept joins. Additional consoles fall back to the
-     * .254-downward pool below. */
-    {
-        uint8_t ip[4];
-        u32_to_ipv4(self, ip);
-        bool taken = false;
-        for (int i = 0; i < DHCP_LEASE_COUNT; ++i) {
-            if (st->leases[i].used && st->leases[i].expires > now &&
-                CMP_IPV4(st->leases[i].ip, ip) &&
-                !CMP_MAC(st->leases[i].mac, mac)) {
-                taken = true;
-                break;
-            }
-        }
-        if (!taken && !arp_has_ip(&lp->packet_ctx, ip) &&
-            (!lp->switch_seen || CMP_IPV4(ip, lp->switch_ip))) {
-            CPY_IPV4(out, ip);
-            return true;
-        }
+    uint8_t net[4], bcast[4], router[4];
+    for (int i = 0; i < 4; i++) {
+        net[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
+        bcast[i] = net[i] | (uint8_t)~lp->wifi_netmask[i];
     }
+    dhcp_get_router_ip(lp, router);
 
-    for (uint32_t cand = bcast - 1; cand > net && (bcast - cand) <= 24; --cand) {
+    const uint32_t b = ipv4_to_u32(bcast);
+    const uint32_t n = ipv4_to_u32(net);
+    for (uint32_t cand = b - 1; cand > n + 1; --cand) {
         uint8_t ip[4];
         u32_to_ipv4(cand, ip);
-        if (cand == gw || cand == self) continue;
-        if (lp->switch_seen && CMP_IPV4(ip, lp->switch_ip)) continue;
+        if (CMP_IPV4(ip, lp->wifi_ip)) continue;
+        if (CMP_IPV4(ip, router)) continue;
         if (arp_has_ip(&lp->packet_ctx, ip)) continue;
         bool taken = false;
         for (int i = 0; i < DHCP_LEASE_COUNT; ++i) {
@@ -144,11 +154,6 @@ static struct dhcp_lease *dhcp_claim(struct lan_play *lp, const uint8_t mac[6],
     lease->offered = offered;
     lease->expires = now + (offered ? DHCP_OFFER_TIME : DHCP_LEASE_TIME);
     lease->used = true;
-    if (!offered && lp->switch_seen && CMP_MAC(mac, lp->switch_mac) &&
-        !CMP_IPV4(lp->switch_ip, ip)) {
-        CPY_IPV4(lp->switch_ip, ip);
-        arp_set(&lp->packet_ctx, mac, ip);
-    }
     return lease;
 }
 
@@ -163,60 +168,7 @@ static size_t dhcp_opt(uint8_t *p, size_t off, uint8_t code, const void *data, s
 
 size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const struct dhcp_request *req, uint8_t msg_type,
-                          const uint8_t yiaddr[4], const uint8_t server_ip[4],
-                          uint8_t *dhcp)
-{
-    memset(dhcp, 0, DHCP_MIN_LEN);
-    dhcp[0] = DHCP_OP_BOOTREPLY;
-    dhcp[1] = DHCP_HTYPE_ETHER;
-    dhcp[2] = 6;
-    dhcp[3] = 0;
-    WRITE_NET16(dhcp, 4, (uint16_t)(req->xid >> 16));
-    WRITE_NET16(dhcp, 6, (uint16_t)(req->xid & 0xffff));
-    WRITE_NET16(dhcp, 10, req->flags);
-    if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
-    /* siaddr: server IP, must match the source IP of the packet. */
-    CPY_IPV4(dhcp + 20, server_ip);
-    CPY_MAC(dhcp + 28, dst_mac);
-    WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
-    WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
-
-    size_t off = 240;
-    off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
-    if (msg_type == DHCP_MSG_NAK && req->has_requested_ip &&
-        req->requested_ip[0] == 192 && req->requested_ip[1] == 168 && req->requested_ip[2] == 2) {
-        static const uint8_t router_ip[4] = {192, 168, 2, 1};
-        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, router_ip, 4);
-    } else if (msg_type != DHCP_MSG_NAK) {
-        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, server_ip, 4);
-        /* The Switch must believe it lives on the ZeroTier subnet: mask,
-         * router and broadcast all come from the overlay network. */
-        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->zerotier_netmask, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->packet_ctx.ip, 4);
-        /* 90DNS so the Switch can't phone home to Nintendo. The user picks which
-         * server is closest to them, that one goes first. */
-        static const uint8_t dns_us[4] = {207,246,121,77};
-        static const uint8_t dns_fr[4] = {163,172,141,219};
-        uint8_t dns_90dns[8];
-        memcpy(dns_90dns, options.dns_france_first ? dns_fr : dns_us, 4);
-        memcpy(dns_90dns + 4, options.dns_france_first ? dns_us : dns_fr, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_90dns, 8);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, lp->zerotier_broadcast_ip, 4);
-        uint8_t lease_be[4];
-        uint32_t lease = DHCP_LEASE_TIME;
-        lease_be[0] = (lease >> 24) & 0xff;
-        lease_be[1] = (lease >> 16) & 0xff;
-        lease_be[2] = (lease >> 8) & 0xff;
-        lease_be[3] = lease & 0xff;
-        off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
-    }
-    dhcp[off++] = DHCP_OPT_END;
-    return DHCP_MIN_LEN;
-}
-
-size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
-                                 const struct dhcp_request *req, uint8_t msg_type,
-                                 const uint8_t yiaddr[4], uint8_t *dhcp)
+                          const uint8_t yiaddr[4], uint8_t *dhcp)
 {
     memset(dhcp, 0, DHCP_MIN_LEN);
     dhcp[0] = DHCP_OP_BOOTREPLY;
@@ -232,29 +184,46 @@ size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
 
-    uint8_t subnet[4], gateway[4], broadcast[4];
-    for (int i = 0; i < 4; i++) {
-        subnet[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
-        broadcast[i] = subnet[i] | (uint8_t)~lp->wifi_netmask[i];
-    }
-    memcpy(gateway, subnet, 4);
-    gateway[3] |= 1;
-
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
-    if (msg_type != DHCP_MSG_NAK) {
-        off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->wifi_ip, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->wifi_netmask, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gateway, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gateway, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, broadcast, 4);
-        uint8_t lease_be[4];
-        uint8_t t1_be[4];
-        lease_be[0] = 0; lease_be[1] = 0; lease_be[2] = 0; lease_be[3] = 2;
-        t1_be[0] = 0; t1_be[1] = 0; t1_be[2] = 0; t1_be[3] = 1;
-        off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
-        off = dhcp_opt(dhcp, off, DHCP_OPT_T1, t1_be, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->wifi_ip, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->wifi_netmask, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->wifi_ip, 4);
+    static const uint8_t dns_us[4] = {207,246,121,77};
+    static const uint8_t dns_fr[4] = {163,172,141,219};
+    uint8_t dns_90dns[8];
+    memcpy(dns_90dns, options.dns_france_first ? dns_fr : dns_us, 4);
+    memcpy(dns_90dns + 4, options.dns_france_first ? dns_us : dns_fr, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_90dns, 8);
+    if (options.dhcp_option121) {
+        uint8_t routes[16];
+        size_t roff = 0;
+        uint8_t zt_net[4];
+        int bits = 0;
+        for (int i = 0; i < 4; i++) {
+            zt_net[i] = lp->zerotier_ip[i] & lp->zerotier_netmask[i];
+            for (int b = 0; b < 8; b++)
+                if (lp->zerotier_netmask[i] & (0x80 >> b)) bits++;
+        }
+        const int octets = (bits + 7) / 8;
+        routes[roff++] = (uint8_t)bits;
+        memcpy(routes + roff, zt_net, (size_t)octets);
+        roff += (size_t)octets;
+        CPY_IPV4(routes + roff, lp->wifi_ip);
+        roff += 4;
+        routes[roff++] = 0;
+        dhcp_get_router_ip(lp, routes + roff);
+        roff += 4;
+        off = dhcp_opt(dhcp, off, DHCP_OPT_CLASSLESS_ROUTE, routes, roff);
     }
+    off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, lp->wifi_broadcast, 4);
+    uint8_t lease_be[4];
+    uint32_t lease = DHCP_LEASE_TIME;
+    lease_be[0] = (lease >> 24) & 0xff;
+    lease_be[1] = (lease >> 16) & 0xff;
+    lease_be[2] = (lease >> 8) & 0xff;
+    lease_be[3] = lease & 0xff;
+    off = dhcp_opt(dhcp, off, DHCP_OPT_LEASE_TIME, lease_be, 4);
     dhcp[off++] = DHCP_OPT_END;
     return DHCP_MIN_LEN;
 }
@@ -265,7 +234,10 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
                       const struct dhcp_request *req, uint8_t msg_type,
                       const uint8_t yiaddr[4])
 {
-    /* Ethernet is added by lan_play_dhcp_send; build the IPv4 packet here. */
+    /* Ethernet is added by lan_play_dhcp_send; build the IPv4 packet here.
+     * Replies always go out as IP/Ethernet broadcast: embedded clients
+     * (including the Switch) may not receive unicast IP before they own
+     * the offered address. The client filters on xid/chaddr. */
     uint8_t ip[ETHER_MTU];
     const size_t dhcp_len = DHCP_MIN_LEN;
     const size_t udp_len = UDP_OFF_END + dhcp_len;
@@ -273,7 +245,7 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     if (ip_len > sizeof(ip)) return -1;
     memset(ip, 0, ip_len);
 
-    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr, lp->packet_ctx.ip,
+    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr,
                        ip + IPV4_HEADER_LEN + UDP_OFF_END);
 
     ip[IPV4_OFF_VER_LEN] = 0x45;
@@ -281,27 +253,8 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(ip, IPV4_OFF_ID, ++dhcp_ip_id);
     ip[IPV4_OFF_TTL] = 64;
     ip[IPV4_OFF_PROTOCOL] = IPV4_PROTOCOL_UDP;
-    static const uint8_t router_ip[4] = {192, 168, 2, 1};
-    bool spoofed_nak = (msg_type == DHCP_MSG_NAK && req->has_requested_ip &&
-                        req->requested_ip[0] == 192 && req->requested_ip[1] == 168 &&
-                        req->requested_ip[2] == 2);
-    if (spoofed_nak) {
-        CPY_IPV4(ip + IPV4_OFF_SRC, router_ip);
-    } else {
-        CPY_IPV4(ip + IPV4_OFF_SRC, lp->packet_ctx.ip);
-    }
-    static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    const uint8_t *eth_dst;
-    if (spoofed_nak) {
-        memset(ip + IPV4_OFF_DST, 0xff, 4);
-        eth_dst = bcast_mac;
-    } else if (req->flags & 0x8000) {
-        memset(ip + IPV4_OFF_DST, 0xff, 4);
-        eth_dst = bcast_mac;
-    } else {
-        CPY_IPV4(ip + IPV4_OFF_DST, yiaddr);
-        eth_dst = req->chaddr;
-    }
+    CPY_IPV4(ip + IPV4_OFF_SRC, lp->wifi_ip);
+    memset(ip + IPV4_OFF_DST, 0xff, 4);
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, 0);
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, ipv4_header_checksum(ip, IPV4_HEADER_LEN));
 
@@ -312,7 +265,8 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(udp, UDP_OFF_CHECKSUM, 0);
     WRITE_NET16(udp, UDP_OFF_CHECKSUM, udp_checksum(ip, IPV4_HEADER_LEN, ip_len));
 
-    return lan_play_dhcp_send(lp, eth_dst, ip, (uint16_t)ip_len);
+    static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+    return lan_play_dhcp_send(lp, bcast_mac, ip, (uint16_t)ip_len);
 }
 
 bool dhcp_parse_payload(const uint8_t *dhcp, size_t len, struct dhcp_request *req)
@@ -389,15 +343,6 @@ static void dhcp_event(const char *kind, const uint8_t mac[6], const uint8_t ip[
          mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
-/* True when the address lives on the ZeroTier subnet we serve. Anything
- * else came from another DHCP server (home router, Windows hotspot DHCP). */
-static bool dhcp_in_our_subnet(struct lan_play *lp, const uint8_t ip[4])
-{
-    const uint32_t mask = ipv4_to_u32(lp->zerotier_netmask);
-    const uint32_t net = ipv4_to_u32(lp->zerotier_ip) & mask;
-    return (ipv4_to_u32(ip) & mask) == net;
-}
-
 uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
                     const struct dhcp_request *req, uint8_t yiaddr[4])
 {
@@ -405,94 +350,35 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
     dhcp_sweep_expired(st, time(NULL));
 
     if (!is_nintendo_mac(mac)) {
-        /* Not a console: swallow the packet so only the household router
-         * answers it, and never hand it a lease. */
         st->ignored_non_nintendo++;
         return 0;
     }
 
-    uint8_t phase1_ip[4];
-    for (int i = 0; i < 4; i++)
-        phase1_ip[i] = (uint8_t)(lp->wifi_ip[i] & lp->wifi_netmask[i]);
-    phase1_ip[3] |= 250;
-
     if (req->msg_type == DHCP_MSG_DISCOVER) {
-        struct dhcp_lease *existing = dhcp_find_mac(&lp->dhcp_state, mac);
-        if (existing) {
-            if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
-            LLOG(LLOG_INFO, "DHCP: Phase 2 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
-                 yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3],
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-            uint8_t offer_net[4], cur_net[4];
-            for (int i = 0; i < 4; i++) {
-                offer_net[i] = yiaddr[i] & lp->zerotier_netmask[i];
-                cur_net[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
-            }
-            static const uint8_t st_dns_us[4] = {207, 246, 121, 77};
-            static const uint8_t st_dns_fr[4] = {163, 172, 141, 219};
-            const uint8_t *st_dns1 = options.dns_france_first ? st_dns_fr : st_dns_us;
-            const uint8_t *st_dns2 = options.dns_france_first ? st_dns_us : st_dns_fr;
-            LLOG(LLOG_INFO, "DHCP: subnet-test client-net %u.%u.%u.%u offer-net %u.%u.%u.%u",
-                 cur_net[0], cur_net[1], cur_net[2], cur_net[3],
-                 offer_net[0], offer_net[1], offer_net[2], offer_net[3]);
-            LLOG(LLOG_INFO, "DHCP: subnet-test yiaddr %u.%u.%u.%u server-id %u.%u.%u.%u mask %u.%u.%u.%u router %u.%u.%u.%u dns %u.%u.%u.%u %u.%u.%u.%u bcast %u.%u.%u.%u lease %u",
-                 yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3],
-                 lp->packet_ctx.ip[0], lp->packet_ctx.ip[1], lp->packet_ctx.ip[2], lp->packet_ctx.ip[3],
-                 lp->zerotier_netmask[0], lp->zerotier_netmask[1], lp->zerotier_netmask[2], lp->zerotier_netmask[3],
-                 lp->packet_ctx.ip[0], lp->packet_ctx.ip[1], lp->packet_ctx.ip[2], lp->packet_ctx.ip[3],
-                 st_dns1[0], st_dns1[1], st_dns1[2], st_dns1[3],
-                 st_dns2[0], st_dns2[1], st_dns2[2], st_dns2[3],
-                 lp->zerotier_broadcast_ip[0], lp->zerotier_broadcast_ip[1], lp->zerotier_broadcast_ip[2], lp->zerotier_broadcast_ip[3],
-                 (unsigned)DHCP_LEASE_TIME);
-        } else {
-            CPY_IPV4(yiaddr, phase1_ip);
-            LLOG(LLOG_INFO, "DHCP: Phase 1 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
-                 phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3],
-                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        if (!dhcp_pick_home_ip(lp, mac, yiaddr)) {
+            LLOG(LLOG_WARNING, "DHCP: address pool exhausted; DISCOVER ignored");
+            return 0;
+        }
+        if (!dhcp_claim(lp, mac, yiaddr, true)) {
+            LLOG(LLOG_WARNING, "DHCP: no free lease slot; DISCOVER ignored");
+            return 0;
         }
         return DHCP_MSG_OFFER;
     }
 
     if (req->msg_type == DHCP_MSG_REQUEST) {
-        const uint8_t *want = req->has_requested_ip ? req->requested_ip : req->ciaddr;
-        const bool has_want = req->has_requested_ip || !CMP_IPV4(req->ciaddr, "\0\0\0\0");
-
-        if (has_want && CMP_IPV4(want, phase1_ip)) {
-            if (!req->has_requested_ip) {
-                LLOG(LLOG_INFO, "DHCP: NAK renewal to force migrate");
-                return DHCP_MSG_NAK;
-            }
-            CPY_IPV4(yiaddr, phase1_ip);
-            dhcp_claim(lp, mac, yiaddr, false);
-            LLOG(LLOG_INFO, "DHCP: ACK %u.%u.%u.%u (home wifi mode)",
-                 phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3]);
-            return DHCP_MSG_ACK;
-        }
-
         struct dhcp_lease *lease = dhcp_find_mac(st, mac);
         const time_t now = time(NULL);
+        const uint8_t *want = req->has_requested_ip ? req->requested_ip : req->ciaddr;
+        const bool has_want = req->has_requested_ip || !CMP_IPV4(req->ciaddr, "\0\0\0\0");
         if (lease && lease->expires > now && has_want && CMP_IPV4(want, lease->ip)) {
-            /* Our client, our lease: the race is won. */
             dhcp_claim(lp, mac, lease->ip, false);
             CPY_IPV4(yiaddr, lease->ip);
             return DHCP_MSG_ACK;
         }
-        if (has_want && dhcp_in_our_subnet(lp, want)) {
-            /* The console asked us for a ZeroTier-subnet address that is not
-             * its lease: NAK so it restarts cleanly with DISCOVER. */
-            memset(yiaddr, 0, 4);
-            return DHCP_MSG_NAK;
-        }
         if (has_want) {
-            /* The console is renewing a router IP (e.g., waking from sleep
-             * with 192.168.2.x). NAK spoofed as the router so it restarts
-             * DHCP and discovers our 10.147.17.x offer. */
             st->lost_races++;
             dhcp_event("lost", mac, want);
-            LLOG(LLOG_INFO, "DHCP: NAKing router IP %u.%u.%u.%u to force rediscover",
-                 want[0], want[1], want[2], want[3]);
-            memset(yiaddr, 0, 4);
-            return DHCP_MSG_NAK;
         }
         return 0;
     }
@@ -504,6 +390,12 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
     }
 
     return 0;
+}
+
+bool dhcp_is_our_lease(struct lan_play *lp, const uint8_t mac[6], const uint8_t ip[4])
+{
+    struct dhcp_lease *lease = dhcp_find_mac(&lp->dhcp_state, mac);
+    return lease && lease->expires > time(NULL) && CMP_IPV4(lease->ip, ip);
 }
 
 void dhcp_account_reply(struct lan_play *lp, const uint8_t *mac, uint8_t msg,
@@ -528,9 +420,68 @@ void dhcp_account_reply(struct lan_play *lp, const uint8_t *mac, uint8_t msg,
     }
 }
 
+static bool dhcp_parse_server(const uint8_t *frame, size_t len)
+{
+    if (len < ETHER_HEADER_LEN + IPV4_HEADER_LEN + UDP_OFF_END + 240) return false;
+    if (READ_NET16(frame, ETHER_OFF_TYPE) != ETHER_TYPE_IPV4) return false;
+    const uint8_t *ip = frame + ETHER_HEADER_LEN;
+    const size_t hlen = (ip[IPV4_OFF_VER_LEN] & 0x0f) * 4;
+    if ((ip[IPV4_OFF_VER_LEN] >> 4) != 4 || hlen < IPV4_HEADER_LEN) return false;
+    const size_t total = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
+    if (total < hlen + UDP_OFF_END || total > len - ETHER_HEADER_LEN) return false;
+    if (ip[IPV4_OFF_PROTOCOL] != IPV4_PROTOCOL_UDP) return false;
+    const uint8_t *udp = ip + hlen;
+    if (READ_NET16(udp, UDP_OFF_SRCPORT) != 67 || READ_NET16(udp, UDP_OFF_DSTPORT) != 68)
+        return false;
+    const size_t ulen = READ_NET16(udp, UDP_OFF_LENGTH);
+    if (ulen < UDP_OFF_END + 240 || hlen + ulen > total) return false;
+    return true;
+}
+
+static void dhcp_snoop_server(struct lan_play *lp, const uint8_t *payload, size_t len)
+{
+    if (lp->dhcp_router_known || len < 240) return;
+    if (payload[0] != DHCP_OP_BOOTREPLY) return;
+    if (READ_NET16(payload, 236) != (uint16_t)(DHCP_MAGIC >> 16) ||
+        READ_NET16(payload, 238) != (uint16_t)(DHCP_MAGIC & 0xffff)) return;
+    size_t off = 240;
+    while (off + 1 < len) {
+        const uint8_t code = payload[off];
+        if (code == DHCP_OPT_END) break;
+        if (code == 0) {
+            ++off;
+            continue;
+        }
+        if (off + 2 > len) break;
+        const uint8_t olen = payload[off + 1];
+        if (off + 2 + olen > len) break;
+        if (code == DHCP_OPT_SERVER_ID && olen == 4) {
+            const uint8_t *sip = payload + off + 2;
+            static const uint8_t zero[4] = {0, 0, 0, 0};
+            if (!CMP_IPV4(sip, zero) && !CMP_IPV4(sip, lp->wifi_ip) &&
+                !CMP_IPV4(sip, lp->zerotier_ip)) {
+                CPY_IPV4(lp->dhcp_router_ip, sip);
+                lp->dhcp_router_known = true;
+                LLOG(LLOG_INFO, "DHCP: learned router %u.%u.%u.%u from another server's reply",
+                     sip[0], sip[1], sip[2], sip[3]);
+            }
+            return;
+        }
+        off += 2 + olen;
+    }
+}
+
 bool dhcp_server_consume(struct lan_play *lp, const uint8_t *frame, size_t len)
 {
     if (!options.dhcp_server || !lp->wifi_subnet_known) return false;
+
+    if (dhcp_parse_server(frame, len)) {
+        const uint8_t *ip = frame + ETHER_HEADER_LEN;
+        const size_t hlen = (ip[IPV4_OFF_VER_LEN] & 0x0f) * 4;
+        dhcp_snoop_server(lp, frame + ETHER_HEADER_LEN + hlen + UDP_OFF_END,
+                          len - ETHER_HEADER_LEN - hlen - UDP_OFF_END);
+        return true;
+    }
 
     struct dhcp_request req;
     if (!dhcp_parse(frame, len, &req)) return false;
