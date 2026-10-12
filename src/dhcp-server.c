@@ -421,6 +421,7 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
     if (req->msg_type == DHCP_MSG_DISCOVER) {
         struct dhcp_lease *existing = dhcp_find_mac(&lp->dhcp_state, mac);
         if (existing) {
+            existing->expires = 0;
             if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
             LLOG(LLOG_INFO, "DHCP: Phase 2 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
                  yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3],
