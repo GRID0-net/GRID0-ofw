@@ -146,8 +146,6 @@ static struct dhcp_lease *dhcp_claim(struct lan_play *lp, const uint8_t mac[6],
     lease->used = true;
     if (!offered && lp->switch_seen && CMP_MAC(mac, lp->switch_mac) &&
         !CMP_IPV4(lp->switch_ip, ip)) {
-        LLOG(LLOG_INFO, "DHCP: updating switch_ip to %u.%u.%u.%u",
-             ip[0], ip[1], ip[2], ip[3]);
         CPY_IPV4(lp->switch_ip, ip);
         arp_set(&lp->packet_ctx, mac, ip);
     }
@@ -275,10 +273,7 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     if (ip_len > sizeof(ip)) return -1;
     memset(ip, 0, ip_len);
 
-    uint8_t sid[4];
-    memcpy(sid, lp->packet_ctx.ip, 4);
-    if (yiaddr[0] == 10 && yiaddr[1] == 147) { sid[0]=10; sid[1]=147; sid[2]=17; sid[3]=1; }
-    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr, sid,
+    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr, lp->packet_ctx.ip,
                        ip + IPV4_HEADER_LEN + UDP_OFF_END);
 
     ip[IPV4_OFF_VER_LEN] = 0x45;
@@ -424,11 +419,31 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
     if (req->msg_type == DHCP_MSG_DISCOVER) {
         struct dhcp_lease *existing = dhcp_find_mac(&lp->dhcp_state, mac);
         if (existing) {
-            existing->expires = 0;
             if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
             LLOG(LLOG_INFO, "DHCP: Phase 2 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
                  yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3],
                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+            uint8_t offer_net[4], cur_net[4];
+            for (int i = 0; i < 4; i++) {
+                offer_net[i] = yiaddr[i] & lp->zerotier_netmask[i];
+                cur_net[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
+            }
+            static const uint8_t st_dns_us[4] = {207, 246, 121, 77};
+            static const uint8_t st_dns_fr[4] = {163, 172, 141, 219};
+            const uint8_t *st_dns1 = options.dns_france_first ? st_dns_fr : st_dns_us;
+            const uint8_t *st_dns2 = options.dns_france_first ? st_dns_us : st_dns_fr;
+            LLOG(LLOG_INFO, "DHCP: subnet-test client-net %u.%u.%u.%u offer-net %u.%u.%u.%u",
+                 cur_net[0], cur_net[1], cur_net[2], cur_net[3],
+                 offer_net[0], offer_net[1], offer_net[2], offer_net[3]);
+            LLOG(LLOG_INFO, "DHCP: subnet-test yiaddr %u.%u.%u.%u server-id %u.%u.%u.%u mask %u.%u.%u.%u router %u.%u.%u.%u dns %u.%u.%u.%u %u.%u.%u.%u bcast %u.%u.%u.%u lease %u",
+                 yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3],
+                 lp->packet_ctx.ip[0], lp->packet_ctx.ip[1], lp->packet_ctx.ip[2], lp->packet_ctx.ip[3],
+                 lp->zerotier_netmask[0], lp->zerotier_netmask[1], lp->zerotier_netmask[2], lp->zerotier_netmask[3],
+                 lp->packet_ctx.ip[0], lp->packet_ctx.ip[1], lp->packet_ctx.ip[2], lp->packet_ctx.ip[3],
+                 st_dns1[0], st_dns1[1], st_dns1[2], st_dns1[3],
+                 st_dns2[0], st_dns2[1], st_dns2[2], st_dns2[3],
+                 lp->zerotier_broadcast_ip[0], lp->zerotier_broadcast_ip[1], lp->zerotier_broadcast_ip[2], lp->zerotier_broadcast_ip[3],
+                 (unsigned)DHCP_LEASE_TIME);
         } else {
             CPY_IPV4(yiaddr, phase1_ip);
             LLOG(LLOG_INFO, "DHCP: Phase 1 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
