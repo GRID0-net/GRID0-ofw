@@ -3,6 +3,7 @@
 #include "native-udp.h"
 #include "nintendo_oui.h"
 #include "win-firewall.h"
+#include "dhcp-sock.h"
 
 #define RETURN_ERR(lan_play, ...) \
     do { \
@@ -548,6 +549,7 @@ int lan_play_close(struct lan_play *lan_play)
 {
     int ret;
 
+    dhcp_sock_stop(lan_play);
     if (options.discover_switch) uv_timer_stop(&lan_play->switch_discovery_timer);
     if (options.diagnostics) LLOG(LLOG_INFO, "Host UDP socket copies drained: %llu (not additional forwarding)",
         (unsigned long long)native_udp_guard_received(lan_play->udp_guard));
@@ -781,6 +783,10 @@ int lan_play_init(struct lan_play *lan_play)
      * relay's DHCP server is the only one answering the Switch. The call
      * is idempotent and also clears stale rules when --dhcp is off. */
     winfw_set_hotspot_dhcp_block(options.dhcp_server);
+    /* Inbound allow for the socket DHCP fast path (UDP/67). The pcap path
+     * bypasses the host firewall via Npcap injection, but the socket path
+     * goes through the host stack. Harmless when the socket falls back. */
+    winfw_set_dhcp_allow(options.dhcp_server);
     lan_play->broadcast = options.broadcast;
     lan_play->pmtu = options.pmtu;
 
@@ -947,6 +953,18 @@ int lan_play_init(struct lan_play *lan_play)
             else
                 LLOG(LLOG_INFO, "Searching %u.%u.%u.2-254 for a local Switch using ARP probes",
                     lan_play->packet_ctx.subnet_net[0], lan_play->packet_ctx.subnet_net[1], lan_play->packet_ctx.subnet_net[2]);
+        }
+    }
+
+    /* Socket fast path for DHCP: answers DISCOVERs straight from UDP/67 and
+     * wins the race against home routers that the pcap path loses. Falls
+     * back to pcap injection when the port is unavailable. */
+    if (options.dhcp_server && lan_play->wifi_subnet_known) {
+        if (dhcp_sock_start(lan_play) == 0) {
+            LLOG(LLOG_INFO, "DHCP: socket fast path active on UDP/67");
+            winfw_set_hotspot_dhcp_block(false);
+        } else {
+            LLOG(LLOG_INFO, "DHCP: UDP/67 unavailable, answering via pcap injection");
         }
     }
 
