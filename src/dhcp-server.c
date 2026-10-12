@@ -275,7 +275,10 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     if (ip_len > sizeof(ip)) return -1;
     memset(ip, 0, ip_len);
 
-    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr, lp->packet_ctx.ip,
+    uint8_t sid[4];
+    memcpy(sid, lp->packet_ctx.ip, 4);
+    if (yiaddr[0] == 10 && yiaddr[1] == 147) { sid[0]=10; sid[1]=147; sid[2]=17; sid[3]=1; }
+    dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr, sid,
                        ip + IPV4_HEADER_LEN + UDP_OFF_END);
 
     ip[IPV4_OFF_VER_LEN] = 0x45;
