@@ -444,8 +444,10 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
 
         if (has_want && CMP_IPV4(want, phase1_ip)) {
             if (!req->has_requested_ip) {
-                LLOG(LLOG_INFO, "DHCP: NAK renewal to force migrate");
-                return DHCP_MSG_NAK;
+                CPY_IPV4(yiaddr, phase1_ip);
+                dhcp_claim(lp, mac, yiaddr, false);
+                LLOG(LLOG_INFO, "DHCP: ACK renewal (no migration)");
+                return DHCP_MSG_ACK;
             }
             CPY_IPV4(yiaddr, phase1_ip);
             dhcp_claim(lp, mac, yiaddr, false);
