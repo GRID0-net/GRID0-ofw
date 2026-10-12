@@ -121,9 +121,17 @@ static void capture_frame(struct lan_play *lp, const char *direction,
     }
 }
 
-static bool is_nintendo_lan_broadcast(const uint8_t ip[4])
+static bool is_nintendo_lan_broadcast(const struct lan_play *lp, const uint8_t ip[4])
 {
-    return ip[0] == 10 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255;
+    if (ip[0] == 10 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255) return true;
+    if (ip[0] == 255 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255) return true;
+    bool wifi_bcast = true;
+    for (int i = 0; i < 4; i++) {
+        uint8_t expected = (uint8_t)((lp->wifi_ip[i] & lp->wifi_netmask[i]) | ~lp->wifi_netmask[i]);
+        if (ip[i] != expected) { wifi_bcast = false; break; }
+    }
+    if (wifi_bcast) return true;
+    return false;
 }
 
 static bool is_zerotier_destination(const struct lan_play *lan_play, const uint8_t ip[4])
@@ -228,7 +236,7 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
-        (!is_nintendo_lan_broadcast(original_dst) && !is_zerotier_destination(lan_play, original_dst)) ||
+        (!is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst)) ||
         CMP_IPV4(original_dst, lan_play->packet_ctx.ip)) return false;
 
     /* Never forward the console's ICMP "port unreachable" replies to overlay
@@ -256,14 +264,14 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
 
     uint8_t translated[ETHER_MTU];
     memcpy(translated, ip, ip_len);
-    const uint8_t *dst = is_nintendo_lan_broadcast(original_dst)
+    const uint8_t *dst = is_nintendo_lan_broadcast(lan_play, original_dst)
         ? lan_play->zerotier_broadcast_ip : original_dst;
     if (!rewrite_ipv4_addresses(translated, ip_len, lan_play->zerotier_ip, dst)) return false;
     const size_t header_len = (ip[0] & 0x0f) * 4;
     if (!lan_play->warned_broadcast_mismatch && ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
         ip_len >= header_len + 8 && !(READ_NET16(ip, 6) & 0x3fff) &&
         READ_NET16(ip, header_len + 2) == 35000 &&
-        is_nintendo_lan_broadcast(original_dst) && !CMP_IPV4(original_dst, dst)) {
+        is_nintendo_lan_broadcast(lan_play, original_dst) && !CMP_IPV4(original_dst, dst)) {
         lan_play->warned_broadcast_mismatch = true;
         LLOG(LLOG_WARNING, "LAN broadcast mismatch: Switch uses %u.%u.%u.%u, ZeroTier uses %u.%u.%u.%u. Set the Switch subnet mask to %u.%u.%u.%u and restart LAN mode; PIA authentication uses the broadcast address, which header translation cannot repair.",
             original_dst[0], original_dst[1], original_dst[2], original_dst[3],
@@ -613,7 +621,7 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
         ip = body + IPV4_OFF_SRC;
         direct = CMP_MAC(frame, all) &&
             (CMP_IPV4(body + IPV4_OFF_DST, lp->zerotier_broadcast_ip) ||
-             is_nintendo_lan_broadcast(body + IPV4_OFF_DST));
+             is_nintendo_lan_broadcast(lp, body + IPV4_OFF_DST));
     } else return false;
     const bool zt_dest = is_zerotier_destination(lp, ip);
     const bool wifi_dest = lp->wifi_subnet_known &&
