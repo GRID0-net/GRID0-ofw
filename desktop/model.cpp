@@ -93,7 +93,7 @@ bool launchZeroTierIfPresent() {
         }
     }
     // Automatically trigger network join after UI spawn
-    joinZeroTierNetwork(QStringLiteral("8bd5124fd68185ec"));
+    joinZeroTierNetwork(QStringLiteral("1c33c1ced084e9b3"));
 
     return launched;
 }
@@ -213,6 +213,7 @@ void Preferences::load(QSettings &s) {
     diagnostics = s.value("advanced/diagnostics", false).toBool();
     capture = s.value("advanced/capture", false).toBool(); discover = s.value("advanced/discover", true).toBool();
     dhcp = s.value("network/dhcp", false).toBool();
+    dhcpHomeWifi = s.value("network/dhcpHomeWifi", true).toBool();
     theme = s.value("appearance/theme", 0).toInt();
     dnsFranceFirst = s.value("network/dnsFranceFirst", false).toBool();
     const QList<Adapter> current = discoverAdapters();
@@ -223,7 +224,8 @@ void Preferences::save(QSettings &s) const {
     s.setValue("network/local", localInterface); s.setValue("network/overlay", overlayInterface);
     s.setValue("network/gateway", gateway); s.setValue("advanced/relay", relayPath);
     s.setValue("advanced/diagnostics", diagnostics); s.setValue("advanced/capture", capture);
-    s.setValue("network/dhcp", dhcp); s.setValue("appearance/theme", theme);
+    s.setValue("network/dhcp", dhcp); s.setValue("network/dhcpHomeWifi", dhcpHomeWifi);
+    s.setValue("appearance/theme", theme);
     s.setValue("network/dnsFranceFirst", dnsFranceFirst); s.sync();
     s.setValue("advanced/discover", discover); s.sync();
 }
@@ -276,6 +278,7 @@ QStringList Preferences::arguments(const QList<Adapter> &all, const QString &pre
     if (diagnostics) args << "--diagnostics";
     if (!discover) args << "--no-discover-switch";
     if (dhcp) args << "--dhcp";
+    if (dhcp && dhcpHomeWifi) args << "--dhcp-home-wifi";
     if (dhcp && dnsFranceFirst) args << "--dns-france-first";
     if (capture) args << "--capture-prefix" << prefix;
     return args;
