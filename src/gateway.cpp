@@ -302,10 +302,5 @@ int gateway_close(struct gateway *gateway) {
 void gateway_on_packet(struct gateway *gateway, const uint8_t *data, int data_len) {
     data += ETHER_OFF_END;
     data_len -= ETHER_OFF_END;
-    if (data_len >= 20) {
-        eprintf("GATEWAY: packet from %u.%u.%u.%u to %u.%u.%u.%u\n",
-                data[12], data[13], data[14], data[15],
-                data[16], data[17], data[18], data[19]);
-    }
     gateway->onPacket(data, data_len);
 }
