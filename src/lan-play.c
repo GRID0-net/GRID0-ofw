@@ -235,8 +235,16 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
 
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
+    bool is_bcast = is_nintendo_lan_broadcast(lan_play, original_dst);
+    bool is_zt = is_zerotier_destination(lan_play, original_dst);
+    if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
+        LLOG(LLOG_DEBUG, "Relay Wi-Fi UDP %u.%u.%u.%u -> %u.%u.%u.%u bcast=%d zt=%d",
+             ip[IPV4_OFF_SRC], ip[IPV4_OFF_SRC+1], ip[IPV4_OFF_SRC+2], ip[IPV4_OFF_SRC+3],
+             original_dst[0], original_dst[1], original_dst[2], original_dst[3],
+             is_bcast, is_zt);
+    }
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
-        (!is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst)) ||
+        (!is_bcast && !is_zt) ||
         CMP_IPV4(original_dst, lan_play->packet_ctx.ip)) return false;
 
     /* Never forward the console's ICMP "port unreachable" replies to overlay
