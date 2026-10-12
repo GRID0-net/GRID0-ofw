@@ -47,16 +47,6 @@ struct lan_client_fragment {
     uint8_t buffer[ETHER_MTU];
 };
 
-struct nat_entry {
-    uint8_t switch_ip[4];
-    uint16_t switch_port;
-    uint8_t remote_ip[4];
-    uint16_t remote_port;
-    uint8_t protocol;
-    uint16_t nat_port;
-    uint64_t last_seen;
-};
-
 struct lan_play {
     struct packet_ctx packet_ctx;
 
@@ -97,6 +87,8 @@ struct lan_play {
     struct dhcp_server_state dhcp_state;
     uv_udp_t dhcp_sock;
     bool dhcp_sock_active;
+    uint8_t dhcp_router_ip[4];
+    bool dhcp_router_known;
     struct packet_ctx zerotier_neighbors;
     struct native_udp_guard *udp_guard;
     bool wifi_delivery_probe_sent;
@@ -128,9 +120,6 @@ struct lan_play {
     unsigned char key[LP_KEY_LEN];
 
     struct gateway *gateway;
-    struct nat_entry *nat_table;
-    size_t nat_count;
-    size_t nat_capacity;
     char last_err[1024];
 
     uint64_t upload_byte;
@@ -167,6 +156,8 @@ struct cli_options {
     bool status_events;
     bool discover_switch;
     bool dhcp_server;
+    bool dhcp_option121;
+    char *dhcp_router;
     bool dns_france_first;
     char *capture_prefix;
 
