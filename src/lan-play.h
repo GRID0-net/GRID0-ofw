@@ -154,6 +154,7 @@ struct cli_options {
     bool status_events;
     bool discover_switch;
     bool dhcp_server;
+    bool dhcp_home_wifi_mode;
     bool dns_france_first;
     char *capture_prefix;
 
