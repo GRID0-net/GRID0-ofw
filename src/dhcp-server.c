@@ -239,8 +239,7 @@ size_t dhcp_build_phase1_payload(struct lan_play *lp, const uint8_t *dst_mac,
         subnet[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
         broadcast[i] = subnet[i] | (uint8_t)~lp->wifi_netmask[i];
     }
-    memcpy(gateway, subnet, 4);
-    gateway[3] |= 1;
+    memcpy(gateway, lp->wifi_ip, 4);
 
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
