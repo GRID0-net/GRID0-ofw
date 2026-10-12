@@ -425,6 +425,8 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
 
         if (has_want && CMP_IPV4(want, phase1_ip)) {
             if (!req->has_requested_ip) {
+                struct dhcp_lease *old = dhcp_find_mac(&lp->dhcp_state, mac);
+                if (old) old->expires = 0;
                 if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
                 if (!dhcp_claim(lp, mac, yiaddr, false)) return 0;
                 LLOG(LLOG_INFO, "DHCP: migrate to %u.%u.%u.%u",
