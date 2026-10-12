@@ -128,16 +128,15 @@ struct lan_play {
     unsigned char key[LP_KEY_LEN];
 
     struct gateway *gateway;
+    struct nat_entry *nat_table;
+    size_t nat_count;
+    size_t nat_capacity;
     char last_err[1024];
 
     uint64_t upload_byte;
     uint64_t download_byte;
     uint64_t upload_packet;
     uint64_t download_packet;
-
-    struct nat_entry *nat_table;
-    size_t nat_count;
-    size_t nat_capacity;
 };
 
 int lan_play_send_packet(struct lan_play *lan_play, void *data, int size);
@@ -168,7 +167,6 @@ struct cli_options {
     bool status_events;
     bool discover_switch;
     bool dhcp_server;
-    bool dhcp_home_wifi_mode;
     bool dns_france_first;
     char *capture_prefix;
 
