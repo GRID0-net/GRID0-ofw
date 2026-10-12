@@ -287,7 +287,8 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
             lan_play->zerotier_netmask[2], lan_play->zerotier_netmask[3]);
     }
     if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
-        !(READ_NET16(ip, IPV4_OFF_FLAGS_FRAG_OFFSET) & 0x1fff) && ip_len >= header_len + 8) {
+        !(READ_NET16(ip, IPV4_OFF_FLAGS_FRAG_OFFSET) & 0x1fff) && ip_len >= header_len + 8 &&
+        !is_nintendo_lan_broadcast(lan_play, original_dst)) {
         const uint16_t port = READ_NET16(ip, header_len);
         int ret = native_udp_guard_reserve(lan_play->udp_guard, port);
         if (ret != 0) {
