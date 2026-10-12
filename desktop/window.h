@@ -52,8 +52,6 @@ private:
     QLabel *fwDot = nullptr;
     QLabel *hotspotHint = nullptr;
     QPushButton *hotspotSetup = nullptr;
-    QRadioButton *homeWifiRadio = nullptr;
-    QRadioButton *hotspotRadio = nullptr;
     QLabel *requirements = nullptr;
     QPushButton *start, *stop, *refresh, *setupRequirements = nullptr;
     QPlainTextEdit *log;
