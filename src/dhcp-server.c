@@ -419,10 +419,18 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
     phase1_ip[3] |= 250;
 
     if (req->msg_type == DHCP_MSG_DISCOVER) {
-        CPY_IPV4(yiaddr, phase1_ip);
-        LLOG(LLOG_INFO, "DHCP: Phase 1 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
-             phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3],
-             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        struct dhcp_lease *existing = dhcp_find_mac(&lp->dhcp_state, mac);
+        if (existing) {
+            if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
+            LLOG(LLOG_INFO, "DHCP: Phase 2 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
+                 yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3],
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        } else {
+            CPY_IPV4(yiaddr, phase1_ip);
+            LLOG(LLOG_INFO, "DHCP: Phase 1 offer %u.%u.%u.%u for %02x:%02x:%02x:%02x:%02x:%02x",
+                 phase1_ip[0], phase1_ip[1], phase1_ip[2], phase1_ip[3],
+                 mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        }
         return DHCP_MSG_OFFER;
     }
 
@@ -432,13 +440,8 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
 
         if (has_want && CMP_IPV4(want, phase1_ip)) {
             if (!req->has_requested_ip) {
-                struct dhcp_lease *old = dhcp_find_mac(&lp->dhcp_state, mac);
-                if (old) old->expires = 0;
-                if (!dhcp_pick_ip(lp, mac, yiaddr)) return 0;
-                if (!dhcp_claim(lp, mac, yiaddr, false)) return 0;
-                LLOG(LLOG_INFO, "DHCP: migrate to %u.%u.%u.%u",
-                     yiaddr[0], yiaddr[1], yiaddr[2], yiaddr[3]);
-                return DHCP_MSG_ACK;
+                LLOG(LLOG_INFO, "DHCP: NAK renewal to force migrate");
+                return DHCP_MSG_NAK;
             }
             CPY_IPV4(yiaddr, phase1_ip);
             dhcp_claim(lp, mac, yiaddr, false);
