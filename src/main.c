@@ -526,7 +526,7 @@ int old_main()
         RT_ASSERT(uv_timer_start(&control_timer, windows_control_cb, 0, 100) == 0);
     }
 #endif
-    eprintf("Relay started (PID %d) [BUILD MARKER: NO-MIGRATION-TEST]\n", (int)getpid());
+    eprintf("Relay started (PID %d) [BUILD MARKER: NO-MIGRATION-ARP-FIX]\n", (int)getpid());
     ret = uv_run(lan_play->loop, UV_RUN_DEFAULT);
     if (ret) {
         LLOG(LLOG_ERROR, "uv_run %d", ret);
