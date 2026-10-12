@@ -214,6 +214,14 @@ Window::Window(bool preview) : previewMode(preview) {
 #endif
     // Automatic mode gets its own boxed section like the manual one.
     autoLayout->addLayout(hotspotTopRow);
+    auto *modeRow = new QHBoxLayout;
+    homeWifiRadio = new QRadioButton("Home Wi-Fi");
+    hotspotRadio = new QRadioButton("Hotspot");
+    homeWifiRadio->setChecked(true);
+    modeRow->addWidget(homeWifiRadio);
+    modeRow->addWidget(hotspotRadio);
+    modeRow->addStretch();
+    autoLayout->addLayout(modeRow);
     autoLayout->addWidget(hotspotHint);
 #ifdef Q_OS_WIN
     autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
@@ -301,6 +309,13 @@ Window::Window(bool preview) : previewMode(preview) {
         preferences.autoSelectLocalAdapter(adapters);
         const int li = local->findData(preferences.localInterface);
         if (li >= 0) local->setCurrentIndex(li);
+        save();
+    });
+    homeWifiRadio->setChecked(preferences.dhcpHomeWifi);
+    hotspotRadio->setChecked(!preferences.dhcpHomeWifi);
+    for (auto *m : {homeWifiRadio, hotspotRadio}) connect(m, &QRadioButton::toggled, this, [this] {
+        if (loading) return;
+        preferences.dhcpHomeWifi = homeWifiRadio->isChecked();
         save();
     });
     dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
