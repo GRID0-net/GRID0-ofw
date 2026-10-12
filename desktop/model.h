@@ -29,7 +29,6 @@ QStringList getZeroTierNetworkIPs(const QString &networkId = QStringLiteral("8bd
 struct Preferences {
     QString localInterface, overlayInterface, gateway, relayPath;
     bool diagnostics = false, capture = false, discover = true, dhcp = false;
-    bool dhcpHomeWifi = true;
     int theme = 0;
     bool dnsFranceFirst = false;
     void load(QSettings &settings);
