@@ -198,7 +198,9 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, srv_ip, 4);
     uint8_t dns_router[4];
     if (is_zt_offer) {
-        dns_router[0] = 10; dns_router[1] = 147; dns_router[2] = 17; dns_router[3] = 1;
+        /* DNS should be the PC's ZeroTier IP (the gateway), not 10.147.17.1.
+         * The PC runs a DNS forwarder for the Switch. */
+        CPY_IPV4(dns_router, lp->zerotier_ip);
     } else {
         for (int i = 0; i < 4; i++) {
             dns_router[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
