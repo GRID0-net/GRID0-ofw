@@ -174,7 +174,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
                           const struct dhcp_request *req, uint8_t msg_type,
                           const uint8_t yiaddr[4], uint8_t *dhcp)
 {
-    memset(dhcp, 0, DHCP_MIN_LEN);
+    if (!yiaddr) return 0; memset(dhcp, 0, DHCP_MIN_LEN);
     dhcp[0] = DHCP_OP_BOOTREPLY;
     dhcp[1] = DHCP_HTYPE_ETHER;
     dhcp[2] = 6;
@@ -183,30 +183,30 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     WRITE_NET16(dhcp, 6, (uint16_t)(req->xid & 0xffff));
     WRITE_NET16(dhcp, 10, req->flags);
     if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
-    static const uint8_t zt_net_early[4] = {10, 147, 17, 0};
-    static const uint8_t zt_mask_early[4] = {255, 255, 255, 0};
-    bool is_zt_early = yiaddr && IS_SUBNET(yiaddr, zt_net_early, zt_mask_early);
-    const uint8_t *siaddr_ip = is_zt_early ? lp->zerotier_ip : lp->wifi_ip;
+    bool is_zt_offer = IS_SUBNET(yiaddr, lp->zerotier_ip, lp->zerotier_netmask);
+    
+    
+    const uint8_t *siaddr_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     CPY_IPV4(dhcp + 20, siaddr_ip);
-    CPY_MAC(dhcp + 28, dst_mac);
+    CPY_MAC(dhcp + 28, req->chaddr);
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
 
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
     /* Proxy ARP mode: use ZeroTier IP for server/gateway/DNS */
-    static const uint8_t zt_net[4] = {10, 147, 17, 0};
-    static const uint8_t zt_mask[4] = {255, 255, 255, 0};
-    bool is_zt_offer = yiaddr && IS_SUBNET(yiaddr, zt_net, zt_mask);
+    
+    
+    
     const uint8_t *srv_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
-    const uint8_t *netmask = is_zt_offer ? zt_mask : lp->wifi_netmask;
+    const uint8_t *netmask = is_zt_offer ? lp->zerotier_netmask : lp->wifi_netmask;
     const uint8_t *gw_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, srv_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, netmask, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gw_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gw_ip, 4);
     /* Option 121 test: always include route to ZeroTier via PC. */
-    if (1) {
+    if (!is_zt_offer) {
         uint8_t routes[16];
         size_t roff = 0;
         uint8_t zt_net[4];
@@ -229,7 +229,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     }
     uint8_t bcast_addr[4];
     if (is_zt_offer) {
-        bcast_addr[0] = 10; bcast_addr[1] = 147; bcast_addr[2] = 17; bcast_addr[3] = 255;
+        for (int i = 0; i < 4; i++) bcast_addr[i] = (uint8_t)(lp->zerotier_ip[i] | ~lp->zerotier_netmask[i]);
     } else {
         CPY_IPV4(bcast_addr, lp->wifi_broadcast);
     }
@@ -270,9 +270,9 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(ip, IPV4_OFF_ID, ++dhcp_ip_id);
     ip[IPV4_OFF_TTL] = 64;
     ip[IPV4_OFF_PROTOCOL] = IPV4_PROTOCOL_UDP;
-    static const uint8_t zt_net_src[4] = {10, 147, 17, 0};
-    static const uint8_t zt_mask_src[4] = {255, 255, 255, 0};
-    bool is_zt_src = yiaddr && IS_SUBNET(yiaddr, zt_net_src, zt_mask_src);
+    
+    
+    bool is_zt_src = yiaddr && IS_SUBNET(yiaddr, lp->zerotier_ip, lp->zerotier_netmask);
     const uint8_t *src_ip = is_zt_src ? lp->zerotier_ip : lp->wifi_ip;
     CPY_IPV4(ip + IPV4_OFF_SRC, src_ip);
     memset(ip + IPV4_OFF_DST, 0xff, 4);
