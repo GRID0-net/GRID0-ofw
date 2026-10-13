@@ -299,7 +299,17 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
     if (!rewrite_ipv4_addresses(translated, ip_len, src_ip, dst)) return false;
     const size_t header_len = (ip[0] & 0x0f) * 4;
     /* Broadcast mismatch is expected in Option 121 mode (Switch on home
-     * subnet, ZeroTier on 10.x). Do not warn; the subnets differ by design. */
+     * subnet, ZeroTier on 10.x). Log at INFO, not WARNING, so the UI
+     * does not present it as an error. */
+    if (!lan_play->warned_broadcast_mismatch && ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
+        ip_len >= header_len + 8 && !(READ_NET16(ip, 6) & 0x3fff) &&
+        READ_NET16(ip, header_len + 2) == 35000 &&
+        is_nintendo_lan_broadcast(lan_play, original_dst) && !CMP_IPV4(original_dst, dst)) {
+        lan_play->warned_broadcast_mismatch = true;
+        LLOG(LLOG_INFO, "LAN broadcast mismatch: Switch uses %u.%u.%u.%u, ZeroTier uses %u.%u.%u.%u. Option 121 mode: subnets differ by design.",
+            original_dst[0], original_dst[1], original_dst[2], original_dst[3],
+            dst[0], dst[1], dst[2], dst[3]);
+    }
     if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
         !(READ_NET16(ip, IPV4_OFF_FLAGS_FRAG_OFFSET) & 0x1fff) && ip_len >= header_len + 8) {
         const uint16_t port = READ_NET16(ip, header_len);
