@@ -180,11 +180,9 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     WRITE_NET16(dhcp, 6, (uint16_t)(req->xid & 0xffff));
     WRITE_NET16(dhcp, 10, req->flags);
     if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
-    /* siaddr must match Server ID (opt 54). For 10.147.17.x offers, use ZeroTier IP. */
-    static const uint8_t zt_net_si[4] = {10, 147, 17, 0};
-    static const uint8_t zt_mask_si[4] = {255, 255, 255, 0};
-    bool is_zt = yiaddr && IS_SUBNET(yiaddr, zt_net_si, zt_mask_si);
-    CPY_IPV4(dhcp + 20, is_zt ? lp->zerotier_ip : lp->wifi_ip);
+    /* Test: all server identifiers use Wi-Fi IP to match outer IP header.
+     * siaddr and opt 54 = 192.168.2.136, even for 10.147.17.x offers. */
+    CPY_IPV4(dhcp + 20, lp->wifi_ip);
     CPY_MAC(dhcp + 28, dst_mac);
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
@@ -195,13 +193,15 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     static const uint8_t zt_net[4] = {10, 147, 17, 0};
     static const uint8_t zt_mask[4] = {255, 255, 255, 0};
     bool is_zt_offer = yiaddr && IS_SUBNET(yiaddr, zt_net, zt_mask);
-    const uint8_t *srv_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
+    /* Test: Server ID matches outer IP (192.168.2.136), even for 10.x offers.
+     * Gateway and DNS stay as ZeroTier IP for the 10.x network. */
+    const uint8_t *srv_ip = lp->wifi_ip;
     const uint8_t *netmask = is_zt_offer ? zt_mask : lp->wifi_netmask;
+    const uint8_t *gw_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, srv_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, netmask, 4);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, srv_ip, 4);
-    /* DNS = PC's ZeroTier IP (same as router), not hardcoded 10.147.17.1 */
-    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, srv_ip, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gw_ip, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gw_ip, 4);
     if (options.dhcp_option121) {
         uint8_t routes[16];
         size_t roff = 0;
