@@ -94,6 +94,32 @@ static void dhcp_get_router_ip(struct lan_play *lp, uint8_t out[4])
         out[i] = (uint8_t)((lp->wifi_ip[i] & lp->wifi_netmask[i]) | (i == 3 ? 1 : 0));
 }
 
+static void dhcp_build_ip_pool(struct lan_play *lp)
+{
+    struct dhcp_server_state *st = &lp->dhcp_state;
+    uint8_t net[4];
+    uint8_t bcast[4];
+    CPY_IPV4(net, lp->zerotier_ip);
+    net[3] = 0;
+    CPY_IPV4(bcast, lp->zerotier_ip);
+    bcast[3] = 255;
+    const uint32_t b = ipv4_to_u32(bcast);
+    const uint32_t n = ipv4_to_u32(net);
+    st->ip_pool_count = 0;
+    CPY_IPV4(st->ip_pool_zt_ip, lp->zerotier_ip);
+    for (uint32_t cand = b - 1; cand > n + 1; --cand) {
+        uint8_t ip[4];
+        u32_to_ipv4(cand, ip);
+        if (CMP_IPV4(ip, lp->zerotier_ip)) continue;
+        if (arp_has_ip(&lp->packet_ctx, ip)) continue;
+        if (st->ip_pool_count < 253) {
+            CPY_IPV4(st->ip_pool[st->ip_pool_count], ip);
+            st->ip_pool_count++;
+        }
+    }
+    st->ip_pool_built = true;
+}
+
 static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t out[4])
 {
     struct dhcp_server_state *st = &lp->dhcp_state;
@@ -103,34 +129,20 @@ static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t
         CPY_IPV4(out, own->ip);
         return true;
     }
-
-    uint8_t net[4];
-    uint8_t bcast[4];
-    CPY_IPV4(net, lp->zerotier_ip);
-    net[3] = 0;
-    CPY_IPV4(bcast, lp->zerotier_ip);
-    bcast[3] = 255;
-    uint8_t router[4];
-    CPY_IPV4(router, lp->zerotier_ip);
-
-    const uint32_t b = ipv4_to_u32(bcast);
-    const uint32_t n = ipv4_to_u32(net);
-    for (uint32_t cand = b - 1; cand > n + 1; --cand) {
-        uint8_t ip[4];
-        u32_to_ipv4(cand, ip);
-        if (CMP_IPV4(ip, lp->zerotier_ip)) continue;
-        if (CMP_IPV4(ip, router)) continue;
-        if (arp_has_ip(&lp->packet_ctx, ip)) continue;
+    if (!st->ip_pool_built || !CMP_IPV4(st->ip_pool_zt_ip, lp->zerotier_ip)) {
+        dhcp_build_ip_pool(lp);
+    }
+    for (int i = 0; i < st->ip_pool_count; ++i) {
         bool taken = false;
-        for (int i = 0; i < DHCP_LEASE_COUNT; ++i) {
-            if (st->leases[i].used && st->leases[i].expires > now &&
-                CMP_IPV4(st->leases[i].ip, ip)) {
+        for (int j = 0; j < DHCP_LEASE_COUNT; ++j) {
+            if (st->leases[j].used && st->leases[j].expires > now &&
+                CMP_IPV4(st->leases[j].ip, st->ip_pool[i])) {
                 taken = true;
                 break;
             }
         }
         if (taken) continue;
-        CPY_IPV4(out, ip);
+        CPY_IPV4(out, st->ip_pool[i]);
         return true;
     }
     return false;
