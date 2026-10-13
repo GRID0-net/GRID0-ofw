@@ -104,13 +104,16 @@ static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t
         return true;
     }
 
-    /* Proxy ARP mode: offer ZeroTier subnet addresses so the Switch
-     * believes it is natively on 10.147.17.0/24. PIA sees unmodified
-     * packets and passes authentication. */
-    uint8_t net[4] = {10, 147, 17, 0};
-    uint8_t bcast[4] = {10, 147, 17, 255};
+    /* Option 121 test: offer home subnet (192.168.2.x) so Switch accepts.
+     * Option 121 gives route to 10.147.17.0/24 via PC (192.168.2.136). */
+    uint8_t net[4];
+    uint8_t bcast[4];
+    CPY_IPV4(net, lp->wifi_ip);
+    net[3] = 0;
+    CPY_IPV4(bcast, lp->wifi_ip);
+    bcast[3] = 255;
     uint8_t router[4];
-    CPY_IPV4(router, lp->zerotier_ip);
+    CPY_IPV4(router, lp->wifi_ip);
 
     const uint32_t b = ipv4_to_u32(bcast);
     const uint32_t n = ipv4_to_u32(net);
@@ -202,7 +205,8 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, netmask, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gw_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gw_ip, 4);
-    if (options.dhcp_option121) {
+    /* Option 121 test: always include route to ZeroTier via PC. */
+    if (1) {
         uint8_t routes[16];
         size_t roff = 0;
         uint8_t zt_net[4];
