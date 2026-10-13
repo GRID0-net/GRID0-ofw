@@ -18,6 +18,25 @@ void lan_play_zerotier_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr 
 static void switch_discovery_timer_cb(uv_timer_t *timer);
 static void diagnostic_log_frame(struct lan_play *lan_play, const char *direction, const u_char *packet, int len);
 
+static void rewrite_payload_ips(uint8_t *payload, size_t len,
+                                const uint8_t from1[4], const uint8_t to1[4],
+                                const uint8_t from2[4], const uint8_t to2[4])
+{
+    for (size_t i = 0; i + 4 <= len; i++) {
+        if (memcmp(payload + i, from1, 4) == 0) {
+            memcpy(payload + i, to1, 4);
+            LLOG(LLOG_INFO, "PAYLOAD: rewrote %u.%u.%u.%u -> %u.%u.%u.%u at offset %zu",
+                 from1[0], from1[1], from1[2], from1[3],
+                 to1[0], to1[1], to1[2], to1[3], i);
+        } else if (memcmp(payload + i, from2, 4) == 0) {
+            memcpy(payload + i, to2, 4);
+            LLOG(LLOG_INFO, "PAYLOAD: rewrote %u.%u.%u.%u -> %u.%u.%u.%u at offset %zu",
+                 from2[0], from2[1], from2[2], from2[3],
+                 to2[0], to2[1], to2[2], to2[3], i);
+        }
+    }
+}
+
 
 static const char *capture_suffixes[5] = {
     "wifi-rx", "wifi-tx", "zerotier-rx", "zerotier-tx", "host"
@@ -296,6 +315,14 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
         LLOG(LLOG_INFO, "LANPLAY: forwarding broadcast to ZT, src %u.%u.%u.%u -> %u.%u.%u.%u, len %zu, proto %u",
              translated[IPV4_OFF_SRC], translated[IPV4_OFF_SRC+1], translated[IPV4_OFF_SRC+2], translated[IPV4_OFF_SRC+3],
              dst[0], dst[1], dst[2], dst[3], ip_len, ip[IPV4_OFF_PROTOCOL]);
+        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > header_len + 8) {
+            static const uint8_t home_sw[4] = {192, 168, 2, 254};
+            static const uint8_t zt_pc[4] = {10, 147, 17, 182};
+            static const uint8_t home_bc[4] = {192, 168, 2, 255};
+            static const uint8_t zt_bc[4] = {10, 147, 17, 255};
+            rewrite_payload_ips(translated + header_len + 8, ip_len - header_len - 8,
+                                home_sw, zt_pc, home_bc, zt_bc);
+        }
         lan_play_send_zerotier_ipv4_broadcast(lan_play, translated, ip_len);
     } else {
         LLOG(LLOG_INFO, "LANPLAY: forwarding unicast to ZT %u.%u.%u.%u -> %u.%u.%u.%u, len %zu",
@@ -390,6 +417,17 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
      * broadcast address in its authenticated challenge nonce. Preserve it. */
     const uint8_t *dst = broadcast ? lan_play->zerotier_broadcast_ip : lan_play->switch_ip;
     if (!rewrite_ipv4_addresses(translated, ip_len, ip + IPV4_OFF_SRC, dst)) return false;
+    {
+        const size_t hlen = (translated[0] & 0x0f) * 4;
+        if (translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8) {
+            static const uint8_t partner_zt[4] = {10, 147, 17, 26};
+            static const uint8_t partner_home[4] = {192, 168, 2, 250};
+            static const uint8_t zt_bc[4] = {10, 147, 17, 255};
+            static const uint8_t home_bc[4] = {192, 168, 2, 255};
+            rewrite_payload_ips(translated + hlen + 8, ip_len - hlen - 8,
+                                partner_zt, partner_home, zt_bc, home_bc);
+        }
+    }
     int ret = lan_play_send_wifi_ipv4(lan_play, broadcast ? wifi_broadcast : lan_play->switch_mac, translated, ip_len);
     const size_t header_len = (ip[0] & 15) * 4;
     if (ret == 0 && !broadcast && ip[9] == IPV4_PROTOCOL_UDP &&
