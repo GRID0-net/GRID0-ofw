@@ -47,6 +47,19 @@ struct lan_client_fragment {
     uint8_t buffer[ETHER_MTU];
 };
 
+struct nat_entry {
+    uint8_t switch_ip[4];
+    uint16_t switch_port;
+    uint16_t pc_port;
+    uint8_t dest_ip[4];
+    uint16_t dest_port;
+    uint8_t protocol;
+    time_t expires;
+    bool used;
+};
+
+#define NAT_TABLE_SIZE 64
+
 struct lan_play {
     struct packet_ctx packet_ctx;
 
@@ -123,6 +136,8 @@ struct lan_play {
 
     struct gateway *gateway;
     char last_err[1024];
+    struct nat_entry nat_table[NAT_TABLE_SIZE];
+    uint16_t nat_next_port;
 
     uint64_t upload_byte;
     uint64_t download_byte;
