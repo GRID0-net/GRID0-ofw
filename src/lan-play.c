@@ -292,10 +292,17 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
             return true; /* Handled: do not fall through to the legacy relay. */
         }
     }
-    if (CMP_IPV4(dst, lan_play->zerotier_broadcast_ip))
+    if (CMP_IPV4(dst, lan_play->zerotier_broadcast_ip)) {
+        LLOG(LLOG_INFO, "LANPLAY: forwarding broadcast to ZT, src %u.%u.%u.%u -> %u.%u.%u.%u, len %zu, proto %u",
+             translated[IPV4_OFF_SRC], translated[IPV4_OFF_SRC+1], translated[IPV4_OFF_SRC+2], translated[IPV4_OFF_SRC+3],
+             dst[0], dst[1], dst[2], dst[3], ip_len, ip[IPV4_OFF_PROTOCOL]);
         lan_play_send_zerotier_ipv4_broadcast(lan_play, translated, ip_len);
-    else
+    } else {
+        LLOG(LLOG_INFO, "LANPLAY: forwarding unicast to ZT %u.%u.%u.%u -> %u.%u.%u.%u, len %zu",
+             translated[IPV4_OFF_SRC], translated[IPV4_OFF_SRC+1], translated[IPV4_OFF_SRC+2], translated[IPV4_OFF_SRC+3],
+             dst[0], dst[1], dst[2], dst[3], ip_len);
         lan_play_send_zerotier_ipv4(lan_play, dst, translated, ip_len);
+    }
     return true;
 }
 
@@ -358,6 +365,9 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
     const bool broadcast = CMP_IPV4(original_dst, lan_play->zerotier_broadcast_ip);
+    LLOG(LLOG_INFO, "LANPLAY: ZT incoming %u.%u.%u.%u -> %u.%u.%u.%u, len %u, broadcast=%d",
+         ip[IPV4_OFF_SRC], ip[IPV4_OFF_SRC+1], ip[IPV4_OFF_SRC+2], ip[IPV4_OFF_SRC+3],
+         original_dst[0], original_dst[1], original_dst[2], original_dst[3], ip_len, broadcast);
     /* Games join the remote console by its own address (learned from the room
      * beacon), not by the relay PC's ZeroTier address. Classic lan-play routed
      * those by Switch IP on the central server; on ZeroTier there is no
