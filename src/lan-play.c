@@ -322,6 +322,8 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
             static const uint8_t zt_bc[4] = {10, 147, 17, 255};
             rewrite_payload_ips(translated + header_len + 8, ip_len - header_len - 8,
                                 home_sw, zt_pc, home_bc, zt_bc);
+            WRITE_NET16(translated, header_len + 6, 0);
+            WRITE_NET16(translated, header_len + 6, udp_checksum(translated, header_len, ip_len));
         }
         lan_play_send_zerotier_ipv4_broadcast(lan_play, translated, ip_len);
     } else {
@@ -426,6 +428,8 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
             static const uint8_t home_bc[4] = {192, 168, 2, 255};
             rewrite_payload_ips(translated + hlen + 8, ip_len - hlen - 8,
                                 partner_zt, partner_home, zt_bc, home_bc);
+            WRITE_NET16(translated, hlen + 6, 0);
+            WRITE_NET16(translated, hlen + 6, udp_checksum(translated, hlen, ip_len));
         }
     }
     int ret = lan_play_send_wifi_ipv4(lan_play, broadcast ? wifi_broadcast : lan_play->switch_mac, translated, ip_len);
