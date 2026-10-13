@@ -118,7 +118,7 @@ int arp_request(struct packet_ctx *self, const struct arp *arp)
     static const uint8_t zt_mask[4] = {255, 255, 255, 0};
     if (self->arg && !self->arg->ingress_zerotier) {
         if (IS_SUBNET(arp->target_ip, zt_net, zt_mask)) {
-            if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
+            if (CMP_IPV4(arp->sender_ip, NONE_IP) || CMP_IPV4(arp->sender_ip, arp->target_ip)) {
                 return 0;
             }
             return send_arp(
