@@ -104,19 +104,20 @@ static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t
         return true;
     }
 
-    uint8_t net[4], bcast[4], router[4];
-    for (int i = 0; i < 4; i++) {
-        net[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
-        bcast[i] = net[i] | (uint8_t)~lp->wifi_netmask[i];
-    }
-    dhcp_get_router_ip(lp, router);
+    /* Proxy ARP mode: offer ZeroTier subnet addresses so the Switch
+     * believes it is natively on 10.147.17.0/24. PIA sees unmodified
+     * packets and passes authentication. */
+    uint8_t net[4] = {10, 147, 17, 0};
+    uint8_t bcast[4] = {10, 147, 17, 255};
+    uint8_t router[4];
+    CPY_IPV4(router, lp->zerotier_ip);
 
     const uint32_t b = ipv4_to_u32(bcast);
     const uint32_t n = ipv4_to_u32(net);
     for (uint32_t cand = b - 1; cand > n + 1; --cand) {
         uint8_t ip[4];
         u32_to_ipv4(cand, ip);
-        if (CMP_IPV4(ip, lp->wifi_ip)) continue;
+        if (CMP_IPV4(ip, lp->zerotier_ip)) continue;
         if (CMP_IPV4(ip, router)) continue;
         if (arp_has_ip(&lp->packet_ctx, ip)) continue;
         bool taken = false;
@@ -186,14 +187,24 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
 
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->wifi_ip, 4);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->wifi_netmask, 4);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->wifi_ip, 4);
+    /* Proxy ARP mode: if offering 10.147.17.x, use ZeroTier IP for server/gateway */
+    static const uint8_t zt_net[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask[4] = {255, 255, 255, 0};
+    bool is_zt_offer = yiaddr && IS_SUBNET(yiaddr, zt_net, zt_mask);
+    const uint8_t *srv_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
+    const uint8_t *netmask = is_zt_offer ? zt_mask : lp->wifi_netmask;
+    off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, srv_ip, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, netmask, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, srv_ip, 4);
     uint8_t dns_router[4];
-    for (int i = 0; i < 4; i++) {
-        dns_router[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
+    if (is_zt_offer) {
+        dns_router[0] = 10; dns_router[1] = 147; dns_router[2] = 17; dns_router[3] = 1;
+    } else {
+        for (int i = 0; i < 4; i++) {
+            dns_router[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
+        }
+        dns_router[3] |= 1;
     }
-    dns_router[3] |= 1;
     off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_router, 4);
     if (options.dhcp_option121) {
         uint8_t routes[16];
@@ -216,7 +227,13 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
         roff += 4;
         off = dhcp_opt(dhcp, off, DHCP_OPT_CLASSLESS_ROUTE, routes, roff);
     }
-    off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, lp->wifi_broadcast, 4);
+    uint8_t bcast_addr[4];
+    if (is_zt_offer) {
+        bcast_addr[0] = 10; bcast_addr[1] = 147; bcast_addr[2] = 17; bcast_addr[3] = 255;
+    } else {
+        CPY_IPV4(bcast_addr, lp->wifi_broadcast);
+    }
+    off = dhcp_opt(dhcp, off, DHCP_OPT_BROADCAST, bcast_addr, 4);
     uint8_t lease_be[4];
     uint32_t lease = DHCP_LEASE_TIME;
     lease_be[0] = (lease >> 24) & 0xff;
