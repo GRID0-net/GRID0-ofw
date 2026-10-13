@@ -290,7 +290,13 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
     memcpy(translated, ip, ip_len);
     const uint8_t *dst = is_nintendo_lan_broadcast(lan_play, original_dst)
         ? lan_play->zerotier_broadcast_ip : original_dst;
-    if (!rewrite_ipv4_addresses(translated, ip_len, lan_play->zerotier_ip, dst)) return false;
+    /* Proxy ARP mode: Switch keeps its 10.147.17.x address, no source rewrite.
+     * Otherwise, rewrite source to PC's ZeroTier IP for NAT. */
+    static const uint8_t zt_net2[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask2[4] = {255, 255, 255, 0};
+    bool sw_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net2, zt_mask2);
+    const uint8_t *src_ip = sw_on_zt ? (ip + IPV4_OFF_SRC) : lan_play->zerotier_ip;
+    if (!rewrite_ipv4_addresses(translated, ip_len, src_ip, dst)) return false;
     const size_t header_len = (ip[0] & 0x0f) * 4;
     if (!lan_play->warned_broadcast_mismatch && ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
         ip_len >= header_len + 8 && !(READ_NET16(ip, 6) & 0x3fff) &&
@@ -418,10 +424,15 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     /* The console must use the overlay's subnet mask: PIA includes that
      * broadcast address in its authenticated challenge nonce. Preserve it. */
     const uint8_t *dst = broadcast ? lan_play->zerotier_broadcast_ip : lan_play->switch_ip;
+    static const uint8_t zt_net[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask[4] = {255, 255, 255, 0};
+    bool switch_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net, zt_mask);
     static const uint8_t partner_zt_ip[4] = {10, 147, 17, 26};
     static const uint8_t partner_home_ip[4] = {192, 168, 2, 250};
     const uint8_t *src_for_header = ip + IPV4_OFF_SRC;
-    if (!broadcast && CMP_IPV4(ip + IPV4_OFF_SRC, partner_zt_ip)) {
+    /* Only rewrite header source if Switch is NOT natively on ZeroTier.
+     * Proxy ARP mode: keep real IPs, PIA passes. */
+    if (!switch_on_zt && !broadcast && CMP_IPV4(ip + IPV4_OFF_SRC, partner_zt_ip)) {
         src_for_header = partner_home_ip;
     }
     if (!rewrite_ipv4_addresses(translated, ip_len, src_for_header, dst)) return false;
@@ -429,9 +440,6 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
         const size_t hlen = (translated[0] & 0x0f) * 4;
         /* Skip payload rewriting if Switch is natively on ZeroTier subnet.
          * Proxy ARP mode: no translation needed, PIA sees real IPs. */
-        static const uint8_t zt_net[4] = {10, 147, 17, 0};
-        static const uint8_t zt_mask[4] = {255, 255, 255, 0};
-        bool switch_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net, zt_mask);
         if (!switch_on_zt && translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8) {
             static const uint8_t partner_zt[4] = {10, 147, 17, 26};
             static const uint8_t partner_home[4] = {192, 168, 2, 250};
