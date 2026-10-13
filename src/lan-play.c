@@ -290,7 +290,57 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
     if (is_internet) {
         uint8_t nat_packet[ETHER_MTU];
         memcpy(nat_packet, ip, ip_len);
+        const size_t hdr_len = (ip[0] & 0x0f) * 4;
+        uint16_t src_port = 0;
+        uint16_t dst_port = 0;
+        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP || ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_TCP) {
+            if (ip_len >= hdr_len + 4) {
+                src_port = READ_NET16(ip, hdr_len);
+                dst_port = READ_NET16(ip, hdr_len + 2);
+            }
+        }
+        struct nat_entry *entry = NULL;
+        time_t now = time(NULL);
+        for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+            if (lan_play->nat_table[i].used && lan_play->nat_table[i].expires > now &&
+                CMP_IPV4(lan_play->nat_table[i].switch_ip, ip + IPV4_OFF_SRC) &&
+                lan_play->nat_table[i].switch_port == src_port &&
+                CMP_IPV4(lan_play->nat_table[i].dest_ip, original_dst) &&
+                lan_play->nat_table[i].dest_port == dst_port &&
+                lan_play->nat_table[i].protocol == ip[IPV4_OFF_PROTOCOL]) {
+                entry = &lan_play->nat_table[i];
+                break;
+            }
+        }
+        if (!entry) {
+            for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+                if (!lan_play->nat_table[i].used || lan_play->nat_table[i].expires <= now) {
+                    entry = &lan_play->nat_table[i];
+                    break;
+                }
+            }
+            if (!entry) return false;
+            CPY_IPV4(entry->switch_ip, ip + IPV4_OFF_SRC);
+            entry->switch_port = src_port;
+            CPY_IPV4(entry->dest_ip, original_dst);
+            entry->dest_port = dst_port;
+            entry->protocol = ip[IPV4_OFF_PROTOCOL];
+            entry->used = true;
+            if (lan_play->nat_next_port < 40000) lan_play->nat_next_port = 40000;
+            entry->pc_port = lan_play->nat_next_port++;
+            if (lan_play->nat_next_port >= 60000) lan_play->nat_next_port = 40000;
+        }
+        entry->expires = now + 120;
         if (!rewrite_ipv4_addresses(nat_packet, ip_len, lan_play->wifi_ip, original_dst)) return false;
+        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP || ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_TCP) {
+            if (ip_len >= hdr_len + 4) {
+                WRITE_NET16(nat_packet, hdr_len, entry->pc_port);
+                WRITE_NET16(nat_packet, hdr_len + 6, 0);
+                if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
+                    WRITE_NET16(nat_packet, hdr_len + 6, udp_checksum(nat_packet, hdr_len, ip_len));
+                }
+            }
+        }
         uint8_t router_mac[6];
         uint8_t router_ip[4];
         CPY_IPV4(router_ip, lan_play->wifi_ip);
@@ -830,6 +880,35 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
     
     if (!learn_local_switch(lan_play, packet, pkt_header->caplen)) return;
     packet_set_mac(&lan_play->packet_ctx, mac);
+    if (pkt_header->caplen >= ETHER_HEADER_LEN + IPV4_HEADER_LEN &&
+        READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_IPV4) {
+        const uint8_t *ip = packet + ETHER_HEADER_LEN;
+        if (CMP_IPV4(ip + IPV4_OFF_DST, lan_play->wifi_ip)) {
+            const size_t hdr_len = (ip[0] & 0x0f) * 4;
+            const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
+            if (ip_len >= hdr_len + 4 && pkt_header->caplen >= ETHER_HEADER_LEN + ip_len) {
+                uint16_t dst_port = READ_NET16(ip, hdr_len + 2);
+                time_t now = time(NULL);
+                for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+                    if (lan_play->nat_table[i].used && lan_play->nat_table[i].expires > now &&
+                        lan_play->nat_table[i].pc_port == dst_port &&
+                        lan_play->nat_table[i].protocol == ip[IPV4_OFF_PROTOCOL]) {
+                        uint8_t nat_packet[ETHER_MTU];
+                        memcpy(nat_packet, ip, ip_len);
+                        if (!rewrite_ipv4_addresses(nat_packet, ip_len, ip + IPV4_OFF_SRC, lan_play->nat_table[i].switch_ip)) break;
+                        WRITE_NET16(nat_packet, hdr_len + 2, lan_play->nat_table[i].switch_port);
+                        WRITE_NET16(nat_packet, hdr_len + 6, 0);
+                        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
+                            WRITE_NET16(nat_packet, hdr_len + 6, udp_checksum(nat_packet, hdr_len, ip_len));
+                        }
+                        lan_play->nat_table[i].expires = now + 120;
+                        lan_play_send_wifi_ipv4(lan_play, lan_play->switch_mac, nat_packet, ip_len);
+                        return;
+                    }
+                }
+            }
+        }
+    }
     if (pkt_header->caplen >= ETHER_HEADER_LEN + IPV4_HEADER_LEN &&
         READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_IPV4 &&
         lan_play_relay_wifi_ipv4(lan_play, packet, pkt_header->caplen)) return;
