@@ -73,10 +73,11 @@ struct dhcp_server_state {
     uint64_t acks_sent;
     uint64_t naks_sent;
     uint64_t ignored_non_nintendo;
-    /* Times a Nintendo console took another DHCP server's offer (home
-     * router, Windows' own hotspot DHCP). The desktop UI uses the matching
-     * GRID0_DHCP lost event to prompt a Wi-Fi toggle retry. */
     uint64_t lost_races;
+    uint8_t ip_pool[253][4];
+    int ip_pool_count;
+    uint8_t ip_pool_zt_ip[4];
+    bool ip_pool_built;
 };
 
 /* Parse a raw DHCP payload (no Ethernet/IP/UDP headers). */
