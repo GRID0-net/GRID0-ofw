@@ -192,7 +192,7 @@ int parse_arguments(int argc, char **argv)
 
     options.broadcast = false;
     options.pmtu = 0;
-    options.fake_internet = false;
+    options.fake_internet = true;
     options.list_if = false;
     options.diagnostics = false;
     options.status_events = false;
@@ -532,7 +532,7 @@ int old_main()
         RT_ASSERT(uv_timer_start(&control_timer, windows_control_cb, 0, 100) == 0);
     }
 #endif
-    eprintf("Relay started (PID %d) [BUILD MARKER: UNIVERSAL-HOUR6-BRIDGE]\n", (int)getpid());
+    eprintf("Relay started (PID %d) [BUILD MARKER: ZT-SUBNET-TEST]\n", (int)getpid());
     ret = uv_run(lan_play->loop, UV_RUN_DEFAULT);
     if (ret) {
         LLOG(LLOG_ERROR, "uv_run %d", ret);
