@@ -796,9 +796,26 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
      * never reach discovery or the ZeroTier relay path. */
     if (dhcp_server_consume(lan_play, packet, pkt_header->caplen)) return;
     /* Proxy ARP: answer ARP REQUESTs for the ZeroTier gateway IP on Wi-Fi. */
-    if (pkt_header->caplen >= ETHER_HEADER_LEN + ARP_LEN && READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_ARP && READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_OPCODE) == ARP_OPCODE_REQUEST && CMP_IPV4(packet + ETHER_HEADER_LEN + ARP_OFF_TARGET_IP, lan_play->zerotier_ip)) {
-        lan_play_send_wifi_arp_reply(lan_play, packet + ETHER_OFF_SRC, lan_play->zerotier_ip, packet + ETHER_HEADER_LEN + ARP_OFF_SENDER_IP);
-        return;
+    if (pkt_header->caplen >= ETHER_HEADER_LEN + ARP_LEN &&
+        READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_ARP &&
+        READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_HARDWARE) == ARP_HARDTYPE_ETHER &&
+        READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_PROTOCOL) == ETHER_TYPE_IPV4 &&
+        packet[ETHER_HEADER_LEN + 4] == 6 &&
+        packet[ETHER_HEADER_LEN + 5] == 4 &&
+        READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_OPCODE) == ARP_OPCODE_REQUEST &&
+        CMP_MAC(packet + ETHER_OFF_SRC, packet + ETHER_HEADER_LEN + ARP_OFF_SENDER_MAC)) {
+        const uint8_t *arp = packet + ETHER_HEADER_LEN;
+        const uint8_t *target_ip = arp + ARP_OFF_TARGET_IP;
+        const uint8_t *sender_ip = arp + ARP_OFF_SENDER_IP;
+        const uint8_t *sender_mac = arp + ARP_OFF_SENDER_MAC;
+        if (CMP_IPV4(target_ip, lan_play->zerotier_ip)) {
+            int ret = lan_play_send_wifi_arp_reply(lan_play, sender_mac, target_ip, sender_ip);
+            if (ret != 0) LLOG(LLOG_ERROR, "Wi-Fi proxy ARP reply failed %d", ret);
+            return;
+        }
+    }
+
+
     }
     if (!learn_local_switch(lan_play, packet, pkt_header->caplen)) return;
     packet_set_mac(&lan_play->packet_ctx, mac);
@@ -813,7 +830,7 @@ void lan_play_zerotier_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr 
     if (CMP_MAC(packet + ETHER_OFF_SRC, mac)) {
         diagnostic_log_frame(lan_play, "HOST ZeroTier", packet, pkt_header->caplen);
         return;
-    }
+
     // Keep overlay neighbors separate from the Wi-Fi ARP table. Learning from
     // discovery IPv4 as well as ARP lets the first browse reply use unicast.
     const uint8_t *peer_ip = NULL;
