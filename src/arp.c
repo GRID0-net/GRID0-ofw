@@ -111,6 +111,26 @@ int arp_request(struct packet_ctx *self, const struct arp *arp)
             arp->sender_ip
         );
     }
+    /* Proxy ARP for ZeroTier subnet on Wi-Fi: answer ARPs for 10.147.17.x
+     * with our Wi-Fi MAC, so the Switch thinks those hosts are on Wi-Fi.
+     * We forward the packets to ZeroTier. */
+    static const uint8_t zt_net[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask[4] = {255, 255, 255, 0};
+    if (self->arg && !self->arg->ingress_zerotier) {
+        if (IS_SUBNET(arp->target_ip, zt_net, zt_mask)) {
+            if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
+                return 0;
+            }
+            return send_arp(
+                self,
+                ARP_OPCODE_REPLY,
+                self->mac,
+                arp->target_ip,
+                arp->sender_mac,
+                arp->sender_ip
+            );
+        }
+    }
     if (IS_SUBNET(arp->target_ip, self->subnet_net, self->subnet_mask)) {
         if (CMP_IPV4(arp->target_ip, arp->sender_ip)) {
             return 0;
