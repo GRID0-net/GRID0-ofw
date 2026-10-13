@@ -201,9 +201,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     const uint8_t *gw_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, srv_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, netmask, 4);
-    if (!is_zt_offer) {
-        off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gw_ip, 4);
-    }
+    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gw_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gw_ip, 4);
     /* Option 121 test: always include route to ZeroTier via PC. */
     if (!is_zt_offer) {
