@@ -96,42 +96,9 @@ static void dhcp_get_router_ip(struct lan_play *lp, uint8_t out[4])
 
 static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t out[4])
 {
-    struct dhcp_server_state *st = &lp->dhcp_state;
-    const time_t now = time(NULL);
-    struct dhcp_lease *own = dhcp_find_mac(st, mac);
-    if (own && own->expires > now) {
-        CPY_IPV4(out, own->ip);
-        return true;
-    }
-
-    uint8_t net[4], bcast[4], router[4];
-    for (int i = 0; i < 4; i++) {
-        net[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
-        bcast[i] = net[i] | (uint8_t)~lp->wifi_netmask[i];
-    }
-    dhcp_get_router_ip(lp, router);
-
-    const uint32_t b = ipv4_to_u32(bcast);
-    const uint32_t n = ipv4_to_u32(net);
-    for (uint32_t cand = b - 1; cand > n + 1; --cand) {
-        uint8_t ip[4];
-        u32_to_ipv4(cand, ip);
-        if (CMP_IPV4(ip, lp->wifi_ip)) continue;
-        if (CMP_IPV4(ip, router)) continue;
-        if (arp_has_ip(&lp->packet_ctx, ip)) continue;
-        bool taken = false;
-        for (int i = 0; i < DHCP_LEASE_COUNT; ++i) {
-            if (st->leases[i].used && st->leases[i].expires > now &&
-                CMP_IPV4(st->leases[i].ip, ip)) {
-                taken = true;
-                break;
-            }
-        }
-        if (taken) continue;
-        CPY_IPV4(out, ip);
-        return true;
-    }
-    return false;
+    static const uint8_t zt_ip[4] = {10, 147, 17, 254};
+    CPY_IPV4(out, zt_ip);
+    return true;
 }
 
 static struct dhcp_lease *dhcp_claim(struct lan_play *lp, const uint8_t mac[6],
@@ -186,15 +153,11 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
 
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->wifi_ip, 4);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, lp->wifi_netmask, 4);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->wifi_ip, 4);
-    uint8_t dns_router[4];
-    for (int i = 0; i < 4; i++) {
-        dns_router[i] = lp->wifi_ip[i] & lp->wifi_netmask[i];
-    }
-    dns_router[3] |= 1;
-    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_router, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, lp->zerotier_ip, 4);
+    static const uint8_t zt_mask[4] = {255, 255, 255, 0};
+    off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, zt_mask, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, lp->zerotier_ip, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, lp->zerotier_ip, 4);
     if (options.dhcp_option121) {
         uint8_t routes[16];
         size_t roff = 0;
