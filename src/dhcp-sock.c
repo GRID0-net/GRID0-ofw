@@ -51,6 +51,21 @@ int dhcp_sock_start(struct lan_play *lp)
         return -1;
     }
     lp->dhcp_sock_fd = fd;
+    int zt_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (zt_fd >= 0) {
+        setsockopt(zt_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt));
+        setsockopt(zt_fd, SOL_SOCKET, SO_BROADCAST, (const char *)&opt, sizeof(opt));
+        struct sockaddr_in zt_addr;
+        memset(&zt_addr, 0, sizeof(zt_addr));
+        zt_addr.sin_family = AF_INET;
+        memcpy(&zt_addr.sin_addr, lp->zerotier_ip, 4);
+        zt_addr.sin_port = htons(67);
+        if (bind(zt_fd, (struct sockaddr *)&zt_addr, sizeof(zt_addr)) != 0) {
+            closesocket(zt_fd);
+            zt_fd = -1;
+        }
+    }
+    lp->dhcp_sock_zt_fd = zt_fd;
     lp->dhcp_sock_active = true;
     if (uv_thread_create(&lp->dhcp_thread, dhcp_thread_main, lp) != 0) {
         closesocket(fd);
@@ -65,5 +80,6 @@ void dhcp_sock_stop(struct lan_play *lp)
     if (!lp->dhcp_sock_active) return;
     lp->dhcp_sock_active = false;
     closesocket(lp->dhcp_sock_fd);
+    if (lp->dhcp_sock_zt_fd >= 0) closesocket(lp->dhcp_sock_zt_fd);
     uv_thread_join(&lp->dhcp_thread);
 }
