@@ -131,6 +131,24 @@ int arp_request(struct packet_ctx *self, const struct arp *arp)
             );
         }
     }
+    /* Proxy ARP on ZeroTier for the Switch: answer ARPs for the Switch's
+     * 10.147.17.x address with our ZeroTier MAC, so ZeroTier peers send
+     * to us and we forward to the Switch via Wi-Fi. */
+    if (self->arg && self->arg->ingress_zerotier) {
+        if (CMP_IPV4(arp->target_ip, self->arg->switch_ip)) {
+            if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
+                return 0;
+            }
+            return send_arp(
+                self,
+                ARP_OPCODE_REPLY,
+                self->mac,
+                arp->target_ip,
+                arp->sender_mac,
+                arp->sender_ip
+            );
+        }
+    }
     if (IS_SUBNET(arp->target_ip, self->subnet_net, self->subnet_mask)) {
         if (CMP_IPV4(arp->target_ip, arp->sender_ip)) {
             return 0;
