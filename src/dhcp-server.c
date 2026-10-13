@@ -270,9 +270,6 @@ int dhcp_send_reply_udp(struct lan_play *lp, const uint8_t *dst_mac,
     addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
     addr.sin_port = htons(68);
     int fd = lp->dhcp_sock_fd;
-    if (yiaddr && IS_SUBNET(yiaddr, lp->zerotier_ip, lp->zerotier_netmask) && lp->dhcp_sock_zt_fd >= 0) {
-        fd = lp->dhcp_sock_zt_fd;
-    }
     int sent = sendto(fd, (const char *)dhcp, (int)built, 0,
                       (struct sockaddr *)&addr, sizeof(addr));
     return sent == (int)built ? 0 : -1;
