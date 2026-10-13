@@ -816,7 +816,7 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
     }
 
 
-    }
+    
     if (!learn_local_switch(lan_play, packet, pkt_header->caplen)) return;
     packet_set_mac(&lan_play->packet_ctx, mac);
     if (pkt_header->caplen >= ETHER_HEADER_LEN + IPV4_HEADER_LEN &&
@@ -831,6 +831,7 @@ void lan_play_zerotier_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr 
         diagnostic_log_frame(lan_play, "HOST ZeroTier", packet, pkt_header->caplen);
         return;
 
+    }
     // Keep overlay neighbors separate from the Wi-Fi ARP table. Learning from
     // discovery IPv4 as well as ARP lets the first browse reply use unicast.
     const uint8_t *peer_ip = NULL;
