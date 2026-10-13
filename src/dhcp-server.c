@@ -183,9 +183,11 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     WRITE_NET16(dhcp, 6, (uint16_t)(req->xid & 0xffff));
     WRITE_NET16(dhcp, 10, req->flags);
     if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
-    /* Test: all server identifiers use Wi-Fi IP to match outer IP header.
-     * siaddr and opt 54 = 192.168.2.136, even for 10.147.17.x offers. */
-    CPY_IPV4(dhcp + 20, lp->wifi_ip);
+    static const uint8_t zt_net_early[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask_early[4] = {255, 255, 255, 0};
+    bool is_zt_early = yiaddr && IS_SUBNET(yiaddr, zt_net_early, zt_mask_early);
+    const uint8_t *siaddr_ip = is_zt_early ? lp->zerotier_ip : lp->wifi_ip;
+    CPY_IPV4(dhcp + 20, siaddr_ip);
     CPY_MAC(dhcp + 28, dst_mac);
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
@@ -196,9 +198,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     static const uint8_t zt_net[4] = {10, 147, 17, 0};
     static const uint8_t zt_mask[4] = {255, 255, 255, 0};
     bool is_zt_offer = yiaddr && IS_SUBNET(yiaddr, zt_net, zt_mask);
-    /* Test: Server ID matches outer IP (192.168.2.136), even for 10.x offers.
-     * Gateway and DNS stay as ZeroTier IP for the 10.x network. */
-    const uint8_t *srv_ip = lp->wifi_ip;
+    const uint8_t *srv_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     const uint8_t *netmask = is_zt_offer ? zt_mask : lp->wifi_netmask;
     const uint8_t *gw_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, srv_ip, 4);
@@ -270,7 +270,11 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(ip, IPV4_OFF_ID, ++dhcp_ip_id);
     ip[IPV4_OFF_TTL] = 64;
     ip[IPV4_OFF_PROTOCOL] = IPV4_PROTOCOL_UDP;
-    CPY_IPV4(ip + IPV4_OFF_SRC, lp->wifi_ip);
+    static const uint8_t zt_net_src[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask_src[4] = {255, 255, 255, 0};
+    bool is_zt_src = yiaddr && IS_SUBNET(yiaddr, zt_net_src, zt_mask_src);
+    const uint8_t *src_ip = is_zt_src ? lp->zerotier_ip : lp->wifi_ip;
+    CPY_IPV4(ip + IPV4_OFF_SRC, src_ip);
     memset(ip + IPV4_OFF_DST, 0xff, 4);
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, 0);
     WRITE_NET16(ip, IPV4_OFF_CHECKSUM, ipv4_header_checksum(ip, IPV4_HEADER_LEN));
