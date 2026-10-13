@@ -122,6 +122,9 @@ int process_ipv4(struct packet_ctx *arg, const struct ether_frame *ether)
     arp_set(arg, ipv4.ether->src, ipv4.src);
 
     if (!arg->arg->ingress_zerotier && CMP_IPV4(ipv4.src, home_switch_ip) && is_zt_net(ipv4.dst)) {
+        LLOG(LLOG_INFO, "BRIDGE: home->zt unicast %d.%d.%d.%d -> %d.%d.%d.%d proto %d",
+             ipv4.src[0], ipv4.src[1], ipv4.src[2], ipv4.src[3],
+             ipv4.dst[0], ipv4.dst[1], ipv4.dst[2], ipv4.dst[3], ipv4.protocol);
         uint8_t *pkt = (uint8_t *)ether->raw;
         rewrite_ipv4_addr(pkt + 14, IPV4_OFF_SRC, zt_switch_ip);
         return lan_play_send_zerotier_ipv4(arg->arg, ipv4.dst, pkt + 14, ipv4.total_len);
@@ -130,6 +133,7 @@ int process_ipv4(struct packet_ctx *arg, const struct ether_frame *ether)
     static const uint8_t home_broadcast[4] = {192, 168, 2, 255};
     static const uint8_t zt_broadcast[4] = {10, 147, 17, 255};
     if (!arg->arg->ingress_zerotier && CMP_IPV4(ipv4.src, home_switch_ip) && CMP_IPV4(ipv4.dst, home_broadcast)) {
+        LLOG(LLOG_INFO, "BRIDGE: home broadcast -> zt broadcast, len %d", ipv4.total_len);
         uint8_t *pkt = (uint8_t *)ether->raw;
         rewrite_ipv4_addr(pkt + 14, IPV4_OFF_SRC, zt_switch_ip);
         rewrite_ipv4_addr(pkt + 14, IPV4_OFF_DST, zt_broadcast);
@@ -137,6 +141,8 @@ int process_ipv4(struct packet_ctx *arg, const struct ether_frame *ether)
     }
 
     if (arg->arg->ingress_zerotier && CMP_IPV4(ipv4.dst, zt_broadcast)) {
+        LLOG(LLOG_INFO, "BRIDGE: zt broadcast -> home broadcast from %d.%d.%d.%d len %d",
+             ipv4.src[0], ipv4.src[1], ipv4.src[2], ipv4.src[3], ipv4.total_len);
         uint8_t *pkt = (uint8_t *)ether->raw;
         rewrite_ipv4_addr(pkt + 14, IPV4_OFF_DST, home_broadcast);
         uint8_t dst_mac[6];
@@ -149,6 +155,8 @@ int process_ipv4(struct packet_ctx *arg, const struct ether_frame *ether)
     }
 
     if (arg->arg->ingress_zerotier && CMP_IPV4(ipv4.dst, zt_switch_ip)) {
+        LLOG(LLOG_INFO, "BRIDGE: zt -> home unicast %d.%d.%d.%d -> 10.147.17.253 len %d",
+             ipv4.src[0], ipv4.src[1], ipv4.src[2], ipv4.src[3], ipv4.total_len);
         uint8_t *pkt = (uint8_t *)ether->raw;
         rewrite_ipv4_addr(pkt + 14, IPV4_OFF_DST, home_switch_ip);
         uint8_t dst_mac[6];
