@@ -427,7 +427,12 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     if (!rewrite_ipv4_addresses(translated, ip_len, src_for_header, dst)) return false;
     {
         const size_t hlen = (translated[0] & 0x0f) * 4;
-        if (translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8) {
+        /* Skip payload rewriting if Switch is natively on ZeroTier subnet.
+         * Proxy ARP mode: no translation needed, PIA sees real IPs. */
+        static const uint8_t zt_net[4] = {10, 147, 17, 0};
+        static const uint8_t zt_mask[4] = {255, 255, 255, 0};
+        bool switch_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net, zt_mask);
+        if (!switch_on_zt && translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8) {
             static const uint8_t partner_zt[4] = {10, 147, 17, 26};
             static const uint8_t partner_home[4] = {192, 168, 2, 250};
             static const uint8_t zt_bc[4] = {10, 147, 17, 255};
