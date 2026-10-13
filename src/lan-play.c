@@ -321,9 +321,9 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
         }
     }
     if (CMP_IPV4(dst, lan_play->zerotier_broadcast_ip)) {
-        LLOG(LLOG_INFO, "LANPLAY: forwarding broadcast to ZT, src %u.%u.%u.%u -> %u.%u.%u.%u, len %zu, proto %u",
+        LLOG(LLOG_INFO, "LANPLAY: forwarding broadcast to ZT, src %u.%u.%u.%u -> %u.%u.%u.%u, len %u, proto %u",
              translated[IPV4_OFF_SRC], translated[IPV4_OFF_SRC+1], translated[IPV4_OFF_SRC+2], translated[IPV4_OFF_SRC+3],
-             dst[0], dst[1], dst[2], dst[3], ip_len, ip[IPV4_OFF_PROTOCOL]);
+             dst[0], dst[1], dst[2], dst[3], (unsigned int)ip_len, ip[IPV4_OFF_PROTOCOL]);
         if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > header_len + 8) {
             static const uint8_t home_sw[4] = {192, 168, 2, 254};
             static const uint8_t zt_pc[4] = {10, 147, 17, 182};
