@@ -87,6 +87,8 @@ struct lan_play {
     struct dhcp_server_state dhcp_state;
     uv_udp_t dhcp_sock;
     bool dhcp_sock_active;
+    int dhcp_sock_fd;
+    uv_thread_t dhcp_thread;
     uint8_t dhcp_router_ip[4];
     bool dhcp_router_known;
     struct packet_ctx zerotier_neighbors;
