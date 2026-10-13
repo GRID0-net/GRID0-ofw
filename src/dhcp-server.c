@@ -180,7 +180,11 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     WRITE_NET16(dhcp, 6, (uint16_t)(req->xid & 0xffff));
     WRITE_NET16(dhcp, 10, req->flags);
     if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
-    CPY_IPV4(dhcp + 20, lp->wifi_ip);
+    /* siaddr must match Server ID (opt 54). For 10.147.17.x offers, use ZeroTier IP. */
+    static const uint8_t zt_net_si[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask_si[4] = {255, 255, 255, 0};
+    bool is_zt = yiaddr && IS_SUBNET(yiaddr, zt_net_si, zt_mask_si);
+    CPY_IPV4(dhcp + 20, is_zt ? lp->zerotier_ip : lp->wifi_ip);
     CPY_MAC(dhcp + 28, dst_mac);
     WRITE_NET16(dhcp, 236, (uint16_t)(DHCP_MAGIC >> 16));
     WRITE_NET16(dhcp, 238, (uint16_t)(DHCP_MAGIC & 0xffff));
