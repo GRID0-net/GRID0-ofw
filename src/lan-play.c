@@ -418,7 +418,13 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     /* The console must use the overlay's subnet mask: PIA includes that
      * broadcast address in its authenticated challenge nonce. Preserve it. */
     const uint8_t *dst = broadcast ? lan_play->zerotier_broadcast_ip : lan_play->switch_ip;
-    if (!rewrite_ipv4_addresses(translated, ip_len, ip + IPV4_OFF_SRC, dst)) return false;
+    static const uint8_t partner_zt_ip[4] = {10, 147, 17, 26};
+    static const uint8_t partner_home_ip[4] = {192, 168, 2, 250};
+    const uint8_t *src_for_header = ip + IPV4_OFF_SRC;
+    if (!broadcast && CMP_IPV4(ip + IPV4_OFF_SRC, partner_zt_ip)) {
+        src_for_header = partner_home_ip;
+    }
+    if (!rewrite_ipv4_addresses(translated, ip_len, src_for_header, dst)) return false;
     {
         const size_t hlen = (translated[0] & 0x0f) * 4;
         if (translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8) {
