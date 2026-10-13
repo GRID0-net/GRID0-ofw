@@ -257,6 +257,23 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
 
 static uint16_t dhcp_ip_id = 0;
 
+int dhcp_send_reply_udp(struct lan_play *lp, const uint8_t *dst_mac,
+                        const struct dhcp_request *req, uint8_t msg_type,
+                        const uint8_t yiaddr[4])
+{
+    uint8_t dhcp[DHCP_MIN_LEN];
+    size_t built = dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr, dhcp);
+    if (built == 0) return -1;
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    addr.sin_port = htons(68);
+    int sent = sendto(lp->dhcp_sock_fd, (const char *)dhcp, (int)built, 0,
+                      (struct sockaddr *)&addr, sizeof(addr));
+    return sent == (int)built ? 0 : -1;
+}
+
 int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
                       const struct dhcp_request *req, uint8_t msg_type,
                       const uint8_t yiaddr[4])
