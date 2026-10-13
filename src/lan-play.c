@@ -722,7 +722,17 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
                  ip[0], ip[1], ip[2], ip[3]);
         return false;
     }
-    if (lp->switch_seen && !CMP_IPV4(ip, lp->switch_ip)) return false;
+    /* Switch IP changed (DHCP reassigned). If MAC matches, update IP. */
+    if (lp->switch_seen && !CMP_IPV4(ip, lp->switch_ip)) {
+        if (CMP_MAC(frame + 6, lp->switch_mac)) {
+            CPY_IPV4(lp->switch_ip, ip);
+            LLOG(LLOG_INFO, "Switch IP changed to %u.%u.%u.%u (MAC %02x:%02x:%02x:%02x:%02x:%02x)",
+                 ip[0], ip[1], ip[2], ip[3],
+                 frame[6], frame[7], frame[8], frame[9], frame[10], frame[11]);
+        } else {
+            return false;
+        }
+    }
     bool changed = !lp->switch_seen || !CMP_MAC(frame + 6, lp->switch_mac);
     if (lp->switch_seen && changed && (lp->switch_mac_confirmed || !direct)) {
         if (++lp->switch_mac_conflicts == 1)
