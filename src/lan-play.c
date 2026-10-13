@@ -17,6 +17,7 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
 void lan_play_zerotier_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_header, const u_char *packet, const uint8_t *mac);
 static void switch_discovery_timer_cb(uv_timer_t *timer);
 static void diagnostic_log_frame(struct lan_play *lan_play, const char *direction, const u_char *packet, int len);
+int lan_play_send_wifi_arp_reply(struct lan_play *lan_play, const uint8_t *target_mac, const uint8_t *target_ip, const uint8_t *sender_ip);
 
 static void rewrite_payload_ips(uint8_t *payload, size_t len,
                                 const uint8_t from1[4], const uint8_t to1[4],
@@ -794,6 +795,11 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
     /* DHCP client traffic is answered locally when --dhcp is on; it must
      * never reach discovery or the ZeroTier relay path. */
     if (dhcp_server_consume(lan_play, packet, pkt_header->caplen)) return;
+    /* Proxy ARP: answer ARP REQUESTs for the ZeroTier gateway IP on Wi-Fi. */
+    if (pkt_header->caplen >= ETHER_HEADER_LEN + ARP_LEN && READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_ARP && READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_OPCODE) == ARP_OPCODE_REQUEST && CMP_IPV4(packet + ETHER_HEADER_LEN + ARP_OFF_TARGET_IP, lan_play->zerotier_ip)) {
+        lan_play_send_wifi_arp_reply(lan_play, packet + ETHER_OFF_SRC, lan_play->zerotier_ip, packet + ETHER_HEADER_LEN + ARP_OFF_SENDER_IP);
+        return;
+    }
     if (!learn_local_switch(lan_play, packet, pkt_header->caplen)) return;
     packet_set_mac(&lan_play->packet_ctx, mac);
     if (pkt_header->caplen >= ETHER_HEADER_LEN + IPV4_HEADER_LEN &&
@@ -1097,6 +1103,21 @@ int lan_play_send_zerotier_arp_reply(struct lan_play *lan_play, const uint8_t *t
     diagnostic_log_frame(lan_play, "TX ZeroTier", frame, sizeof(frame));
     int ret = uv_pcap_sendpacket(&lan_play->zerotier_pcap, frame, sizeof(frame));
     if (ret != 0) LLOG(LLOG_ERROR, "ZeroTier ARP reply send failed %d", ret);
+    return ret;
+}
+int lan_play_send_wifi_arp_reply(struct lan_play *lan_play, const uint8_t *target_mac, const uint8_t *target_ip, const uint8_t *sender_ip) {
+    uint8_t frame[42] = {0};
+    CPY_MAC(frame + ETHER_OFF_DST, target_mac); CPY_MAC(frame + ETHER_OFF_SRC, lan_play->wifi_mac); WRITE_NET16(frame, 12, ETHER_TYPE_ARP);
+    WRITE_NET16(frame, 14, ARP_HARDTYPE_ETHER); WRITE_NET16(frame, 16, ETHER_TYPE_IPV4);
+    frame[18] = 6; frame[19] = 4; WRITE_NET16(frame, 20, ARP_OPCODE_REPLY);
+    CPY_MAC(frame + ETHER_HEADER_LEN + ARP_OFF_SENDER_MAC, lan_play->wifi_mac);
+    CPY_IPV4(frame + ETHER_HEADER_LEN + ARP_OFF_SENDER_IP, target_ip);
+    CPY_MAC(frame + ETHER_HEADER_LEN + ARP_OFF_TARGET_MAC, target_mac);
+    CPY_IPV4(frame + ETHER_HEADER_LEN + ARP_OFF_TARGET_IP, sender_ip);
+    lan_play->wifi_tx++;
+    diagnostic_log_frame(lan_play, "TX Wi-Fi", frame, sizeof(frame));
+    int ret = uv_pcap_sendpacket(&lan_play->pcap, frame, sizeof(frame));
+    if (ret != 0) LLOG(LLOG_ERROR, "Wi-Fi ARP reply send failed %d", ret);
     return ret;
 }
 int lan_play_send_zerotier_ipv4(struct lan_play *lan_play, const void *dst_ip, const void *packet, uint16_t len) {
