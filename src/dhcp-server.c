@@ -183,7 +183,7 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     if (yiaddr) CPY_IPV4(dhcp + 16, yiaddr);
     bool is_zt_offer = IS_SUBNET(yiaddr, lp->zerotier_ip, lp->zerotier_netmask);
     
-    if (!is_zt_offer) {
+    
     const uint8_t *siaddr_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     CPY_IPV4(dhcp + 20, siaddr_ip);
     CPY_MAC(dhcp + 28, req->chaddr);
