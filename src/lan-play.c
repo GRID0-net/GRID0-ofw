@@ -403,18 +403,12 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
     const bool broadcast = CMP_IPV4(original_dst, lan_play->zerotier_broadcast_ip);
-    LLOG(LLOG_INFO, "LANPLAY: ZT incoming %u.%u.%u.%u -> %u.%u.%u.%u, len %u, broadcast=%d",
-         ip[IPV4_OFF_SRC], ip[IPV4_OFF_SRC+1], ip[IPV4_OFF_SRC+2], ip[IPV4_OFF_SRC+3],
-         original_dst[0], original_dst[1], original_dst[2], original_dst[3], ip_len, broadcast);
-    /* Games join the remote console by its own address (learned from the room
-     * beacon), not by the relay PC's ZeroTier address. Classic lan-play routed
-     * those by Switch IP on the central server; on ZeroTier there is no
-     * server, so a unicast packet addressed to the locally detected Switch is
-     * delivered straight to this relay's console. Anything else addressed to
-     * neither us nor broadcast is still dropped. */
     const bool for_switch = !broadcast && CMP_IPV4(original_dst, lan_play->switch_ip);
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
         (!broadcast && !CMP_IPV4(original_dst, lan_play->zerotier_ip) && !for_switch)) return false;
+    LLOG(LLOG_INFO, "LANPLAY: ZT incoming %u.%u.%u.%u -> %u.%u.%u.%u, len %u, broadcast=%d",
+         ip[IPV4_OFF_SRC], ip[IPV4_OFF_SRC+1], ip[IPV4_OFF_SRC+2], ip[IPV4_OFF_SRC+3],
+         original_dst[0], original_dst[1], original_dst[2], original_dst[3], ip_len, broadcast);
     if (for_switch && !lan_play->warned_direct_switch_delivery) {
         lan_play->warned_direct_switch_delivery = true;
         LLOG(LLOG_INFO, "Delivering ZeroTier traffic addressed to the local Switch %u.%u.%u.%u directly; the game joins the console address, not the relay address",
