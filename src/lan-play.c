@@ -260,8 +260,8 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
 
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
+    const bool is_internet = !is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst);
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
-        (!is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst)) ||
         CMP_IPV4(original_dst, lan_play->packet_ctx.ip)) return false;
 
     /* Never forward the console's ICMP "port unreachable" replies to overlay
@@ -285,6 +285,23 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
                 return true; /* Consumed: do not forward, do not fall through. */
             }
         }
+    }
+
+    if (is_internet) {
+        uint8_t nat_packet[ETHER_MTU];
+        memcpy(nat_packet, ip, ip_len);
+        if (!rewrite_ipv4_addresses(nat_packet, ip_len, lan_play->wifi_ip, original_dst)) return false;
+        uint8_t router_mac[6];
+        uint8_t router_ip[4];
+        CPY_IPV4(router_ip, lan_play->wifi_ip);
+        router_ip[3] = 1;
+        if (lan_play->dhcp_router_known) {
+            CPY_IPV4(router_ip, lan_play->dhcp_router_ip);
+        }
+        if (!arp_get_mac_by_ip(&lan_play->packet_ctx, router_mac, router_ip)) {
+            return false;
+        }
+        return lan_play_send_wifi_ipv4(lan_play, router_mac, nat_packet, ip_len) == 0;
     }
 
     uint8_t translated[ETHER_MTU];
