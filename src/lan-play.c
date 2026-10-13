@@ -260,7 +260,14 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
 
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
-    const bool is_internet = !is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst);
+    const size_t hdr_len_check = (ip[0] & 0x0f) * 4;
+    uint16_t dst_port_check = 0;
+    if (ip_len >= hdr_len_check + 4 && (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP || ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_TCP)) {
+        dst_port_check = READ_NET16(ip, hdr_len_check + 2);
+    }
+    const bool is_relay_ip = CMP_IPV4(original_dst, lan_play->zerotier_ip);
+    const bool is_dns_http = is_relay_ip && (dst_port_check == 53 || dst_port_check == 80 || dst_port_check == 443);
+    const bool is_internet = (!is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst)) || is_dns_http;
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
         CMP_IPV4(original_dst, lan_play->packet_ctx.ip)) return false;
 
@@ -331,7 +338,13 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
             if (lan_play->nat_next_port >= 60000) lan_play->nat_next_port = 40000;
         }
         entry->expires = now + 120;
-        if (!rewrite_ipv4_addresses(nat_packet, ip_len, lan_play->wifi_ip, original_dst)) return false;
+        uint8_t real_dst[4];
+        CPY_IPV4(real_dst, original_dst);
+        if (CMP_IPV4(original_dst, lan_play->zerotier_ip) && dst_port == 53) {
+            real_dst[0] = 8; real_dst[1] = 8; real_dst[2] = 8; real_dst[3] = 8;
+            CPY_IPV4(entry->dest_ip, real_dst);
+        }
+        if (!rewrite_ipv4_addresses(nat_packet, ip_len, lan_play->wifi_ip, real_dst)) return false;
         if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP || ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_TCP) {
             if (ip_len >= hdr_len + 4) {
                 WRITE_NET16(nat_packet, hdr_len, entry->pc_port);
