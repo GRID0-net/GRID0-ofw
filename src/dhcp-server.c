@@ -265,8 +265,6 @@ int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     size_t built = dhcp_build_payload(lp, dst_mac, req, msg_type, yiaddr,
                        ip + IPV4_HEADER_LEN + UDP_OFF_END);
     if (built == 0) return -1;
-    if (built == 0) return -1;
-    if (built == 0) return -1;
     
 
     ip[IPV4_OFF_VER_LEN] = 0x45;
