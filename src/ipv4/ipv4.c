@@ -141,8 +141,6 @@ int process_ipv4(struct packet_ctx *arg, const struct ether_frame *ether)
     }
 
     if (arg->arg->ingress_zerotier && CMP_IPV4(ipv4.dst, zt_broadcast)) {
-        LLOG(LLOG_INFO, "BRIDGE: zt broadcast -> home broadcast from %d.%d.%d.%d len %d",
-             ipv4.src[0], ipv4.src[1], ipv4.src[2], ipv4.src[3], ipv4.total_len);
         uint8_t *pkt = (uint8_t *)ether->raw;
         rewrite_ipv4_addr(pkt + 14, IPV4_OFF_DST, home_broadcast);
         uint8_t dst_mac[6];
