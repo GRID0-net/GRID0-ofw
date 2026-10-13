@@ -485,9 +485,26 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     uint8_t translated[ETHER_MTU];
     uint8_t wifi_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     memcpy(translated, ip, ip_len);
-    /* The console must use the overlay's subnet mask: PIA includes that
-     * broadcast address in its authenticated challenge nonce. Preserve it. */
     const uint8_t *dst = broadcast ? lan_play->zerotier_broadcast_ip : lan_play->switch_ip;
+    const bool is_nat_return = !broadcast && CMP_IPV4(original_dst, lan_play->zerotier_ip) && !CMP_IPV4(original_dst, lan_play->switch_ip);
+    uint16_t nat_switch_port = 0;
+    if (is_nat_return) {
+        const size_t hdr_len = (ip[0] & 0x0f) * 4;
+        if (ip_len >= hdr_len + 4) {
+            uint16_t dst_port = READ_NET16(ip, hdr_len + 2);
+            time_t now = time(NULL);
+            for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+                if (lan_play->nat_table[i].used && lan_play->nat_table[i].expires > now &&
+                    lan_play->nat_table[i].pc_port == dst_port &&
+                    lan_play->nat_table[i].protocol == ip[IPV4_OFF_PROTOCOL]) {
+                    dst = lan_play->nat_table[i].switch_ip;
+                    nat_switch_port = lan_play->nat_table[i].switch_port;
+                    lan_play->nat_table[i].expires = now + 120;
+                    break;
+                }
+            }
+        }
+    }
     static const uint8_t zt_net[4] = {10, 147, 17, 0};
     static const uint8_t zt_mask[4] = {255, 255, 255, 0};
     bool switch_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net, zt_mask);
@@ -500,6 +517,16 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
         src_for_header = partner_home_ip;
     }
     if (!rewrite_ipv4_addresses(translated, ip_len, src_for_header, dst)) return false;
+    if (is_nat_return && nat_switch_port != 0) {
+        const size_t hlen = (translated[0] & 0x0f) * 4;
+        if (ip_len >= hlen + 4) {
+            WRITE_NET16(translated, hlen + 2, nat_switch_port);
+            WRITE_NET16(translated, hlen + 6, 0);
+            if (translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
+                WRITE_NET16(translated, hlen + 6, udp_checksum(translated, hlen, ip_len));
+            }
+        }
+    }
     {
         const size_t hlen = (translated[0] & 0x0f) * 4;
         /* Skip payload rewriting if Switch is natively on ZeroTier subnet.
