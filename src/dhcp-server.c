@@ -104,16 +104,14 @@ static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t
         return true;
     }
 
-    /* Option 121 test: offer home subnet (192.168.2.x) so Switch accepts.
-     * Option 121 gives route to 10.147.17.0/24 via PC (192.168.2.136). */
     uint8_t net[4];
     uint8_t bcast[4];
-    CPY_IPV4(net, lp->wifi_ip);
+    CPY_IPV4(net, lp->zerotier_ip);
     net[3] = 0;
-    CPY_IPV4(bcast, lp->wifi_ip);
+    CPY_IPV4(bcast, lp->zerotier_ip);
     bcast[3] = 255;
     uint8_t router[4];
-    CPY_IPV4(router, lp->wifi_ip);
+    CPY_IPV4(router, lp->zerotier_ip);
 
     const uint32_t b = ipv4_to_u32(bcast);
     const uint32_t n = ipv4_to_u32(net);
