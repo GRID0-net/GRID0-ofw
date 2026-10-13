@@ -532,7 +532,7 @@ int old_main()
         RT_ASSERT(uv_timer_start(&control_timer, windows_control_cb, 0, 100) == 0);
     }
 #endif
-    eprintf("Relay started (PID %d) [BUILD MARKER: PROXY-ARP4]\n", (int)getpid());
+    eprintf("Relay started (PID %d) [BUILD MARKER: PROXY-ARP5]\n", (int)getpid());
     ret = uv_run(lan_play->loop, UV_RUN_DEFAULT);
     if (ret) {
         LLOG(LLOG_ERROR, "uv_run %d", ret);
