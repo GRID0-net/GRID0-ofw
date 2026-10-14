@@ -99,18 +99,18 @@ static void dhcp_build_ip_pool(struct lan_play *lp)
     struct dhcp_server_state *st = &lp->dhcp_state;
     uint8_t net[4];
     uint8_t bcast[4];
-    CPY_IPV4(net, lp->zerotier_ip);
+    CPY_IPV4(net, lp->wifi_ip);
     net[3] = 0;
-    CPY_IPV4(bcast, lp->zerotier_ip);
+    CPY_IPV4(bcast, lp->wifi_ip);
     bcast[3] = 255;
     const uint32_t b = ipv4_to_u32(bcast);
     const uint32_t n = ipv4_to_u32(net);
     st->ip_pool_count = 0;
-    CPY_IPV4(st->ip_pool_zt_ip, lp->zerotier_ip);
+    CPY_IPV4(st->ip_pool_zt_ip, lp->wifi_ip);
     for (uint32_t cand = b - 1; cand > n + 1; --cand) {
         uint8_t ip[4];
         u32_to_ipv4(cand, ip);
-        if (CMP_IPV4(ip, lp->zerotier_ip)) continue;
+        if (CMP_IPV4(ip, lp->wifi_ip)) continue;
         if (arp_has_ip(&lp->packet_ctx, ip)) continue;
         if (st->ip_pool_count < 253) {
             CPY_IPV4(st->ip_pool[st->ip_pool_count], ip);
@@ -129,7 +129,7 @@ static bool dhcp_pick_home_ip(struct lan_play *lp, const uint8_t mac[6], uint8_t
         CPY_IPV4(out, own->ip);
         return true;
     }
-    if (!st->ip_pool_built || !CMP_IPV4(st->ip_pool_zt_ip, lp->zerotier_ip)) {
+    if (!st->ip_pool_built || !CMP_IPV4(st->ip_pool_zt_ip, lp->wifi_ip)) {
         dhcp_build_ip_pool(lp);
     }
     for (int i = 0; i < st->ip_pool_count; ++i) {
