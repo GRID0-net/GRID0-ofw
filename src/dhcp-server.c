@@ -405,8 +405,6 @@ uint8_t dhcp_decide(struct lan_play *lp, const uint8_t *mac,
     }
 
     if (req->msg_type == DHCP_MSG_DISCOVER) {
-        struct dhcp_lease *old = dhcp_find_mac(st, mac);
-        if (old) memset(old, 0, sizeof(*old));
         if (!dhcp_pick_home_ip(lp, mac, yiaddr)) {
             LLOG(LLOG_WARNING, "DHCP: address pool exhausted; DISCOVER ignored");
             return 0;
