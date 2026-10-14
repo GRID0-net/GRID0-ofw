@@ -340,7 +340,7 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
         entry->expires = now + 120;
         uint8_t real_dst[4];
         CPY_IPV4(real_dst, original_dst);
-        if (CMP_IPV4(original_dst, lan_play->zerotier_ip) && dst_port == 53) {
+        if ((CMP_IPV4(original_dst, lan_play->zerotier_ip) || CMP_IPV4(original_dst, lan_play->wifi_ip)) && dst_port == 53) {
             real_dst[0] = 8; real_dst[1] = 8; real_dst[2] = 8; real_dst[3] = 8;
             CPY_IPV4(entry->dest_ip, real_dst);
         }
