@@ -930,12 +930,11 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
         return;
     }
     lan_play->ingress_zerotier = false;
+    /* DHCP first, before logging, to avoid logging delay on the DHCP race. */
+    if (dhcp_server_consume(lan_play, packet, pkt_header->caplen)) return;
     diagnostic_count_rx(lan_play, false, packet, pkt_header->caplen);
     diagnostic_log_frame(lan_play, "RX Wi-Fi", packet, pkt_header->caplen);
     if (consume_wifi_delivery_reply(lan_play, packet, pkt_header->caplen)) return;
-    /* DHCP client traffic is answered locally when --dhcp is on; it must
-     * never reach discovery or the ZeroTier relay path. */
-    if (dhcp_server_consume(lan_play, packet, pkt_header->caplen)) return;
     /* Proxy ARP: answer ARP REQUESTs for the ZeroTier gateway IP on Wi-Fi. */
     if (pkt_header->caplen >= ETHER_HEADER_LEN + ARP_LEN &&
         READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_ARP &&
