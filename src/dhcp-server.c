@@ -97,19 +97,12 @@ static void dhcp_get_router_ip(struct lan_play *lp, uint8_t out[4])
 static void dhcp_build_ip_pool(struct lan_play *lp)
 {
     struct dhcp_server_state *st = &lp->dhcp_state;
-    uint8_t net[4];
-    uint8_t bcast[4];
-    CPY_IPV4(net, lp->wifi_ip);
-    net[3] = 0;
-    CPY_IPV4(bcast, lp->wifi_ip);
-    bcast[3] = 255;
-    const uint32_t b = ipv4_to_u32(bcast);
-    const uint32_t n = ipv4_to_u32(net);
     st->ip_pool_count = 0;
     CPY_IPV4(st->ip_pool_zt_ip, lp->wifi_ip);
-    for (uint32_t cand = b - 1; cand > n + 1; --cand) {
+    for (int last = 150; last >= 100; --last) {
         uint8_t ip[4];
-        u32_to_ipv4(cand, ip);
+        CPY_IPV4(ip, lp->wifi_ip);
+        ip[3] = (uint8_t)last;
         if (CMP_IPV4(ip, lp->wifi_ip)) continue;
         if (arp_has_ip(&lp->packet_ctx, ip)) continue;
         if (st->ip_pool_count < 253) {
