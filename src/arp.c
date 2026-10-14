@@ -156,7 +156,7 @@ int arp_request(struct packet_ctx *self, const struct arp *arp)
         if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
             return 0;
         }
-        if (options.dhcp_home_wifi_mode && !CMP_IPV4(arp->target_ip, self->ip)) {
+        if (options.dhcp_server && !CMP_IPV4(arp->target_ip, self->ip)) {
             return 0;
         }
         if (self->arg->ingress_zerotier) {
