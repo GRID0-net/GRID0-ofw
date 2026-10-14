@@ -201,7 +201,17 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
      * accepts the OFFER. Router and DNS stay as ZeroTier IP for NAT. */
     const uint8_t *srv_ip = lp->wifi_ip;
     const uint8_t *netmask = is_zt_offer ? lp->zerotier_netmask : lp->wifi_netmask;
-    const uint8_t *gw_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
+    uint8_t gw_ip_buf[4];
+    const uint8_t *gw_ip;
+    if (is_zt_offer) {
+        gw_ip = lp->zerotier_ip;
+    } else if (lp->dhcp_router_known) {
+        gw_ip = lp->dhcp_router_ip;
+    } else {
+        CPY_IPV4(gw_ip_buf, lp->wifi_ip);
+        gw_ip_buf[3] = 1;
+        gw_ip = gw_ip_buf;
+    }
     uint8_t dns_ip[4];
     if (is_zt_offer) {
         dns_ip[0] = gw_ip[0]; dns_ip[1] = gw_ip[1]; dns_ip[2] = gw_ip[2]; dns_ip[3] = gw_ip[3];
