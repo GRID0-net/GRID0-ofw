@@ -202,10 +202,18 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
     const uint8_t *srv_ip = lp->wifi_ip;
     const uint8_t *netmask = is_zt_offer ? lp->zerotier_netmask : lp->wifi_netmask;
     const uint8_t *gw_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
+    uint8_t dns_ip[4];
+    if (is_zt_offer) {
+        dns_ip[0] = gw_ip[0]; dns_ip[1] = gw_ip[1]; dns_ip[2] = gw_ip[2]; dns_ip[3] = gw_ip[3];
+    } else if (lp->dhcp_router_known) {
+        dns_ip[0] = lp->dhcp_router_ip[0]; dns_ip[1] = lp->dhcp_router_ip[1]; dns_ip[2] = lp->dhcp_router_ip[2]; dns_ip[3] = lp->dhcp_router_ip[3];
+    } else {
+        dns_ip[0] = lp->wifi_ip[0]; dns_ip[1] = lp->wifi_ip[1]; dns_ip[2] = lp->wifi_ip[2]; dns_ip[3] = 1;
+    }
     off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, srv_ip, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_MASK, netmask, 4);
     off = dhcp_opt(dhcp, off, DHCP_OPT_ROUTER, gw_ip, 4);
-    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, gw_ip, 4);
+    off = dhcp_opt(dhcp, off, DHCP_OPT_DNS, dns_ip, 4);
     /* Option 121 test: always include route to ZeroTier via PC. */
     if (!is_zt_offer) {
         uint8_t routes[16];
