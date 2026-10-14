@@ -369,8 +369,22 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
 
     uint8_t translated[ETHER_MTU];
     memcpy(translated, ip, ip_len);
+    uint8_t peer_zt_dst[4];
+    bool have_peer_zt = false;
+    if (!is_nintendo_lan_broadcast(lan_play, original_dst)) {
+        time_t now = time(NULL);
+        for (int i = 0; i < PEER_MAP_SIZE; i++) {
+            if (lan_play->peer_map[i].used && lan_play->peer_map[i].expires > now &&
+                CMP_IPV4(lan_play->peer_map[i].home_ip, original_dst)) {
+                CPY_IPV4(peer_zt_dst, lan_play->peer_map[i].zt_ip);
+                have_peer_zt = true;
+                lan_play->peer_map[i].expires = now + 300;
+                break;
+            }
+        }
+    }
     const uint8_t *dst = is_nintendo_lan_broadcast(lan_play, original_dst)
-        ? lan_play->zerotier_broadcast_ip : original_dst;
+        ? lan_play->zerotier_broadcast_ip : (have_peer_zt ? peer_zt_dst : original_dst);
     /* Proxy ARP mode: Switch keeps its 10.147.17.x address, no source rewrite.
      * Otherwise, rewrite source to PC's ZeroTier IP for NAT. */
     static const uint8_t zt_net2[4] = {10, 147, 17, 0};
@@ -521,13 +535,42 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     static const uint8_t zt_net[4] = {10, 147, 17, 0};
     static const uint8_t zt_mask[4] = {255, 255, 255, 0};
     bool switch_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net, zt_mask);
-    static const uint8_t partner_zt_ip[4] = {10, 147, 17, 26};
-    static const uint8_t partner_home_ip[4] = {192, 168, 2, 250};
+    uint8_t peer_home_ip[4];
+    bool have_peer_home = false;
     const uint8_t *src_for_header = ip + IPV4_OFF_SRC;
-    /* Only rewrite header source if Switch is NOT natively on ZeroTier.
-     * Proxy ARP mode: keep real IPs, PIA passes. */
-    if (!switch_on_zt && !broadcast && CMP_IPV4(ip + IPV4_OFF_SRC, partner_zt_ip)) {
-        src_for_header = partner_home_ip;
+    if (!switch_on_zt && !broadcast && IS_SUBNET(ip + IPV4_OFF_SRC, zt_net, zt_mask) &&
+        !CMP_IPV4(ip + IPV4_OFF_SRC, lan_play->zerotier_ip)) {
+        time_t now = time(NULL);
+        struct peer_map_entry *entry = NULL;
+        for (int i = 0; i < PEER_MAP_SIZE; i++) {
+            if (lan_play->peer_map[i].used && lan_play->peer_map[i].expires > now &&
+                CMP_IPV4(lan_play->peer_map[i].zt_ip, ip + IPV4_OFF_SRC)) {
+                entry = &lan_play->peer_map[i];
+                break;
+            }
+        }
+        if (!entry) {
+            for (int i = 0; i < PEER_MAP_SIZE; i++) {
+                if (!lan_play->peer_map[i].used || lan_play->peer_map[i].expires <= now) {
+                    entry = &lan_play->peer_map[i];
+                    break;
+                }
+            }
+        }
+        if (entry) {
+            if (!entry->used || entry->expires <= now) {
+                CPY_IPV4(entry->zt_ip, ip + IPV4_OFF_SRC);
+                if (lan_play->peer_map_next_octet < 200 || lan_play->peer_map_next_octet > 230) lan_play->peer_map_next_octet = 200;
+                CPY_IPV4(entry->home_ip, lan_play->wifi_subnet);
+                entry->home_ip[3] = lan_play->peer_map_next_octet++;
+                if (lan_play->peer_map_next_octet > 230) lan_play->peer_map_next_octet = 200;
+                entry->used = true;
+            }
+            entry->expires = now + 300;
+            CPY_IPV4(peer_home_ip, entry->home_ip);
+            have_peer_home = true;
+            src_for_header = peer_home_ip;
+        }
     }
     if (!rewrite_ipv4_addresses(translated, ip_len, src_for_header, dst)) return false;
     if (is_nat_return && nat_switch_port != 0) {
@@ -542,15 +585,12 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     }
     {
         const size_t hlen = (translated[0] & 0x0f) * 4;
-        /* Skip payload rewriting if Switch is natively on ZeroTier subnet.
-         * Proxy ARP mode: no translation needed, PIA sees real IPs. */
-        if (!switch_on_zt && translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8) {
-            static const uint8_t partner_zt[4] = {10, 147, 17, 26};
-            static const uint8_t partner_home[4] = {192, 168, 2, 250};
+        if (!switch_on_zt && translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8 && have_peer_home) {
             static const uint8_t zt_bc[4] = {10, 147, 17, 255};
-            static const uint8_t home_bc[4] = {192, 168, 2, 255};
+            uint8_t home_bc[4];
+            CPY_IPV4(home_bc, lan_play->wifi_broadcast);
             rewrite_payload_ips(translated + hlen + 8, ip_len - hlen - 8,
-                                partner_zt, partner_home, zt_bc, home_bc);
+                                ip + IPV4_OFF_SRC, peer_home_ip, zt_bc, home_bc);
             WRITE_NET16(translated, hlen + 6, 0);
             WRITE_NET16(translated, hlen + 6, udp_checksum(translated, hlen, ip_len));
         }
