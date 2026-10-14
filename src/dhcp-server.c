@@ -204,11 +204,9 @@ size_t dhcp_build_payload(struct lan_play *lp, const uint8_t *dst_mac,
 
     size_t off = 240;
     off = dhcp_opt(dhcp, off, DHCP_OPT_MSG_TYPE, &msg_type, 1);
-    /* Proxy ARP mode: use ZeroTier IP for server/gateway/DNS */
-    
-    
-    
-    const uint8_t *srv_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
+    /* Server identifier must match UDP socket source (Wi-Fi IP) so Switch
+     * accepts the OFFER. Router and DNS stay as ZeroTier IP for NAT. */
+    const uint8_t *srv_ip = lp->wifi_ip;
     const uint8_t *netmask = is_zt_offer ? lp->zerotier_netmask : lp->wifi_netmask;
     const uint8_t *gw_ip = is_zt_offer ? lp->zerotier_ip : lp->wifi_ip;
     off = dhcp_opt(dhcp, off, DHCP_OPT_SERVER_ID, srv_ip, 4);
