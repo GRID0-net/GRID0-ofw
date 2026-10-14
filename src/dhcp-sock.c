@@ -33,6 +33,7 @@ static void dhcp_thread_main(void *arg)
 
 int dhcp_sock_start(struct lan_play *lp)
 {
+    return -1;
     if (lp->dhcp_sock_active) return 0;
     if (!options.dhcp_server || !lp->wifi_subnet_known) return -1;
 
