@@ -304,8 +304,6 @@ int parse_arguments(int argc, char **argv)
             options.discover_switch = false;
         } else if (!strcmp(arg, "--dhcp")) {
             options.dhcp_server = true;
-        } else if (!strcmp(arg, "--dhcp-home-wifi")) {
-            options.dhcp_home_wifi_mode = true;
         } else if (!strcmp(arg, "--dns-france-first")) {
             options.dns_france_first = true;
         } else if (!strcmp(arg, "--broadcast")) {
@@ -392,7 +390,6 @@ void print_help(const char *name)
         "        [--capture-prefix <path>] save five packet traces, including game payloads\n"
         "        [--no-discover-switch] disable automatic local Switch ARP discovery\n"
         "        [--dhcp] run a DHCP server for Automatic/DHCP Switches (Nintendo devices only)\n"
-        "        [--dhcp-home-wifi] Home Wi-Fi mode: hand out home-subnet addresses without requiring 10.147.17.x\n"
         "        [--dns-france-first] list the France 90DNS server before the US one\n"
         "        [--pmtu <pmtu>]\n"
         "        [--socks5-server-addr <addr>]\n"
@@ -526,7 +523,7 @@ int old_main()
         RT_ASSERT(uv_timer_start(&control_timer, windows_control_cb, 0, 100) == 0);
     }
 #endif
-    eprintf("Relay started (PID %d) [BUILD MARKER: M4-FINAL]\n", (int)getpid());
+    eprintf("Relay started (PID %d)\n", (int)getpid());
     ret = uv_run(lan_play->loop, UV_RUN_DEFAULT);
     if (ret) {
         LLOG(LLOG_ERROR, "uv_run %d", ret);
