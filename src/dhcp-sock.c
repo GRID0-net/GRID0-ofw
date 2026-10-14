@@ -25,7 +25,7 @@ static void dhcp_thread_main(void *arg)
         if (msg) {
             int rc = dhcp_send_reply_udp(lp, req.chaddr, &req, msg, yiaddr);
             uint64_t us = (uv_hrtime() - t_recv) / 1000;
-            LLOG(LLOG_INFO, "DHCP: socket reply took %llu us [1234]", (unsigned long long)us);
+            LLOG(LLOG_INFO, "DHCP: socket reply took %llu us [5678]", (unsigned long long)us);
             dhcp_account_reply(lp, req.chaddr, msg, yiaddr, rc);
         }
     }
