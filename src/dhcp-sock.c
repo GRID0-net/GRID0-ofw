@@ -7,6 +7,10 @@
 #include "dhcp-sock.h"
 #include <uv.h>
 
+#ifndef _WIN32
+#define closesocket close
+#endif
+
 static void dhcp_thread_main(void *arg)
 {
     struct lan_play *lp = (struct lan_play *)arg;
