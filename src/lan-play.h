@@ -60,6 +60,15 @@ struct nat_entry {
 
 #define NAT_TABLE_SIZE 64
 
+struct peer_map_entry {
+    uint8_t zt_ip[4];
+    uint8_t home_ip[4];
+    time_t expires;
+    bool used;
+};
+
+#define PEER_MAP_SIZE 32
+
 struct lan_play {
     struct packet_ctx packet_ctx;
 
@@ -139,6 +148,8 @@ struct lan_play {
     char last_err[1024];
     struct nat_entry nat_table[NAT_TABLE_SIZE];
     uint16_t nat_next_port;
+    struct peer_map_entry peer_map[PEER_MAP_SIZE];
+    uint8_t peer_map_next_octet;
 
     uint64_t upload_byte;
     uint64_t download_byte;
