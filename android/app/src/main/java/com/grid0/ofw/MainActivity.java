@@ -1,10 +1,11 @@
 package com.grid0.ofw;
 
 import android.app.Activity;
+import android.app.PendingIntent;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
 import android.graphics.Color;
-import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -12,15 +13,15 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import androidx.core.content.FileProvider;
-
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -115,12 +116,29 @@ public class MainActivity extends Activity {
     }
 
     private void installApk(File apk) {
-        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", apk);
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setDataAndType(uri, "application/vnd.android.package-archive");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        startActivity(intent);
+        try {
+            PackageInstaller installer = getPackageManager().getPackageInstaller();
+            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
+                PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+            int sessionId = installer.createSession(params);
+            PackageInstaller.Session session = installer.openSession(sessionId);
+            try (OutputStream out = session.openWrite("update", 0, apk.length());
+                 InputStream in = new FileInputStream(apk)) {
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = in.read(buf)) != -1) {
+                    out.write(buf, 0, n);
+                }
+                session.fsync(out);
+            }
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.setAction("INSTALL_COMPLETE");
+            PendingIntent pending = PendingIntent.getActivity(this, sessionId, intent, PendingIntent.FLAG_MUTABLE);
+            session.commit(pending.getIntentSender());
+            session.close();
+        } catch (Exception e) {
+            toast("Install failed");
+        }
     }
 
     private void toast(String msg) {
