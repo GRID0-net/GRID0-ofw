@@ -3,6 +3,7 @@
 #include "native-udp.h"
 #include "nintendo_oui.h"
 #include "win-firewall.h"
+#include "dhcp-sock.h"
 
 #define RETURN_ERR(lan_play, ...) \
     do { \
@@ -16,6 +17,26 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
 void lan_play_zerotier_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_header, const u_char *packet, const uint8_t *mac);
 static void switch_discovery_timer_cb(uv_timer_t *timer);
 static void diagnostic_log_frame(struct lan_play *lan_play, const char *direction, const u_char *packet, int len);
+int lan_play_send_wifi_arp_reply(struct lan_play *lan_play, const uint8_t *target_mac, const uint8_t *target_ip, const uint8_t *sender_ip);
+
+static void rewrite_payload_ips(uint8_t *payload, size_t len,
+                                const uint8_t from1[4], const uint8_t to1[4],
+                                const uint8_t from2[4], const uint8_t to2[4])
+{
+    for (size_t i = 0; i + 4 <= len; i++) {
+        if (memcmp(payload + i, from1, 4) == 0) {
+            memcpy(payload + i, to1, 4);
+            LLOG(LLOG_INFO, "PAYLOAD: rewrote %u.%u.%u.%u -> %u.%u.%u.%u at offset %zu",
+                 from1[0], from1[1], from1[2], from1[3],
+                 to1[0], to1[1], to1[2], to1[3], i);
+        } else if (memcmp(payload + i, from2, 4) == 0) {
+            memcpy(payload + i, to2, 4);
+            LLOG(LLOG_INFO, "PAYLOAD: rewrote %u.%u.%u.%u -> %u.%u.%u.%u at offset %zu",
+                 from2[0], from2[1], from2[2], from2[3],
+                 to2[0], to2[1], to2[2], to2[3], i);
+        }
+    }
+}
 
 
 static const char *capture_suffixes[5] = {
@@ -120,9 +141,22 @@ static void capture_frame(struct lan_play *lp, const char *direction,
     }
 }
 
-static bool is_nintendo_lan_broadcast(const uint8_t ip[4])
+static bool is_nintendo_lan_broadcast(const struct lan_play *lp, const uint8_t ip[4])
 {
-    return ip[0] == 10 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255;
+    if (ip[0] == 10 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255) return true;
+    if (ip[0] == 255 && ip[1] == 255 && ip[2] == 255 && ip[3] == 255) return true;
+    if (lp->wifi_subnet_known) {
+        bool wifi_bcast = true;
+        for (int i = 0; i < 4; i++) {
+            const uint8_t expected = (uint8_t)((lp->wifi_ip[i] & lp->wifi_netmask[i]) | ~lp->wifi_netmask[i]);
+            if (ip[i] != expected) {
+                wifi_bcast = false;
+                break;
+            }
+        }
+        if (wifi_bcast) return true;
+    }
+    return false;
 }
 
 static bool is_zerotier_destination(const struct lan_play *lan_play, const uint8_t ip[4])
@@ -226,8 +260,16 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
 
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
+    const size_t hdr_len_check = (ip[0] & 0x0f) * 4;
+    uint16_t dst_port_check = 0;
+    if (ip_len >= hdr_len_check + 4 && (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP || ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_TCP)) {
+        dst_port_check = READ_NET16(ip, hdr_len_check + 2);
+    }
+    const bool is_relay_ip = CMP_IPV4(original_dst, lan_play->zerotier_ip);
+    const bool is_dns_http = is_relay_ip && (dst_port_check == 53 || dst_port_check == 80 || dst_port_check == 443);
+    const bool is_internet = (!is_nintendo_lan_broadcast(lan_play, original_dst) && !is_zerotier_destination(lan_play, original_dst)) || is_dns_http;
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
-        (!is_nintendo_lan_broadcast(original_dst) && !is_zerotier_destination(lan_play, original_dst))) return false;
+        CMP_IPV4(original_dst, lan_play->packet_ctx.ip)) return false;
 
     /* Never forward the console's ICMP "port unreachable" replies to overlay
      * peers. A peer's game reads them as "the host is dead" and stops sending
@@ -252,21 +294,116 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
         }
     }
 
+    if (is_internet) {
+        uint8_t nat_packet[ETHER_MTU];
+        memcpy(nat_packet, ip, ip_len);
+        const size_t hdr_len = (ip[0] & 0x0f) * 4;
+        uint16_t src_port = 0;
+        uint16_t dst_port = 0;
+        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP || ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_TCP) {
+            if (ip_len >= hdr_len + 4) {
+                src_port = READ_NET16(ip, hdr_len);
+                dst_port = READ_NET16(ip, hdr_len + 2);
+            }
+        }
+        struct nat_entry *entry = NULL;
+        time_t now = time(NULL);
+        for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+            if (lan_play->nat_table[i].used && lan_play->nat_table[i].expires > now &&
+                CMP_IPV4(lan_play->nat_table[i].switch_ip, ip + IPV4_OFF_SRC) &&
+                lan_play->nat_table[i].switch_port == src_port &&
+                CMP_IPV4(lan_play->nat_table[i].dest_ip, original_dst) &&
+                lan_play->nat_table[i].dest_port == dst_port &&
+                lan_play->nat_table[i].protocol == ip[IPV4_OFF_PROTOCOL]) {
+                entry = &lan_play->nat_table[i];
+                break;
+            }
+        }
+        if (!entry) {
+            for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+                if (!lan_play->nat_table[i].used || lan_play->nat_table[i].expires <= now) {
+                    entry = &lan_play->nat_table[i];
+                    break;
+                }
+            }
+            if (!entry) return false;
+            CPY_IPV4(entry->switch_ip, ip + IPV4_OFF_SRC);
+            entry->switch_port = src_port;
+            CPY_IPV4(entry->dest_ip, original_dst);
+            entry->dest_port = dst_port;
+            entry->protocol = ip[IPV4_OFF_PROTOCOL];
+            entry->used = true;
+            if (lan_play->nat_next_port < 40000) lan_play->nat_next_port = 40000;
+            entry->pc_port = lan_play->nat_next_port++;
+            if (lan_play->nat_next_port >= 60000) lan_play->nat_next_port = 40000;
+        }
+        entry->expires = now + 120;
+        uint8_t real_dst[4];
+        CPY_IPV4(real_dst, original_dst);
+        if ((CMP_IPV4(original_dst, lan_play->zerotier_ip) || CMP_IPV4(original_dst, lan_play->wifi_ip)) && dst_port == 53) {
+            real_dst[0] = 8; real_dst[1] = 8; real_dst[2] = 8; real_dst[3] = 8;
+            CPY_IPV4(entry->dest_ip, real_dst);
+        }
+        if (!rewrite_ipv4_addresses(nat_packet, ip_len, lan_play->wifi_ip, real_dst)) return false;
+        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP || ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_TCP) {
+            if (ip_len >= hdr_len + 4) {
+                WRITE_NET16(nat_packet, hdr_len, entry->pc_port);
+                WRITE_NET16(nat_packet, hdr_len + 6, 0);
+                if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
+                    WRITE_NET16(nat_packet, hdr_len + 6, udp_checksum(nat_packet, hdr_len, ip_len));
+                }
+            }
+        }
+        uint8_t router_mac[6];
+        uint8_t router_ip[4];
+        CPY_IPV4(router_ip, lan_play->wifi_ip);
+        router_ip[3] = 1;
+        if (lan_play->dhcp_router_known) {
+            CPY_IPV4(router_ip, lan_play->dhcp_router_ip);
+        }
+        if (!arp_get_mac_by_ip(&lan_play->packet_ctx, router_mac, router_ip)) {
+            return false;
+        }
+        return lan_play_send_wifi_ipv4(lan_play, router_mac, nat_packet, ip_len) == 0;
+    }
+
     uint8_t translated[ETHER_MTU];
     memcpy(translated, ip, ip_len);
-    const uint8_t *dst = is_nintendo_lan_broadcast(original_dst)
-        ? lan_play->zerotier_broadcast_ip : original_dst;
-    if (!rewrite_ipv4_addresses(translated, ip_len, lan_play->zerotier_ip, dst)) return false;
+    uint8_t peer_zt_dst[4];
+    bool have_peer_zt = false;
+    if (!is_nintendo_lan_broadcast(lan_play, original_dst)) {
+        time_t now = time(NULL);
+        for (int i = 0; i < PEER_MAP_SIZE; i++) {
+            if (lan_play->peer_map[i].used && lan_play->peer_map[i].expires > now &&
+                CMP_IPV4(lan_play->peer_map[i].home_ip, original_dst)) {
+                CPY_IPV4(peer_zt_dst, lan_play->peer_map[i].zt_ip);
+                have_peer_zt = true;
+                lan_play->peer_map[i].expires = now + 300;
+                break;
+            }
+        }
+    }
+    const uint8_t *dst = is_nintendo_lan_broadcast(lan_play, original_dst)
+        ? lan_play->zerotier_broadcast_ip : (have_peer_zt ? peer_zt_dst : original_dst);
+    /* Proxy ARP mode: Switch keeps its 10.147.17.x address, no source rewrite.
+     * Otherwise, rewrite source to PC's ZeroTier IP for NAT. */
+    static const uint8_t zt_net2[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask2[4] = {255, 255, 255, 0};
+    bool sw_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net2, zt_mask2);
+    const uint8_t *src_ip = sw_on_zt ? (ip + IPV4_OFF_SRC) : lan_play->zerotier_ip;
+    if (!rewrite_ipv4_addresses(translated, ip_len, src_ip, dst)) return false;
     const size_t header_len = (ip[0] & 0x0f) * 4;
+    /* Broadcast mismatch is expected in Option 121 mode (Switch on home
+     * subnet, ZeroTier on 10.x). Log at INFO, not WARNING, so the UI
+     * does not present it as an error. */
     if (!lan_play->warned_broadcast_mismatch && ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
         ip_len >= header_len + 8 && !(READ_NET16(ip, 6) & 0x3fff) &&
         READ_NET16(ip, header_len + 2) == 35000 &&
-        is_nintendo_lan_broadcast(original_dst) && !CMP_IPV4(original_dst, dst)) {
+        is_nintendo_lan_broadcast(lan_play, original_dst) && !CMP_IPV4(original_dst, dst)) {
         lan_play->warned_broadcast_mismatch = true;
-        LLOG(LLOG_WARNING, "LAN broadcast mismatch: Switch uses %u.%u.%u.%u, ZeroTier uses %u.%u.%u.%u. Set the Switch subnet mask to %u.%u.%u.%u and restart LAN mode; PIA authentication uses the broadcast address, which header translation cannot repair.",
+        LLOG(LLOG_INFO, "LAN broadcast mismatch: Switch uses %u.%u.%u.%u, ZeroTier uses %u.%u.%u.%u. Option 121 mode: subnets differ by design.",
             original_dst[0], original_dst[1], original_dst[2], original_dst[3],
-            dst[0], dst[1], dst[2], dst[3], lan_play->zerotier_netmask[0], lan_play->zerotier_netmask[1],
-            lan_play->zerotier_netmask[2], lan_play->zerotier_netmask[3]);
+            dst[0], dst[1], dst[2], dst[3]);
     }
     if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP &&
         !(READ_NET16(ip, IPV4_OFF_FLAGS_FRAG_OFFSET) & 0x1fff) && ip_len >= header_len + 8) {
@@ -277,10 +414,27 @@ static bool lan_play_relay_wifi_ipv4(struct lan_play *lan_play, const u_char *fr
             return true; /* Handled: do not fall through to the legacy relay. */
         }
     }
-    if (CMP_IPV4(dst, lan_play->zerotier_broadcast_ip))
+    if (CMP_IPV4(dst, lan_play->zerotier_broadcast_ip)) {
+        LLOG(LLOG_INFO, "LANPLAY: forwarding broadcast to ZT, src %u.%u.%u.%u -> %u.%u.%u.%u, len %u, proto %u",
+             translated[IPV4_OFF_SRC], translated[IPV4_OFF_SRC+1], translated[IPV4_OFF_SRC+2], translated[IPV4_OFF_SRC+3],
+             dst[0], dst[1], dst[2], dst[3], (unsigned int)ip_len, ip[IPV4_OFF_PROTOCOL]);
+        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > header_len + 8) {
+            static const uint8_t home_sw[4] = {192, 168, 2, 254};
+            static const uint8_t zt_pc[4] = {10, 147, 17, 182};
+            static const uint8_t home_bc[4] = {192, 168, 2, 255};
+            static const uint8_t zt_bc[4] = {10, 147, 17, 255};
+            rewrite_payload_ips(translated + header_len + 8, ip_len - header_len - 8,
+                                home_sw, zt_pc, home_bc, zt_bc);
+            WRITE_NET16(translated, header_len + 6, 0);
+            WRITE_NET16(translated, header_len + 6, udp_checksum(translated, header_len, ip_len));
+        }
         lan_play_send_zerotier_ipv4_broadcast(lan_play, translated, ip_len);
-    else
+    } else {
+        LLOG(LLOG_INFO, "LANPLAY: forwarding unicast to ZT %u.%u.%u.%u -> %u.%u.%u.%u, len %zu",
+             translated[IPV4_OFF_SRC], translated[IPV4_OFF_SRC+1], translated[IPV4_OFF_SRC+2], translated[IPV4_OFF_SRC+3],
+             dst[0], dst[1], dst[2], dst[3], ip_len);
         lan_play_send_zerotier_ipv4(lan_play, dst, translated, ip_len);
+    }
     return true;
 }
 
@@ -343,15 +497,12 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
     const uint8_t *original_dst = ip + IPV4_OFF_DST;
     const bool broadcast = CMP_IPV4(original_dst, lan_play->zerotier_broadcast_ip);
-    /* Games join the remote console by its own address (learned from the room
-     * beacon), not by the relay PC's ZeroTier address. Classic lan-play routed
-     * those by Switch IP on the central server; on ZeroTier there is no
-     * server, so a unicast packet addressed to the locally detected Switch is
-     * delivered straight to this relay's console. Anything else addressed to
-     * neither us nor broadcast is still dropped. */
     const bool for_switch = !broadcast && CMP_IPV4(original_dst, lan_play->switch_ip);
     if (ip_len > ETHER_MTU || frame_len < ETHER_HEADER_LEN + ip_len ||
         (!broadcast && !CMP_IPV4(original_dst, lan_play->zerotier_ip) && !for_switch)) return false;
+    LLOG(LLOG_INFO, "LANPLAY: ZT incoming %u.%u.%u.%u -> %u.%u.%u.%u, len %u, broadcast=%d",
+         ip[IPV4_OFF_SRC], ip[IPV4_OFF_SRC+1], ip[IPV4_OFF_SRC+2], ip[IPV4_OFF_SRC+3],
+         original_dst[0], original_dst[1], original_dst[2], original_dst[3], ip_len, broadcast);
     if (for_switch && !lan_play->warned_direct_switch_delivery) {
         lan_play->warned_direct_switch_delivery = true;
         LLOG(LLOG_INFO, "Delivering ZeroTier traffic addressed to the local Switch %u.%u.%u.%u directly; the game joins the console address, not the relay address",
@@ -361,10 +512,89 @@ static bool lan_play_relay_zerotier_ipv4(struct lan_play *lan_play, const u_char
     uint8_t translated[ETHER_MTU];
     uint8_t wifi_broadcast[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
     memcpy(translated, ip, ip_len);
-    /* The console must use the overlay's subnet mask: PIA includes that
-     * broadcast address in its authenticated challenge nonce. Preserve it. */
     const uint8_t *dst = broadcast ? lan_play->zerotier_broadcast_ip : lan_play->switch_ip;
-    if (!rewrite_ipv4_addresses(translated, ip_len, ip + IPV4_OFF_SRC, dst)) return false;
+    const bool is_nat_return = !broadcast && CMP_IPV4(original_dst, lan_play->zerotier_ip) && !CMP_IPV4(original_dst, lan_play->switch_ip);
+    uint16_t nat_switch_port = 0;
+    if (is_nat_return) {
+        const size_t hdr_len = (ip[0] & 0x0f) * 4;
+        if (ip_len >= hdr_len + 4) {
+            uint16_t dst_port = READ_NET16(ip, hdr_len + 2);
+            time_t now = time(NULL);
+            for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+                if (lan_play->nat_table[i].used && lan_play->nat_table[i].expires > now &&
+                    lan_play->nat_table[i].pc_port == dst_port &&
+                    lan_play->nat_table[i].protocol == ip[IPV4_OFF_PROTOCOL]) {
+                    dst = lan_play->nat_table[i].switch_ip;
+                    nat_switch_port = lan_play->nat_table[i].switch_port;
+                    lan_play->nat_table[i].expires = now + 120;
+                    break;
+                }
+            }
+        }
+    }
+    static const uint8_t zt_net[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask[4] = {255, 255, 255, 0};
+    bool switch_on_zt = IS_SUBNET(lan_play->switch_ip, zt_net, zt_mask);
+    uint8_t peer_home_ip[4];
+    bool have_peer_home = false;
+    const uint8_t *src_for_header = ip + IPV4_OFF_SRC;
+    if (!switch_on_zt && !broadcast && IS_SUBNET(ip + IPV4_OFF_SRC, zt_net, zt_mask) &&
+        !CMP_IPV4(ip + IPV4_OFF_SRC, lan_play->zerotier_ip)) {
+        time_t now = time(NULL);
+        struct peer_map_entry *entry = NULL;
+        for (int i = 0; i < PEER_MAP_SIZE; i++) {
+            if (lan_play->peer_map[i].used && lan_play->peer_map[i].expires > now &&
+                CMP_IPV4(lan_play->peer_map[i].zt_ip, ip + IPV4_OFF_SRC)) {
+                entry = &lan_play->peer_map[i];
+                break;
+            }
+        }
+        if (!entry) {
+            for (int i = 0; i < PEER_MAP_SIZE; i++) {
+                if (!lan_play->peer_map[i].used || lan_play->peer_map[i].expires <= now) {
+                    entry = &lan_play->peer_map[i];
+                    break;
+                }
+            }
+        }
+        if (entry) {
+            if (!entry->used || entry->expires <= now) {
+                CPY_IPV4(entry->zt_ip, ip + IPV4_OFF_SRC);
+                if (lan_play->peer_map_next_octet < 200 || lan_play->peer_map_next_octet > 230) lan_play->peer_map_next_octet = 200;
+                CPY_IPV4(entry->home_ip, lan_play->wifi_subnet);
+                entry->home_ip[3] = lan_play->peer_map_next_octet++;
+                if (lan_play->peer_map_next_octet > 230) lan_play->peer_map_next_octet = 200;
+                entry->used = true;
+            }
+            entry->expires = now + 300;
+            CPY_IPV4(peer_home_ip, entry->home_ip);
+            have_peer_home = true;
+            src_for_header = peer_home_ip;
+        }
+    }
+    if (!rewrite_ipv4_addresses(translated, ip_len, src_for_header, dst)) return false;
+    if (is_nat_return && nat_switch_port != 0) {
+        const size_t hlen = (translated[0] & 0x0f) * 4;
+        if (ip_len >= hlen + 4) {
+            WRITE_NET16(translated, hlen + 2, nat_switch_port);
+            WRITE_NET16(translated, hlen + 6, 0);
+            if (translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
+                WRITE_NET16(translated, hlen + 6, udp_checksum(translated, hlen, ip_len));
+            }
+        }
+    }
+    {
+        const size_t hlen = (translated[0] & 0x0f) * 4;
+        if (!switch_on_zt && translated[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP && ip_len > hlen + 8 && have_peer_home) {
+            static const uint8_t zt_bc[4] = {10, 147, 17, 255};
+            uint8_t home_bc[4];
+            CPY_IPV4(home_bc, lan_play->wifi_broadcast);
+            rewrite_payload_ips(translated + hlen + 8, ip_len - hlen - 8,
+                                ip + IPV4_OFF_SRC, peer_home_ip, zt_bc, home_bc);
+            WRITE_NET16(translated, hlen + 6, 0);
+            WRITE_NET16(translated, hlen + 6, udp_checksum(translated, hlen, ip_len));
+        }
+    }
     int ret = lan_play_send_wifi_ipv4(lan_play, broadcast ? wifi_broadcast : lan_play->switch_mac, translated, ip_len);
     const size_t header_len = (ip[0] & 15) * 4;
     if (ret == 0 && !broadcast && ip[9] == IPV4_PROTOCOL_UDP &&
@@ -548,6 +778,7 @@ int lan_play_close(struct lan_play *lan_play)
 {
     int ret;
 
+    dhcp_sock_stop(lan_play);
     if (options.discover_switch) uv_timer_stop(&lan_play->switch_discovery_timer);
     if (options.diagnostics) LLOG(LLOG_INFO, "Host UDP socket copies drained: %llu (not additional forwarding)",
         (unsigned long long)native_udp_guard_received(lan_play->udp_guard));
@@ -610,7 +841,7 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
         ip = body + IPV4_OFF_SRC;
         direct = CMP_MAC(frame, all) &&
             (CMP_IPV4(body + IPV4_OFF_DST, lp->zerotier_broadcast_ip) ||
-             is_nintendo_lan_broadcast(body + IPV4_OFF_DST));
+             is_nintendo_lan_broadcast(lp, body + IPV4_OFF_DST));
     } else return false;
     const bool zt_dest = is_zerotier_destination(lp, ip);
     const bool wifi_dest = lp->wifi_subnet_known &&
@@ -635,7 +866,17 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
                  ip[0], ip[1], ip[2], ip[3]);
         return false;
     }
-    if (lp->switch_seen && !CMP_IPV4(ip, lp->switch_ip)) return false;
+    /* Switch IP changed (DHCP reassigned). If MAC matches, update IP. */
+    if (lp->switch_seen && !CMP_IPV4(ip, lp->switch_ip)) {
+        if (CMP_MAC(frame + 6, lp->switch_mac)) {
+            CPY_IPV4(lp->switch_ip, ip);
+            LLOG(LLOG_INFO, "Switch IP changed to %u.%u.%u.%u (MAC %02x:%02x:%02x:%02x:%02x:%02x)",
+                 ip[0], ip[1], ip[2], ip[3],
+                 frame[6], frame[7], frame[8], frame[9], frame[10], frame[11]);
+        } else {
+            return false;
+        }
+    }
     bool changed = !lp->switch_seen || !CMP_MAC(frame + 6, lp->switch_mac);
     if (lp->switch_seen && changed && (lp->switch_mac_confirmed || !direct)) {
         if (++lp->switch_mac_conflicts == 1)
@@ -658,8 +899,11 @@ static bool learn_local_switch(struct lan_play *lp, const uint8_t *frame, size_t
             LLOG(LLOG_INFO, "Switch candidate carries a Nintendo vendor prefix; treating as console");
         }
         if (dhcp) {
-            if (options.dhcp_server)
-                LLOG(LLOG_WARNING, "Switch took address %u.%u.%u.%u from the hotspot's own DHCP instead of the relay's 10.147.17.x pool: room joins will fail. On the Switch go to System Settings > Internet > Internet Settings > this network > Delete Settings, then rejoin while the relay is running (restart the relay too), and confirm the Switch shows a 10.147.17.x address.",
+            if (options.dhcp_server && dhcp_is_our_lease(lp, frame + 6, ip))
+                LLOG(LLOG_INFO, "Switch took our DHCP offer %u.%u.%u.%u; this PC is its gateway",
+                    ip[0], ip[1], ip[2], ip[3]);
+            else if (options.dhcp_server)
+                LLOG(LLOG_WARNING, "Switch took address %u.%u.%u.%u from the home router instead of the relay; LAN play needs our offer. Toggle the Switch Wi-Fi off and on while the relay runs to retry the race.",
                     ip[0], ip[1], ip[2], ip[3]);
             else
                 LLOG(LLOG_INFO, "Switch candidate uses a DHCP/Automatic address on the Wi-Fi subnet");
@@ -692,8 +936,59 @@ void lan_play_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr *pkt_head
     /* DHCP client traffic is answered locally when --dhcp is on; it must
      * never reach discovery or the ZeroTier relay path. */
     if (dhcp_server_consume(lan_play, packet, pkt_header->caplen)) return;
+    /* Proxy ARP: answer ARP REQUESTs for the ZeroTier gateway IP on Wi-Fi. */
+    if (pkt_header->caplen >= ETHER_HEADER_LEN + ARP_LEN &&
+        READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_ARP &&
+        READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_HARDWARE) == ARP_HARDTYPE_ETHER &&
+        READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_PROTOCOL) == ETHER_TYPE_IPV4 &&
+        packet[ETHER_HEADER_LEN + 4] == 6 &&
+        packet[ETHER_HEADER_LEN + 5] == 4 &&
+        READ_NET16(packet + ETHER_HEADER_LEN, ARP_OFF_OPCODE) == ARP_OPCODE_REQUEST &&
+        CMP_MAC(packet + ETHER_OFF_SRC, packet + ETHER_HEADER_LEN + ARP_OFF_SENDER_MAC)) {
+        const uint8_t *arp = packet + ETHER_HEADER_LEN;
+        const uint8_t *target_ip = arp + ARP_OFF_TARGET_IP;
+        const uint8_t *sender_ip = arp + ARP_OFF_SENDER_IP;
+        const uint8_t *sender_mac = arp + ARP_OFF_SENDER_MAC;
+        if (CMP_IPV4(target_ip, lan_play->zerotier_ip)) {
+            int ret = lan_play_send_wifi_arp_reply(lan_play, sender_mac, target_ip, sender_ip);
+            if (ret != 0) LLOG(LLOG_ERROR, "Wi-Fi proxy ARP reply failed %d", ret);
+            return;
+        }
+    }
+
+
+    
     if (!learn_local_switch(lan_play, packet, pkt_header->caplen)) return;
     packet_set_mac(&lan_play->packet_ctx, mac);
+    if (pkt_header->caplen >= ETHER_HEADER_LEN + IPV4_HEADER_LEN &&
+        READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_IPV4) {
+        const uint8_t *ip = packet + ETHER_HEADER_LEN;
+        if (CMP_IPV4(ip + IPV4_OFF_DST, lan_play->wifi_ip)) {
+            const size_t hdr_len = (ip[0] & 0x0f) * 4;
+            const uint16_t ip_len = READ_NET16(ip, IPV4_OFF_TOTAL_LEN);
+            if (ip_len >= hdr_len + 4 && pkt_header->caplen >= ETHER_HEADER_LEN + ip_len) {
+                uint16_t dst_port = READ_NET16(ip, hdr_len + 2);
+                time_t now = time(NULL);
+                for (int i = 0; i < NAT_TABLE_SIZE; i++) {
+                    if (lan_play->nat_table[i].used && lan_play->nat_table[i].expires > now &&
+                        lan_play->nat_table[i].pc_port == dst_port &&
+                        lan_play->nat_table[i].protocol == ip[IPV4_OFF_PROTOCOL]) {
+                        uint8_t nat_packet[ETHER_MTU];
+                        memcpy(nat_packet, ip, ip_len);
+                        if (!rewrite_ipv4_addresses(nat_packet, ip_len, ip + IPV4_OFF_SRC, lan_play->nat_table[i].switch_ip)) break;
+                        WRITE_NET16(nat_packet, hdr_len + 2, lan_play->nat_table[i].switch_port);
+                        WRITE_NET16(nat_packet, hdr_len + 6, 0);
+                        if (ip[IPV4_OFF_PROTOCOL] == IPV4_PROTOCOL_UDP) {
+                            WRITE_NET16(nat_packet, hdr_len + 6, udp_checksum(nat_packet, hdr_len, ip_len));
+                        }
+                        lan_play->nat_table[i].expires = now + 120;
+                        lan_play_send_wifi_ipv4(lan_play, lan_play->switch_mac, nat_packet, ip_len);
+                        return;
+                    }
+                }
+            }
+        }
+    }
     if (pkt_header->caplen >= ETHER_HEADER_LEN + IPV4_HEADER_LEN &&
         READ_NET16(packet, ETHER_OFF_TYPE) == ETHER_TYPE_IPV4 &&
         lan_play_relay_wifi_ipv4(lan_play, packet, pkt_header->caplen)) return;
@@ -705,6 +1000,7 @@ void lan_play_zerotier_pcap_handler(uv_pcap_t *handle, const struct pcap_pkthdr 
     if (CMP_MAC(packet + ETHER_OFF_SRC, mac)) {
         diagnostic_log_frame(lan_play, "HOST ZeroTier", packet, pkt_header->caplen);
         return;
+
     }
     // Keep overlay neighbors separate from the Wi-Fi ARP table. Learning from
     // discovery IPv4 as well as ARP lets the first browse reply use unicast.
@@ -781,6 +1077,10 @@ int lan_play_init(struct lan_play *lan_play)
      * relay's DHCP server is the only one answering the Switch. The call
      * is idempotent and also clears stale rules when --dhcp is off. */
     winfw_set_hotspot_dhcp_block(options.dhcp_server);
+    /* Inbound allow for the socket DHCP fast path (UDP/67). The pcap path
+     * bypasses the host firewall via Npcap injection, but the socket path
+     * goes through the host stack. Harmless when the socket falls back. */
+    winfw_set_dhcp_allow(options.dhcp_server);
     lan_play->broadcast = options.broadcast;
     lan_play->pmtu = options.pmtu;
 
@@ -950,6 +1250,18 @@ int lan_play_init(struct lan_play *lan_play)
         }
     }
 
+    /* Socket fast path for DHCP: answers DISCOVERs straight from UDP/67 and
+     * wins the race against home routers that the pcap path loses. Falls
+     * back to pcap injection when the port is unavailable. */
+    if (options.dhcp_server && lan_play->wifi_subnet_known) {
+        if (dhcp_sock_start(lan_play) == 0) {
+            LLOG(LLOG_INFO, "DHCP: socket fast path active on UDP/67");
+            winfw_set_hotspot_dhcp_block(false);
+        } else {
+            LLOG(LLOG_INFO, "DHCP: UDP/67 unavailable, answering via pcap injection");
+        }
+    }
+
     return ret;
 }
 
@@ -979,6 +1291,21 @@ int lan_play_send_zerotier_arp_reply(struct lan_play *lan_play, const uint8_t *t
     diagnostic_log_frame(lan_play, "TX ZeroTier", frame, sizeof(frame));
     int ret = uv_pcap_sendpacket(&lan_play->zerotier_pcap, frame, sizeof(frame));
     if (ret != 0) LLOG(LLOG_ERROR, "ZeroTier ARP reply send failed %d", ret);
+    return ret;
+}
+int lan_play_send_wifi_arp_reply(struct lan_play *lan_play, const uint8_t *target_mac, const uint8_t *target_ip, const uint8_t *sender_ip) {
+    uint8_t frame[42] = {0};
+    CPY_MAC(frame + ETHER_OFF_DST, target_mac); CPY_MAC(frame + ETHER_OFF_SRC, lan_play->wifi_mac); WRITE_NET16(frame, 12, ETHER_TYPE_ARP);
+    WRITE_NET16(frame, 14, ARP_HARDTYPE_ETHER); WRITE_NET16(frame, 16, ETHER_TYPE_IPV4);
+    frame[18] = 6; frame[19] = 4; WRITE_NET16(frame, 20, ARP_OPCODE_REPLY);
+    CPY_MAC(frame + ETHER_HEADER_LEN + ARP_OFF_SENDER_MAC, lan_play->wifi_mac);
+    CPY_IPV4(frame + ETHER_HEADER_LEN + ARP_OFF_SENDER_IP, target_ip);
+    CPY_MAC(frame + ETHER_HEADER_LEN + ARP_OFF_TARGET_MAC, target_mac);
+    CPY_IPV4(frame + ETHER_HEADER_LEN + ARP_OFF_TARGET_IP, sender_ip);
+    lan_play->wifi_tx++;
+    diagnostic_log_frame(lan_play, "TX Wi-Fi", frame, sizeof(frame));
+    int ret = uv_pcap_sendpacket(&lan_play->pcap, frame, sizeof(frame));
+    if (ret != 0) LLOG(LLOG_ERROR, "Wi-Fi ARP reply send failed %d", ret);
     return ret;
 }
 int lan_play_send_zerotier_ipv4(struct lan_play *lan_play, const void *dst_ip, const void *packet, uint16_t len) {

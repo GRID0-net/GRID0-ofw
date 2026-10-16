@@ -95,11 +95,68 @@ int send_arp_request(
 
 int arp_request(struct packet_ctx *self, const struct arp *arp)
 {
+    /* If the target is our gateway IP (10.147.17.1), answer it even when it is
+     * not in this interface's subnet. On home Wi-Fi the Switch has 10.147.17.x
+     * but ARPs on the Wi-Fi interface, whose subnet is 192.168.2.0/24. */
+    if (self->arg && CMP_IPV4(arp->target_ip, self->arg->packet_ctx.ip)) {
+        if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
+            return 0;
+        }
+        return send_arp(
+            self,
+            ARP_OPCODE_REPLY,
+            self->mac,
+            arp->target_ip,
+            arp->sender_mac,
+            arp->sender_ip
+        );
+    }
+    /* Proxy ARP for ZeroTier subnet on Wi-Fi: answer ARPs for 10.147.17.x
+     * with our Wi-Fi MAC, so the Switch thinks those hosts are on Wi-Fi.
+     * We forward the packets to ZeroTier. */
+    static const uint8_t zt_net[4] = {10, 147, 17, 0};
+    static const uint8_t zt_mask[4] = {255, 255, 255, 0};
+    if (self->arg && !self->arg->ingress_zerotier) {
+        if (IS_SUBNET(arp->target_ip, zt_net, zt_mask)) {
+            if (CMP_IPV4(arp->sender_ip, NONE_IP) || CMP_IPV4(arp->sender_ip, arp->target_ip)) {
+                return 0;
+            }
+            return send_arp(
+                self,
+                ARP_OPCODE_REPLY,
+                self->mac,
+                arp->target_ip,
+                arp->sender_mac,
+                arp->sender_ip
+            );
+        }
+    }
+    /* Proxy ARP on ZeroTier for the Switch: answer ARPs for the Switch's
+     * 10.147.17.x address with our ZeroTier MAC, so ZeroTier peers send
+     * to us and we forward to the Switch via Wi-Fi. */
+    if (self->arg && self->arg->ingress_zerotier) {
+        if (CMP_IPV4(arp->target_ip, self->arg->switch_ip)) {
+            if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
+                return 0;
+            }
+            return send_arp(
+                self,
+                ARP_OPCODE_REPLY,
+                self->mac,
+                arp->target_ip,
+                arp->sender_mac,
+                arp->sender_ip
+            );
+        }
+    }
     if (IS_SUBNET(arp->target_ip, self->subnet_net, self->subnet_mask)) {
         if (CMP_IPV4(arp->target_ip, arp->sender_ip)) {
             return 0;
         }
         if (CMP_IPV4(arp->sender_ip, NONE_IP)) {
+            return 0;
+        }
+        if (options.dhcp_server && !CMP_IPV4(arp->target_ip, self->ip)) {
             return 0;
         }
         if (self->arg->ingress_zerotier) {
