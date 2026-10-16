@@ -28,14 +28,15 @@ jobs:
           fi
       - name: Build release APK
         working-directory: android
+        run: gradle assembleRelease
+      - name: Sign APK
         env:
-          KEYSTORE_PATH: ${{ github.workspace }}/android/release.keystore
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'grid0pass' }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'grid0' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'grid0pass' }}
-        run: gradle assembleRelease
-      - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk "android/app/build/outputs/apk/release/GRID0 ofw v3.0.0.apk"
+        run: |
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | head -1)
+          "$APKSIGNER" sign --ks android/release.keystore --ks-pass pass:"$KEYSTORE_PASSWORD" --ks-key-alias "$KEY_ALIAS" --key-pass pass:"$KEY_PASSWORD" --out "android/app/build/outputs/apk/release/GRID0 ofw v3.0.0.apk" android/app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Upload keystore artifact
         uses: actions/upload-artifact@v4
         with:
