@@ -94,77 +94,11 @@ void parse_ipv4(const struct ether_frame *ether, struct ipv4 *ipv4)
     ipv4->payload = packet + ipv4->header_len;
 }
 
-static const uint8_t zt_switch_ip[4] = {10, 147, 17, 253};
-static const uint8_t home_switch_ip[4] = {192, 168, 2, 254};
-static const uint8_t zt_net[4] = {10, 147, 17, 0};
-static const uint8_t zt_mask[4] = {255, 255, 255, 0};
-
-static bool is_zt_net(const uint8_t ip[4])
-{
-    for (int i = 0; i < 4; i++) {
-        if ((ip[i] & zt_mask[i]) != zt_net[i]) return false;
-    }
-    return true;
-}
-
-static void rewrite_ipv4_addr(uint8_t *packet, int off, const uint8_t new_ip[4])
-{
-    CPY_IPV4(packet + off, new_ip);
-    WRITE_NET16(packet, IPV4_OFF_CHECKSUM, 0);
-    uint16_t csum = calc_checksum(packet, IPV4_HEADER_LEN);
-    WRITE_NET16(packet, IPV4_OFF_CHECKSUM, csum);
-}
-
 int process_ipv4(struct packet_ctx *arg, const struct ether_frame *ether)
 {
     struct ipv4 ipv4;
     parse_ipv4(ether, &ipv4);
     arp_set(arg, ipv4.ether->src, ipv4.src);
-
-    if (!arg->arg->ingress_zerotier && CMP_IPV4(ipv4.src, home_switch_ip) && is_zt_net(ipv4.dst)) {
-        LLOG(LLOG_INFO, "BRIDGE: home->zt unicast %d.%d.%d.%d -> %d.%d.%d.%d proto %d",
-             ipv4.src[0], ipv4.src[1], ipv4.src[2], ipv4.src[3],
-             ipv4.dst[0], ipv4.dst[1], ipv4.dst[2], ipv4.dst[3], ipv4.protocol);
-        uint8_t *pkt = (uint8_t *)ether->raw;
-        rewrite_ipv4_addr(pkt + 14, IPV4_OFF_SRC, zt_switch_ip);
-        return lan_play_send_zerotier_ipv4(arg->arg, ipv4.dst, pkt + 14, ipv4.total_len);
-    }
-
-    static const uint8_t home_broadcast[4] = {192, 168, 2, 255};
-    static const uint8_t zt_broadcast[4] = {10, 147, 17, 255};
-    if (!arg->arg->ingress_zerotier && CMP_IPV4(ipv4.src, home_switch_ip) && CMP_IPV4(ipv4.dst, home_broadcast)) {
-        LLOG(LLOG_INFO, "BRIDGE: home broadcast -> zt broadcast, len %d", ipv4.total_len);
-        uint8_t *pkt = (uint8_t *)ether->raw;
-        rewrite_ipv4_addr(pkt + 14, IPV4_OFF_SRC, zt_switch_ip);
-        rewrite_ipv4_addr(pkt + 14, IPV4_OFF_DST, zt_broadcast);
-        return lan_play_send_zerotier_ipv4_broadcast(arg->arg, pkt + 14, ipv4.total_len);
-    }
-
-    if (arg->arg->ingress_zerotier && CMP_IPV4(ipv4.dst, zt_broadcast)) {
-        uint8_t *pkt = (uint8_t *)ether->raw;
-        rewrite_ipv4_addr(pkt + 14, IPV4_OFF_DST, home_broadcast);
-        uint8_t dst_mac[6];
-        struct payload part;
-        memset(dst_mac, 0xff, 6);
-        part.ptr = pkt + 14;
-        part.len = ipv4.total_len;
-        part.next = NULL;
-        return send_ether(arg, dst_mac, ETHER_TYPE_IPV4, &part);
-    }
-
-    if (arg->arg->ingress_zerotier && CMP_IPV4(ipv4.dst, zt_switch_ip)) {
-        LLOG(LLOG_INFO, "BRIDGE: zt -> home unicast %d.%d.%d.%d -> 10.147.17.253 len %d",
-             ipv4.src[0], ipv4.src[1], ipv4.src[2], ipv4.src[3], ipv4.total_len);
-        uint8_t *pkt = (uint8_t *)ether->raw;
-        rewrite_ipv4_addr(pkt + 14, IPV4_OFF_DST, home_switch_ip);
-        uint8_t dst_mac[6];
-        struct payload part;
-        arp_get_mac_by_ip(arg, dst_mac, home_switch_ip);
-        part.ptr = pkt + 14;
-        part.len = ipv4.total_len;
-        part.next = NULL;
-        return send_ether(arg, dst_mac, ETHER_TYPE_IPV4, &part);
-    }
 
     if (CMP_IPV4(ipv4.dst, arg->ip)) {
         switch (ipv4.protocol) {

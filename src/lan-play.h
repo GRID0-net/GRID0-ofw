@@ -47,28 +47,6 @@ struct lan_client_fragment {
     uint8_t buffer[ETHER_MTU];
 };
 
-struct nat_entry {
-    uint8_t switch_ip[4];
-    uint16_t switch_port;
-    uint16_t pc_port;
-    uint8_t dest_ip[4];
-    uint16_t dest_port;
-    uint8_t protocol;
-    time_t expires;
-    bool used;
-};
-
-#define NAT_TABLE_SIZE 64
-
-struct peer_map_entry {
-    uint8_t zt_ip[4];
-    uint8_t home_ip[4];
-    time_t expires;
-    bool used;
-};
-
-#define PEER_MAP_SIZE 32
-
 struct lan_play {
     struct packet_ctx packet_ctx;
 
@@ -107,13 +85,6 @@ struct lan_play {
     bool warned_broadcast_mismatch;
     bool warned_direct_switch_delivery;
     struct dhcp_server_state dhcp_state;
-    uv_udp_t dhcp_sock;
-    bool dhcp_sock_active;
-    int dhcp_sock_fd;
-    int dhcp_sock_zt_fd;
-    uv_thread_t dhcp_thread;
-    uint8_t dhcp_router_ip[4];
-    bool dhcp_router_known;
     struct packet_ctx zerotier_neighbors;
     struct native_udp_guard *udp_guard;
     bool wifi_delivery_probe_sent;
@@ -146,10 +117,6 @@ struct lan_play {
 
     struct gateway *gateway;
     char last_err[1024];
-    struct nat_entry nat_table[NAT_TABLE_SIZE];
-    uint16_t nat_next_port;
-    struct peer_map_entry peer_map[PEER_MAP_SIZE];
-    uint8_t peer_map_next_octet;
 
     uint64_t upload_byte;
     uint64_t download_byte;
@@ -185,8 +152,6 @@ struct cli_options {
     bool status_events;
     bool discover_switch;
     bool dhcp_server;
-    bool dhcp_option121;
-    char *dhcp_router;
     bool dns_france_first;
     char *capture_prefix;
 
