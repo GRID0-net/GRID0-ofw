@@ -1,0 +1,47 @@
+plugins {
+    id("com.android.application")
+}
+
+android {
+    namespace = "com.grid0.ofw"
+    compileSdk = 34
+
+    defaultConfig {
+        applicationId = "com.grid0.ofw"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "3.0.0"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += ""
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = "src/main/cpp/CMakeLists.txt"
+            version = "3.22.1"
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+}
