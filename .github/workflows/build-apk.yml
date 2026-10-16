@@ -18,7 +18,9 @@ jobs:
       - name: Build debug APK
         working-directory: android
         run: gradle assembleDebug
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "android/app/build/outputs/apk/debug/GRID0 ofw v3.0.0.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/debug/GRID0 ofw v3.0.0.apk
