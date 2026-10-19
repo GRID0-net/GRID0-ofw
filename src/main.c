@@ -192,12 +192,14 @@ int parse_arguments(int argc, char **argv)
 
     options.broadcast = false;
     options.pmtu = 0;
-    options.fake_internet = false;
+    options.fake_internet = true;
     options.list_if = false;
     options.diagnostics = false;
     options.status_events = false;
     options.discover_switch = true;
     options.dhcp_server = false;
+    options.dhcp_option121 = false;
+    options.dhcp_router = NULL;
 
     options.netif = NULL;
     options.zerotier_if = NULL;
@@ -304,6 +306,11 @@ int parse_arguments(int argc, char **argv)
             options.discover_switch = false;
         } else if (!strcmp(arg, "--dhcp")) {
             options.dhcp_server = true;
+        } else if (!strcmp(arg, "--dhcp-option121")) {
+            options.dhcp_option121 = true;
+        } else if (!strcmp(arg, "--dhcp-router")) {
+            CHECK_PARAM();
+            options.dhcp_router = argv[++i];
         } else if (!strcmp(arg, "--dns-france-first")) {
             options.dns_france_first = true;
         } else if (!strcmp(arg, "--broadcast")) {
@@ -390,6 +397,8 @@ void print_help(const char *name)
         "        [--capture-prefix <path>] save five packet traces, including game payloads\n"
         "        [--no-discover-switch] disable automatic local Switch ARP discovery\n"
         "        [--dhcp] run a DHCP server for Automatic/DHCP Switches (Nintendo devices only)\n"
+        "        [--dhcp-option121] test: also send DHCP option 121 classless routes (game subnet via this PC)\n"
+        "        [--dhcp-router <IPv4>] override the real router IP used for option 121 (default: detected)\n"
         "        [--dns-france-first] list the France 90DNS server before the US one\n"
         "        [--pmtu <pmtu>]\n"
         "        [--socks5-server-addr <addr>]\n"
@@ -523,7 +532,7 @@ int old_main()
         RT_ASSERT(uv_timer_start(&control_timer, windows_control_cb, 0, 100) == 0);
     }
 #endif
-    eprintf("Relay started (PID %d)\n", (int)getpid());
+    eprintf("Relay started (PID %d) [BUILD MARKER: ZT-SUBNET-TEST]\n", (int)getpid());
     ret = uv_run(lan_play->loop, UV_RUN_DEFAULT);
     if (ret) {
         LLOG(LLOG_ERROR, "uv_run %d", ret);
