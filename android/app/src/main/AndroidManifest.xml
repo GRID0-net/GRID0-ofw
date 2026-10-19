@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <queries>
+        <package android:name="com.zerotier.one" />
+    </queries>
+
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application
+        android:label="GRID0 ofw"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <service
+            android:name=".OverlayService"
+            android:exported="false" />
+
+        <service
+            android:name=".VpnMonitorService"
+            android:exported="false" />
+    </application>
+
+</manifest>
