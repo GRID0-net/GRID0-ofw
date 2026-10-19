@@ -14,6 +14,7 @@ import android.os.Looper;
 
 public class VpnMonitorService extends Service {
     private BroadcastReceiver receiver;
+
     private Handler timeoutHandler = new Handler(Looper.getMainLooper());
 
     @Override
@@ -26,6 +27,7 @@ public class VpnMonitorService extends Service {
         if (receiver != null) {
             return START_NOT_STICKY;
         }
+
         receiver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
@@ -44,20 +46,25 @@ public class VpnMonitorService extends Service {
                 stopSelf();
             }
         }, 300000);
+
         return START_NOT_STICKY;
     }
 
     private boolean isVpnConnected() {
         ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+
         if (cm == null) {
             return false;
         }
+
         for (Network network : cm.getAllNetworks()) {
             NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+
             if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
                 return true;
             }
         }
+
         return false;
     }
 
@@ -68,9 +75,12 @@ public class VpnMonitorService extends Service {
                 unregisterReceiver(receiver);
             } catch (IllegalArgumentException e) {
             }
+
             receiver = null;
         }
+
         timeoutHandler.removeCallbacksAndMessages(null);
+
         super.onDestroy();
     }
 }

@@ -32,13 +32,16 @@ public class OverlayService extends Service {
         if (overlayView != null) {
             return START_NOT_STICKY;
         }
+
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+
         LinearLayout outer = new LinearLayout(this);
         outer.setOrientation(LinearLayout.HORIZONTAL);
         outer.setBackgroundColor(Color.argb(230, 0, 0, 0));
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
+
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         layout.setPadding(pad, pad, pad, pad);
         LinearLayout.LayoutParams contentParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
@@ -99,28 +102,36 @@ public class OverlayService extends Service {
                 if (event.getAction() == MotionEvent.ACTION_DOWN) {
                     dragStartY = event.getRawY();
                     dragStartParamY = overlayParams.y;
+
                     return true;
                 }
+
                 if (event.getAction() == MotionEvent.ACTION_MOVE) {
                     int newY = (int) (dragStartParamY + (event.getRawY() - dragStartY));
                     DisplayMetrics m = new DisplayMetrics();
                     windowManager.getDefaultDisplay().getMetrics(m);
+
                     if (newY < 0) {
                         newY = 0;
                     }
+
                     if (newY > m.heightPixels - 100) {
                         newY = m.heightPixels - 100;
                     }
+
                     overlayParams.y = newY;
                     windowManager.updateViewLayout(overlayView, overlayParams);
+
                     return true;
                 }
+
                 return false;
             }
         });
 
         overlayView = outer;
         windowManager.addView(overlayView, overlayParams);
+
         return START_NOT_STICKY;
     }
 
@@ -130,6 +141,7 @@ public class OverlayService extends Service {
             windowManager.removeView(overlayView);
             overlayView = null;
         }
+
         super.onDestroy();
     }
 }
