@@ -1,147 +1,128 @@
 package com.grid0.ofw;
 
 import android.app.Activity;
-import android.app.PendingIntent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageInfo;
-import android.content.pm.PackageInstaller;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
-import android.view.ViewGroup;
-import android.widget.ImageButton;
+import android.view.View;
+import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONObject;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-
 public class MainActivity extends Activity {
-    private static final String VERSION_URL = "https://raw.githubusercontent.com/GRID0-net/GRID0-ofw/3.0.0/android/version.json";
+    private static final String ZEROTIER_PACKAGE = "com.zerotier.one";
+    private static final String GRID0_NETWORK_ID = "8bd5124fd68185ec";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         LinearLayout layout = new LinearLayout(this);
-        layout.setBackgroundColor(Color.BLACK);
-        layout.setGravity(Gravity.CENTER);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setLayoutParams(new ViewGroup.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            ViewGroup.LayoutParams.MATCH_PARENT));
+        layout.setGravity(Gravity.CENTER);
+        layout.setBackgroundColor(Color.BLACK);
+        int pad = (int) (24 * getResources().getDisplayMetrics().density);
+        layout.setPadding(pad, pad, pad, pad);
 
-        ImageButton button = new ImageButton(this);
-        button.setImageResource(R.drawable.logo);
-        button.setBackgroundColor(Color.TRANSPARENT);
-        button.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-        button.setLayoutParams(new ViewGroup.LayoutParams(600, 600));
-        button.setOnClickListener(v -> checkForUpdate());
+        TextView title = new TextView(this);
+        title.setText("GRID0");
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(28);
+        title.setGravity(Gravity.CENTER);
+        layout.addView(title);
 
-        layout.addView(button);
+        if (!isZeroTierInstalled()) {
+            TextView msg = new TextView(this);
+            msg.setText("GRID0 needs ZeroTier to connect. Install ZeroTier One from the Play Store.");
+            msg.setTextColor(Color.WHITE);
+            msg.setTextSize(16);
+            msg.setGravity(Gravity.CENTER);
+            layout.addView(msg);
+
+            Button install = new Button(this);
+            install.setText("Get ZeroTier");
+            install.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    openZeroTierStore();
+                }
+            });
+            layout.addView(install);
+        } else {
+            TextView msg = new TextView(this);
+            msg.setText("ZeroTier is installed.\nGRID0 Network ID:\n" + GRID0_NETWORK_ID);
+            msg.setTextColor(Color.WHITE);
+            msg.setTextSize(16);
+            msg.setGravity(Gravity.CENTER);
+            layout.addView(msg);
+
+            TextView hint = new TextView(this);
+            hint.setText("Tap Connect. The Network ID is copied and a guide appears over ZeroTier. In ZeroTier, tap +, paste the ID, and enable the connection.");
+            hint.setTextColor(Color.WHITE);
+            hint.setTextSize(14);
+            hint.setGravity(Gravity.CENTER);
+            layout.addView(hint);
+
+            Button connect = new Button(this);
+            connect.setText("Connect to GRID0 Network");
+            connect.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    connectToGrid0Network();
+                }
+            });
+            layout.addView(connect);
+        }
+
         setContentView(layout);
     }
 
-    private void checkForUpdate() {
-        new Thread(() -> {
-            try {
-                JSONObject info = fetchJson(VERSION_URL);
-                String latest = info.getString("version");
-                String url = info.getString("url");
-                String current = currentVersion();
-                if (latest.equals(current)) {
-                    toast("Already on latest version");
-                    return;
-                }
-                toast("Downloading update " + latest);
-                File apk = downloadApk(url);
-                runOnUiThread(() -> installApk(apk));
-            } catch (Exception e) {
-                toast("Update check failed");
-            }
-        }).start();
-    }
-
-    private JSONObject fetchJson(String urlStr) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-        conn.setConnectTimeout(10000);
-        conn.setReadTimeout(10000);
-        try (InputStream in = conn.getInputStream();
-             BufferedReader reader = new BufferedReader(new InputStreamReader(in))) {
-            StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line);
-            }
-            return new JSONObject(sb.toString());
-        } finally {
-            conn.disconnect();
-        }
-    }
-
-    private String currentVersion() {
+    private boolean isZeroTierInstalled() {
         try {
-            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
-            return info.versionName;
-        } catch (Exception e) {
-            return "";
+            getPackageManager().getPackageInfo(ZEROTIER_PACKAGE, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
         }
     }
 
-    private File downloadApk(String urlStr) throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(30000);
-        File apk = new File(getExternalFilesDir(null), "update.apk");
-        try (InputStream in = conn.getInputStream();
-             FileOutputStream out = new FileOutputStream(apk)) {
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-            }
-        } finally {
-            conn.disconnect();
-        }
-        return apk;
-    }
-
-    private void installApk(File apk) {
+    private void openZeroTierStore() {
         try {
-            PackageInstaller installer = getPackageManager().getPackageInstaller();
-            PackageInstaller.SessionParams params = new PackageInstaller.SessionParams(
-                PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-            int sessionId = installer.createSession(params);
-            PackageInstaller.Session session = installer.openSession(sessionId);
-            try (OutputStream out = session.openWrite("update", 0, apk.length());
-                 InputStream in = new FileInputStream(apk)) {
-                byte[] buf = new byte[8192];
-                int n;
-                while ((n = in.read(buf)) != -1) {
-                    out.write(buf, 0, n);
-                }
-                session.fsync(out);
-            }
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.setAction("INSTALL_COMPLETE");
-            PendingIntent pending = PendingIntent.getActivity(this, sessionId, intent, PendingIntent.FLAG_MUTABLE);
-            session.commit(pending.getIntentSender());
-            session.close();
-        } catch (Exception e) {
-            toast("Install failed");
+            Intent store = new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + ZEROTIER_PACKAGE));
+            store.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(store);
+        } catch (android.content.ActivityNotFoundException e) {
+            Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + ZEROTIER_PACKAGE));
+            web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(web);
         }
     }
 
-    private void toast(String msg) {
-        runOnUiThread(() -> Toast.makeText(MainActivity.this, msg, Toast.LENGTH_SHORT).show());
+    private void connectToGrid0Network() {
+        if (!android.provider.Settings.canDrawOverlays(this)) {
+            Toast.makeText(this, "Enable Display over other apps for GRID0, then tap Connect again", Toast.LENGTH_LONG).show();
+            Intent settings = new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName()));
+            settings.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(settings);
+            return;
+        }
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        clipboard.setPrimaryClip(ClipData.newPlainText("GRID0 Network ID", GRID0_NETWORK_ID));
+        Toast.makeText(this, "Network ID copied", Toast.LENGTH_SHORT).show();
+        startService(new Intent(this, OverlayService.class));
+        Intent launch = getPackageManager().getLaunchIntentForPackage(ZEROTIER_PACKAGE);
+        if (launch != null) {
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(launch);
+        } else {
+            stopService(new Intent(this, OverlayService.class));
+            Toast.makeText(this, "Could not open ZeroTier", Toast.LENGTH_SHORT).show();
+        }
     }
 }
