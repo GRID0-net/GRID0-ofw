@@ -4,7 +4,9 @@ import android.app.Service;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
+import android.graphics.Typeface;
 import android.os.IBinder;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
@@ -37,16 +39,19 @@ public class OverlayService extends Service {
         title.setText("GRID0 Setup");
         title.setTextColor(Color.WHITE);
         title.setTextSize(18);
+        title.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         layout.addView(title);
 
         TextView steps = new TextView(this);
         steps.setText("1. Tap ADD NETWORK\n2. Paste the Network ID (copied)\n3. Scroll down and click Add\n4. Turn on the slider next to GRID0\n5. Tap OK on the VPN prompt");
         steps.setTextColor(Color.WHITE);
         steps.setTextSize(14);
+        steps.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
         layout.addView(steps);
 
         Button done = new Button(this);
         done.setText("Got it");
+        done.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         done.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -61,7 +66,10 @@ public class OverlayService extends Service {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);
-        params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
+        DisplayMetrics metrics = new DisplayMetrics();
+        windowManager.getDefaultDisplay().getMetrics(metrics);
+        params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        params.y = (int) (metrics.heightPixels * 0.75) - (int) (125 * getResources().getDisplayMetrics().density);
         overlayView = layout;
         windowManager.addView(overlayView, params);
         return START_NOT_STICKY;
