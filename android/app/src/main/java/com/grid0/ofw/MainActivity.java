@@ -12,6 +12,7 @@ import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.ConnectivityManager;
 import android.net.Network;
@@ -53,8 +54,11 @@ public class MainActivity extends Activity {
     private String isolationResult = "Not checked";
     private int currentTab = 0;
     private ImageView logoImage;
+    private FrameLayout ringContainer;
     private View ringView;
     private GradientDrawable ringDrawable;
+    private View ringDotView;
+    private GradientDrawable ringDotDrawable;
     private ObjectAnimator ringAnimator;
     private TextView statusText;
     private ScrollView logScroll;
@@ -155,7 +159,24 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(ringSize, ringSize);
         ringParams.gravity = Gravity.CENTER;
         ringView.setLayoutParams(ringParams);
-        logoFrame.addView(ringView);
+
+        ringContainer = new FrameLayout(this);
+        FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(ringSize, ringSize);
+        containerParams.gravity = Gravity.CENTER;
+        ringContainer.setLayoutParams(containerParams);
+        ringContainer.addView(ringView);
+
+        ringDotDrawable = new GradientDrawable();
+        ringDotDrawable.setShape(GradientDrawable.OVAL);
+        ringDotDrawable.setColor(Color.GRAY);
+        ringDotView = new View(this);
+        ringDotView.setBackground(ringDotDrawable);
+        int dotSize = (int) (12 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams dotParams = new FrameLayout.LayoutParams(dotSize, dotSize);
+        dotParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        ringDotView.setLayoutParams(dotParams);
+        ringContainer.addView(ringDotView);
+        logoFrame.addView(ringContainer);
 
         logoImage = new ImageView(this);
         logoImage.setImageResource(R.drawable.logo);
@@ -298,8 +319,23 @@ public class MainActivity extends Activity {
         LinearLayout social = new LinearLayout(this);
         social.setOrientation(LinearLayout.HORIZONTAL);
         Button discord = new Button(this);
-        discord.setText("\uD83C\uDFAE Discord");
+        discord.setText("Discord");
+        discord.setTextColor(Color.WHITE);
         discord.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        GradientDrawable discordBg = new GradientDrawable();
+        discordBg.setColor(0xFF5865F2);
+        discordBg.setCornerRadius((int) (4 * getResources().getDisplayMetrics().density));
+        discord.setBackground(discordBg);
+        try {
+            Drawable discordIcon = getDrawable(R.drawable.ic_discord);
+            if (discordIcon != null) {
+                int iconSize = (int) (24 * getResources().getDisplayMetrics().density);
+                discordIcon.setBounds(0, 0, iconSize, iconSize);
+                discord.setCompoundDrawables(discordIcon, null, null, null);
+                discord.setCompoundDrawablePadding((int) (8 * getResources().getDisplayMetrics().density));
+            }
+        } catch (Exception e) {
+        }
         LinearLayout.LayoutParams socialParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
         discord.setLayoutParams(socialParams);
         discord.setOnClickListener(new View.OnClickListener() {
@@ -569,15 +605,18 @@ public class MainActivity extends Activity {
                 logoImage.setColorFilter(new ColorMatrixColorFilter(matrix));
             }
         }
-        if (ringDrawable != null && ringView != null) {
+        if (ringDrawable != null && ringContainer != null) {
             int strokeWidth = (int) (4 * getResources().getDisplayMetrics().density);
             int dashWidth = (int) (12 * getResources().getDisplayMetrics().density);
             int dashGap = (int) (8 * getResources().getDisplayMetrics().density);
             if (proxyRunning) {
                 ringDrawable.setStroke(strokeWidth, Color.RED, dashWidth, dashGap);
+                if (ringDotDrawable != null) {
+                    ringDotDrawable.setColor(Color.RED);
+                }
                 if (ringAnimator == null) {
-                    ringAnimator = ObjectAnimator.ofFloat(ringView, "rotation", 0f, 360f);
-                    ringAnimator.setDuration(1500);
+                    ringAnimator = ObjectAnimator.ofFloat(ringContainer, "rotation", 0f, 360f);
+                    ringAnimator.setDuration(5000);
                     ringAnimator.setRepeatCount(ValueAnimator.INFINITE);
                     ringAnimator.setInterpolator(new LinearInterpolator());
                 }
@@ -588,7 +627,13 @@ public class MainActivity extends Activity {
                 if (ringAnimator != null && ringAnimator.isRunning()) {
                     ringAnimator.cancel();
                 }
+                if (ringContainer != null) {
+                    ringContainer.setRotation(0f);
+                }
                 ringDrawable.setStroke(strokeWidth, Color.GRAY, dashWidth, dashGap);
+                if (ringDotDrawable != null) {
+                    ringDotDrawable.setColor(Color.GRAY);
+                }
             }
         }
     }
