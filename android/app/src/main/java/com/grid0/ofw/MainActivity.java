@@ -33,6 +33,8 @@ import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.grid0.ofw.nintendo.NintendoPrefixes;
+
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.net.InetAddress;
@@ -44,10 +46,6 @@ import java.util.Map;
 public class MainActivity extends Activity {
     private static final String ZEROTIER_PACKAGE = "com.zerotier.one";
     private static final String GRID0_NETWORK_ID = "8bd5124fd68185ec";
-    private static final String[] NINTENDO_PREFIXES = {
-        "60:6B:FF", "34:AF:2C", "98:B6:E9", "D8:A2:5E", "E0:E7:51", "04:03:D6", "7C:BB:8A",
-        "00:1F:32", "00:1E:35", "00:19:FD", "00:1B:7A", "00:09:BF"
-    };
     private boolean zeroTierInstalled = false;
     private boolean proxyRunning = false;
     private String logText = "";
@@ -471,7 +469,7 @@ public class MainActivity extends Activity {
                 if (mac.equals("00:00:00:00:00:00")) {
                     continue;
                 }
-                for (String prefix : NINTENDO_PREFIXES) {
+                for (String prefix : NintendoPrefixes.PREFIXES) {
                     if (mac.startsWith(prefix)) {
                         foundSwitch = true;
                         break;
