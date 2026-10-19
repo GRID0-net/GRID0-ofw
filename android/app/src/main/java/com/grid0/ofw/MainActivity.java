@@ -43,10 +43,14 @@ import java.util.Map;
 public class MainActivity extends Activity {
     private static final String ZEROTIER_PACKAGE = "com.zerotier.one";
     private static final String GRID0_NETWORK_ID = "8bd5124fd68185ec";
+    private static final String[] NINTENDO_PREFIXES = {
+        "60:6B:FF", "34:AF:2C", "98:B6:E9", "D8:A2:5E", "E0:E7:51", "04:03:D6", "7C:BB:8A",
+        "00:1F:32", "00:1E:35", "00:19:FD", "00:1B:7A", "00:09:BF"
+    };
     private boolean zeroTierInstalled = false;
     private boolean proxyRunning = false;
-    private boolean isolationError = false;
     private String logText = "";
+    private String isolationResult = "Not checked";
     private int currentTab = 0;
     private ImageView logoImage;
     private View ringView;
@@ -61,6 +65,8 @@ public class MainActivity extends Activity {
     private LinearLayout homeContent;
     private LinearLayout moreContent;
     private Map<String, TextView> moreValues = new HashMap<>();
+    private Button checkIsolationButton;
+    private TextView isolationResultView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -233,34 +239,6 @@ public class MainActivity extends Activity {
         });
         homeContent.addView(proxyButton);
 
-        LinearLayout social = new LinearLayout(this);
-        social.setOrientation(LinearLayout.HORIZONTAL);
-        Button discord = new Button(this);
-        discord.setText("\uD83C\uDFAE Discord");
-        discord.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        LinearLayout.LayoutParams socialParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
-        discord.setLayoutParams(socialParams);
-        discord.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.gg/splatfest"));
-                web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(web);
-            }
-        });
-        social.addView(discord);
-        Button support = new Button(this);
-        support.setText("Support Us");
-        support.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        support.setLayoutParams(socialParams);
-        support.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-            }
-        });
-        social.addView(support);
-        homeContent.addView(social);
-
         moreContent = new LinearLayout(this);
         moreContent.setOrientation(LinearLayout.VERTICAL);
         moreContent.setGravity(Gravity.CENTER);
@@ -289,6 +267,61 @@ public class MainActivity extends Activity {
             }
         });
         moreContent.addView(refresh);
+
+        checkIsolationButton = new Button(this);
+        checkIsolationButton.setText("Check Client Isolation");
+        checkIsolationButton.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        checkIsolationButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                checkClientIsolation();
+            }
+        });
+        moreContent.addView(checkIsolationButton);
+
+        TextView isolationHelp = new TextView(this);
+        isolationHelp.setText("Turn on your Switch and make sure it is connected to the same network, then click Check Client Isolation.");
+        isolationHelp.setTextColor(Color.WHITE);
+        isolationHelp.setTextSize(14);
+        isolationHelp.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        isolationHelp.setGravity(Gravity.CENTER);
+        moreContent.addView(isolationHelp);
+
+        isolationResultView = new TextView(this);
+        isolationResultView.setText(isolationResult);
+        isolationResultView.setTextColor(Color.WHITE);
+        isolationResultView.setTextSize(14);
+        isolationResultView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        isolationResultView.setGravity(Gravity.CENTER);
+        moreContent.addView(isolationResultView);
+
+        LinearLayout social = new LinearLayout(this);
+        social.setOrientation(LinearLayout.HORIZONTAL);
+        Button discord = new Button(this);
+        discord.setText("\uD83C\uDFAE Discord");
+        discord.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        LinearLayout.LayoutParams socialParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        discord.setLayoutParams(socialParams);
+        discord.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.gg/splatfest"));
+                web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(web);
+            }
+        });
+        social.addView(discord);
+        Button support = new Button(this);
+        support.setText("Support Us");
+        support.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        support.setLayoutParams(socialParams);
+        support.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+            }
+        });
+        social.addView(support);
+        moreContent.addView(social);
 
         GradientDrawable logBorder = new GradientDrawable();
         logBorder.setColor(Color.BLACK);
@@ -372,7 +405,7 @@ public class MainActivity extends Activity {
         String ztIp = getZeroTierIp();
         setMoreValue("zt_ip", ztIp.equals("not found") ? "not connected" : ztIp);
         setMoreValue("phone_ip", getPhoneWifiIp());
-        setMoreValue("isolation", hasClientIsolation() ? "Detected" : "Not detected");
+        setMoreValue("isolation", isolationResult);
         setMoreValue("zt_status", isVpnConnected() ? "Connected" : "Not connected");
         setMoreValue("grid0_network", isGrid0Connected() ? "Connected" : "Not connected");
         setMoreValue("network_id", GRID0_NETWORK_ID);
@@ -385,49 +418,11 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void toggleProxy() {
-        if (!proxyRunning) {
-            if (!isGrid0Connected()) {
-                Toast.makeText(this, "Connect to the GRID0 network first", Toast.LENGTH_LONG).show();
-                return;
-            }
-            logText = "Checking client isolation...\n";
-            if (hasClientIsolation()) {
-                logText += "ERROR: Your wifi has client isolation\n";
-                isolationError = true;
-                proxyRunning = true;
-                if (logView != null) {
-                    logView.setText(logText);
-                }
-                updateProxyUI();
-                return;
-            }
-            logText += "Client isolation: not detected\n";
-            String phoneIp = getPhoneWifiIp();
-            String ztIp = getZeroTierIp();
-            logText += "PHONE_IP = " + phoneIp + "\nZT_IP = " + ztIp + "\n";
-            isolationError = false;
-            proxyRunning = true;
-            if (logView != null) {
-                logView.setText(logText);
-            }
-            updateProxyUI();
-        } else {
-            proxyRunning = false;
-            isolationError = false;
-            logText = "";
-            if (logView != null) {
-                logView.setText("");
-            }
-            updateProxyUI();
-        }
-    }
-
-    private boolean hasClientIsolation() {
+    private void checkClientIsolation() {
+        boolean foundSwitch = false;
         try {
             BufferedReader reader = new BufferedReader(new FileReader("/proc/net/arp"));
             String line;
-            int others = 0;
             while ((line = reader.readLine()) != null) {
                 if (line.startsWith("IP address")) {
                     continue;
@@ -436,36 +431,57 @@ public class MainActivity extends Activity {
                 if (parts.length < 4) {
                     continue;
                 }
-                String ip = parts[0];
-                String mac = parts[3];
+                String mac = parts[3].toUpperCase();
                 if (mac.equals("00:00:00:00:00:00")) {
                     continue;
                 }
-                if (isGatewayIp(ip)) {
-                    continue;
+                for (String prefix : NINTENDO_PREFIXES) {
+                    if (mac.startsWith(prefix)) {
+                        foundSwitch = true;
+                        break;
+                    }
                 }
-                others++;
+                if (foundSwitch) {
+                    break;
+                }
             }
             reader.close();
-            return others == 0;
         } catch (Exception e) {
-            return false;
+            foundSwitch = false;
         }
+        if (foundSwitch) {
+            isolationResult = "Client Isolation is Disabled, you're good to go";
+        } else {
+            isolationResult = "Client Isolation may be Enabled";
+        }
+        if (isolationResultView != null) {
+            isolationResultView.setText(isolationResult);
+        }
+        setMoreValue("isolation", isolationResult);
     }
 
-    private boolean isGatewayIp(String ip) {
-        try {
-            WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
-            if (wifi != null) {
-                int gateway = wifi.getDhcpInfo().gateway;
-                if (gateway != 0) {
-                    String gatewayIp = (gateway & 0xff) + "." + ((gateway >> 8) & 0xff) + "." + ((gateway >> 16) & 0xff) + "." + ((gateway >> 24) & 0xff);
-                    return ip.equals(gatewayIp);
-                }
+    private void toggleProxy() {
+        if (!proxyRunning) {
+            if (!isGrid0Connected()) {
+                Toast.makeText(this, "Connect to the GRID0 network first", Toast.LENGTH_LONG).show();
+                return;
             }
-        } catch (Exception e) {
+            String phoneIp = getPhoneWifiIp();
+            String ztIp = getZeroTierIp();
+            logText = "PHONE_IP = " + phoneIp + "\nZT_IP = " + ztIp + "\n";
+            proxyRunning = true;
+            if (logView != null) {
+                logView.setText(logText);
+            }
+            updateProxyUI();
+        } else {
+            proxyRunning = false;
+            logText = "";
+            if (logView != null) {
+                logView.setText("");
+            }
+            updateProxyUI();
         }
-        return false;
     }
 
     private boolean isGrid0Connected() {
@@ -527,22 +543,25 @@ public class MainActivity extends Activity {
     }
 
     private void updateProxyUI() {
-        boolean running = proxyRunning && !isolationError;
         if (proxyButton != null) {
             proxyButton.setText(proxyRunning ? "Stop Proxy" : "Start Proxy");
             boolean canStart = proxyRunning || isGrid0Connected();
             proxyButton.setEnabled(canStart);
             proxyButton.setAlpha(canStart ? 1.0f : 0.5f);
         }
+        if (checkIsolationButton != null) {
+            checkIsolationButton.setEnabled(proxyRunning);
+            checkIsolationButton.setAlpha(proxyRunning ? 1.0f : 0.5f);
+        }
         if (logScroll != null) {
             logScroll.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
         }
         if (statusText != null) {
-            statusText.setText(running ? "ON" : "OFF");
-            statusText.setTextColor(running ? Color.RED : Color.GRAY);
+            statusText.setText(proxyRunning ? "ON" : "OFF");
+            statusText.setTextColor(proxyRunning ? Color.RED : Color.GRAY);
         }
         if (logoImage != null) {
-            if (running) {
+            if (proxyRunning) {
                 logoImage.clearColorFilter();
             } else {
                 ColorMatrix matrix = new ColorMatrix();
@@ -554,7 +573,7 @@ public class MainActivity extends Activity {
             int strokeWidth = (int) (4 * getResources().getDisplayMetrics().density);
             int dashWidth = (int) (12 * getResources().getDisplayMetrics().density);
             int dashGap = (int) (8 * getResources().getDisplayMetrics().density);
-            if (running) {
+            if (proxyRunning) {
                 ringDrawable.setStroke(strokeWidth, Color.RED, dashWidth, dashGap);
                 if (ringAnimator == null) {
                     ringAnimator = ObjectAnimator.ofFloat(ringView, "rotation", 0f, 360f);
