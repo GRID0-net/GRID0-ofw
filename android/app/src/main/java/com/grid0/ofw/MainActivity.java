@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -30,12 +31,13 @@ public class MainActivity extends Activity {
         int pad = (int) (24 * getResources().getDisplayMetrics().density);
         layout.setPadding(pad, pad, pad, pad);
 
-        TextView title = new TextView(this);
-        title.setText("GRID0");
-        title.setTextColor(Color.WHITE);
-        title.setTextSize(28);
-        title.setGravity(Gravity.CENTER);
-        layout.addView(title);
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.logo);
+        int logoSize = (int) (160 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(logoSize, logoSize);
+        logoParams.gravity = Gravity.CENTER;
+        logo.setLayoutParams(logoParams);
+        layout.addView(logo);
 
         if (!isZeroTierInstalled()) {
             TextView msg = new TextView(this);
@@ -44,6 +46,13 @@ public class MainActivity extends Activity {
             msg.setTextSize(16);
             msg.setGravity(Gravity.CENTER);
             layout.addView(msg);
+
+            TextView step1 = new TextView(this);
+            step1.setText("Step 1");
+            step1.setTextColor(Color.WHITE);
+            step1.setTextSize(16);
+            step1.setGravity(Gravity.CENTER);
+            layout.addView(step1);
 
             Button install = new Button(this);
             install.setText("Get ZeroTier");
@@ -54,6 +63,22 @@ public class MainActivity extends Activity {
                 }
             });
             layout.addView(install);
+
+            TextView step2 = new TextView(this);
+            step2.setText("Step 2");
+            step2.setTextColor(Color.WHITE);
+            step2.setTextSize(16);
+            step2.setGravity(Gravity.CENTER);
+            layout.addView(step2);
+
+            Button proxy = new Button(this);
+            proxy.setText("Start Proxy");
+            proxy.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                }
+            });
+            layout.addView(proxy);
         } else {
             TextView msg = new TextView(this);
             msg.setText("ZeroTier is installed.\nGRID0 Network ID:\n" + GRID0_NETWORK_ID);
@@ -63,11 +88,18 @@ public class MainActivity extends Activity {
             layout.addView(msg);
 
             TextView hint = new TextView(this);
-            hint.setText("Tap Connect. The Network ID is copied and a guide appears over ZeroTier. In ZeroTier, tap +, paste the ID, and enable the connection.");
+            hint.setText("Tap Connect. The Network ID is copied and a guide appears over ZeroTier. In ZeroTier, tap ADD NETWORK, paste the ID, and enable the connection.");
             hint.setTextColor(Color.WHITE);
             hint.setTextSize(14);
             hint.setGravity(Gravity.CENTER);
             layout.addView(hint);
+
+            TextView step1 = new TextView(this);
+            step1.setText("Step 1");
+            step1.setTextColor(Color.WHITE);
+            step1.setTextSize(16);
+            step1.setGravity(Gravity.CENTER);
+            layout.addView(step1);
 
             Button connect = new Button(this);
             connect.setText("Connect to GRID0 Network");
@@ -78,6 +110,22 @@ public class MainActivity extends Activity {
                 }
             });
             layout.addView(connect);
+
+            TextView step2 = new TextView(this);
+            step2.setText("Step 2");
+            step2.setTextColor(Color.WHITE);
+            step2.setTextSize(16);
+            step2.setGravity(Gravity.CENTER);
+            layout.addView(step2);
+
+            Button proxy = new Button(this);
+            proxy.setText("Start Proxy");
+            proxy.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                }
+            });
+            layout.addView(proxy);
         }
 
         setContentView(layout);
@@ -114,7 +162,7 @@ public class MainActivity extends Activity {
         }
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         clipboard.setPrimaryClip(ClipData.newPlainText("GRID0 Network ID", GRID0_NETWORK_ID));
-        Toast.makeText(this, "Network ID copied", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Network ID already copied", Toast.LENGTH_SHORT).show();
         startService(new Intent(this, OverlayService.class));
         Intent launch = getPackageManager().getLaunchIntentForPackage(ZEROTIER_PACKAGE);
         if (launch != null) {

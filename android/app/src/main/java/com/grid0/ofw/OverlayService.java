@@ -40,7 +40,7 @@ public class OverlayService extends Service {
         layout.addView(title);
 
         TextView steps = new TextView(this);
-        steps.setText("1. Tap + (top right)\n2. Paste the Network ID (copied)\n3. Tap Add Network\n4. Turn on the slider next to GRID0\n5. Tap OK on the VPN prompt");
+        steps.setText("1. Tap ADD NETWORK\n2. Paste the Network ID (copied)\n3. Scroll down and click Add\n4. Turn on the slider next to GRID0\n5. Tap OK on the VPN prompt");
         steps.setTextColor(Color.WHITE);
         steps.setTextSize(14);
         layout.addView(steps);
