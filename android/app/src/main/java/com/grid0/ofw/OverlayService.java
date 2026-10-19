@@ -8,6 +8,7 @@ import android.graphics.Typeface;
 import android.os.IBinder;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -17,6 +18,9 @@ import android.widget.TextView;
 public class OverlayService extends Service {
     private WindowManager windowManager;
     private View overlayView;
+    private WindowManager.LayoutParams overlayParams;
+    private float dragStartY;
+    private int dragStartParamY;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -29,11 +33,16 @@ public class OverlayService extends Service {
             return START_NOT_STICKY;
         }
         windowManager = (WindowManager) getSystemService(WINDOW_SERVICE);
+        LinearLayout outer = new LinearLayout(this);
+        outer.setOrientation(LinearLayout.HORIZONTAL);
+        outer.setBackgroundColor(Color.argb(230, 0, 0, 0));
+
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setBackgroundColor(Color.argb(230, 0, 0, 0));
         int pad = (int) (16 * getResources().getDisplayMetrics().density);
         layout.setPadding(pad, pad, pad, pad);
+        LinearLayout.LayoutParams contentParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        layout.setLayoutParams(contentParams);
 
         TextView title = new TextView(this);
         title.setText("GRID0 Setup");
@@ -50,7 +59,7 @@ public class OverlayService extends Service {
         layout.addView(steps);
 
         Button done = new Button(this);
-        done.setText("Got it");
+        done.setText("CLOSE");
         done.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         done.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -59,8 +68,21 @@ public class OverlayService extends Service {
             }
         });
         layout.addView(done);
+        outer.addView(layout);
 
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+        TextView handle = new TextView(this);
+        handle.setText("\u21D5");
+        handle.setTextColor(Color.GRAY);
+        handle.setTextSize(28);
+        handle.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams handleParams = new LinearLayout.LayoutParams(
+                (int) (48 * getResources().getDisplayMetrics().density),
+                LinearLayout.LayoutParams.MATCH_PARENT);
+        handle.setLayoutParams(handleParams);
+        handle.setBackgroundColor(Color.argb(255, 40, 40, 40));
+        outer.addView(handle);
+
+        overlayParams = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -68,10 +90,37 @@ public class OverlayService extends Service {
                 PixelFormat.TRANSLUCENT);
         DisplayMetrics metrics = new DisplayMetrics();
         windowManager.getDefaultDisplay().getMetrics(metrics);
-        params.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        params.y = (int) (metrics.heightPixels * 0.75) - (int) (125 * getResources().getDisplayMetrics().density);
-        overlayView = layout;
-        windowManager.addView(overlayView, params);
+        overlayParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        overlayParams.y = (int) (metrics.heightPixels * 0.75) - (int) (125 * getResources().getDisplayMetrics().density);
+
+        outer.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                    dragStartY = event.getRawY();
+                    dragStartParamY = overlayParams.y;
+                    return true;
+                }
+                if (event.getAction() == MotionEvent.ACTION_MOVE) {
+                    int newY = (int) (dragStartParamY + (event.getRawY() - dragStartY));
+                    DisplayMetrics m = new DisplayMetrics();
+                    windowManager.getDefaultDisplay().getMetrics(m);
+                    if (newY < 0) {
+                        newY = 0;
+                    }
+                    if (newY > m.heightPixels - 100) {
+                        newY = m.heightPixels - 100;
+                    }
+                    overlayParams.y = newY;
+                    windowManager.updateViewLayout(overlayView, overlayParams);
+                    return true;
+                }
+                return false;
+            }
+        });
+
+        overlayView = outer;
+        windowManager.addView(overlayView, overlayParams);
         return START_NOT_STICKY;
     }
 

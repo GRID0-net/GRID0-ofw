@@ -6,15 +6,21 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -22,6 +28,12 @@ public class MainActivity extends Activity {
     private static final String ZEROTIER_PACKAGE = "com.zerotier.one";
     private static final String GRID0_NETWORK_ID = "8bd5124fd68185ec";
     private boolean zeroTierInstalled = false;
+    private boolean proxyRunning = false;
+    private ImageView logoImage;
+    private ProgressBar ringProgress;
+    private TextView statusText;
+    private ScrollView logScroll;
+    private Button proxyButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,13 +65,32 @@ public class MainActivity extends Activity {
         int pad = (int) (24 * getResources().getDisplayMetrics().density);
         layout.setPadding(pad, pad, pad, pad);
 
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(R.drawable.logo);
+        FrameLayout logoFrame = new FrameLayout(this);
+        int ringSize = (int) (180 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams frameParams = new FrameLayout.LayoutParams(ringSize, ringSize);
+        frameParams.gravity = Gravity.CENTER;
+        logoFrame.setLayoutParams(frameParams);
+
+        ringProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleLarge);
+        FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(ringSize, ringSize);
+        ringParams.gravity = Gravity.CENTER;
+        ringProgress.setLayoutParams(ringParams);
+        logoFrame.addView(ringProgress);
+
+        logoImage = new ImageView(this);
+        logoImage.setImageResource(R.drawable.logo);
         int logoSize = (int) (160 * getResources().getDisplayMetrics().density);
-        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(logoSize, logoSize);
+        FrameLayout.LayoutParams logoParams = new FrameLayout.LayoutParams(logoSize, logoSize);
         logoParams.gravity = Gravity.CENTER;
-        logo.setLayoutParams(logoParams);
-        layout.addView(logo);
+        logoImage.setLayoutParams(logoParams);
+        logoFrame.addView(logoImage);
+        layout.addView(logoFrame);
+
+        statusText = new TextView(this);
+        statusText.setTextSize(16);
+        statusText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        statusText.setGravity(Gravity.CENTER);
+        layout.addView(statusText);
 
         if (!zeroTierInstalled) {
             TextView msg = new TextView(this);
@@ -97,15 +128,16 @@ public class MainActivity extends Activity {
             step2.setGravity(Gravity.CENTER);
             layout.addView(step2);
 
-            Button proxy = new Button(this);
-            proxy.setText("Start Proxy");
-            proxy.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            proxy.setOnClickListener(new View.OnClickListener() {
+            proxyButton = new Button(this);
+            proxyButton.setText("Start Proxy");
+            proxyButton.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            proxyButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    toggleProxy();
                 }
             });
-            layout.addView(proxy);
+            layout.addView(proxyButton);
         } else {
             TextView msg = new TextView(this);
             msg.setText("ZeroTier is installed.\nGRID0 Network ID:\n" + GRID0_NETWORK_ID);
@@ -150,18 +182,72 @@ public class MainActivity extends Activity {
             step2.setGravity(Gravity.CENTER);
             layout.addView(step2);
 
-            Button proxy = new Button(this);
-            proxy.setText("Start Proxy");
-            proxy.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            proxy.setOnClickListener(new View.OnClickListener() {
+            proxyButton = new Button(this);
+            proxyButton.setText("Start Proxy");
+            proxyButton.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            proxyButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
+                    toggleProxy();
                 }
             });
-            layout.addView(proxy);
+            layout.addView(proxyButton);
         }
 
+        logScroll = new ScrollView(this);
+        LinearLayout.LayoutParams logParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (int) (200 * getResources().getDisplayMetrics().density));
+        logScroll.setLayoutParams(logParams);
+        logScroll.setBackgroundColor(Color.BLACK);
+        logScroll.setVisibility(View.GONE);
+        TextView logView = new TextView(this);
+        logView.setText("");
+        logView.setTextColor(Color.WHITE);
+        logView.setTypeface(Typeface.MONOSPACE);
+        logView.setTextSize(12);
+        logScroll.addView(logView);
+        layout.addView(logScroll);
+
         setContentView(layout);
+        updateProxyUI();
+    }
+
+    private void toggleProxy() {
+        proxyRunning = !proxyRunning;
+        updateProxyUI();
+    }
+
+    private void updateProxyUI() {
+        if (proxyButton != null) {
+            proxyButton.setText(proxyRunning ? "Stop Proxy" : "Start Proxy");
+        }
+        if (logScroll != null) {
+            logScroll.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
+        }
+        if (statusText != null) {
+            statusText.setText(proxyRunning ? "ON" : "OFF");
+            statusText.setTextColor(proxyRunning ? Color.RED : Color.GRAY);
+        }
+        if (logoImage != null) {
+            if (proxyRunning) {
+                logoImage.clearColorFilter();
+            } else {
+                ColorMatrix matrix = new ColorMatrix();
+                matrix.setSaturation(0);
+                logoImage.setColorFilter(new ColorMatrixColorFilter(matrix));
+            }
+        }
+        if (ringProgress != null) {
+            if (proxyRunning) {
+                ringProgress.setIndeterminate(true);
+                ringProgress.setIndeterminateTintList(ColorStateList.valueOf(Color.RED));
+            } else {
+                ringProgress.setIndeterminate(false);
+                ringProgress.setProgress(100);
+                ringProgress.setProgressTintList(ColorStateList.valueOf(Color.GRAY));
+            }
+        }
     }
 
     private boolean isZeroTierInstalled() {
@@ -197,6 +283,7 @@ public class MainActivity extends Activity {
         clipboard.setPrimaryClip(ClipData.newPlainText("GRID0 Network ID", GRID0_NETWORK_ID));
         Toast.makeText(this, "Network ID already copied", Toast.LENGTH_SHORT).show();
         startService(new Intent(this, OverlayService.class));
+        startService(new Intent(this, VpnMonitorService.class));
         Intent launch = getPackageManager().getLaunchIntentForPackage(ZEROTIER_PACKAGE);
         if (launch != null) {
             launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
