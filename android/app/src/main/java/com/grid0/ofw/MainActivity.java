@@ -1,28 +1,35 @@
 package com.grid0.ofw;
 
+import android.animation.ObjectAnimator;
+import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
+import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import java.net.InetAddress;
+import java.net.NetworkInterface;
+import java.util.Enumeration;
 
 public class MainActivity extends Activity {
     private static final String ZEROTIER_PACKAGE = "com.zerotier.one";
@@ -30,9 +37,12 @@ public class MainActivity extends Activity {
     private boolean zeroTierInstalled = false;
     private boolean proxyRunning = false;
     private ImageView logoImage;
-    private ProgressBar ringProgress;
+    private View ringView;
+    private GradientDrawable ringDrawable;
+    private ObjectAnimator ringAnimator;
     private TextView statusText;
     private ScrollView logScroll;
+    private TextView logView;
     private Button proxyButton;
 
     @Override
@@ -58,12 +68,20 @@ public class MainActivity extends Activity {
     }
 
     private void buildLayout() {
+        FrameLayout root = new FrameLayout(this);
+        root.setBackgroundColor(Color.BLACK);
+
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setGravity(Gravity.CENTER);
-        layout.setBackgroundColor(Color.BLACK);
         int pad = (int) (24 * getResources().getDisplayMetrics().density);
         layout.setPadding(pad, pad, pad, pad);
+        FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT);
+        layoutParams.gravity = Gravity.CENTER;
+        layout.setLayoutParams(layoutParams);
+        root.addView(layout);
 
         FrameLayout logoFrame = new FrameLayout(this);
         int ringSize = (int) (180 * getResources().getDisplayMetrics().density);
@@ -71,11 +89,15 @@ public class MainActivity extends Activity {
         frameParams.gravity = Gravity.CENTER;
         logoFrame.setLayoutParams(frameParams);
 
-        ringProgress = new ProgressBar(this, null, android.R.attr.progressBarStyleLarge);
+        ringDrawable = new GradientDrawable();
+        ringDrawable.setShape(GradientDrawable.OVAL);
+        ringDrawable.setColor(Color.TRANSPARENT);
+        ringView = new View(this);
+        ringView.setBackground(ringDrawable);
         FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(ringSize, ringSize);
         ringParams.gravity = Gravity.CENTER;
-        ringProgress.setLayoutParams(ringParams);
-        logoFrame.addView(ringProgress);
+        ringView.setLayoutParams(ringParams);
+        logoFrame.addView(ringView);
 
         logoImage = new ImageView(this);
         logoImage.setImageResource(R.drawable.logo);
@@ -147,14 +169,6 @@ public class MainActivity extends Activity {
             msg.setGravity(Gravity.CENTER);
             layout.addView(msg);
 
-            TextView hint = new TextView(this);
-            hint.setText("Tap Connect. The Network ID is copied and a guide appears over ZeroTier. In ZeroTier, tap ADD NETWORK, paste the ID, and enable the connection.");
-            hint.setTextColor(Color.WHITE);
-            hint.setTextSize(14);
-            hint.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
-            hint.setGravity(Gravity.CENTER);
-            layout.addView(hint);
-
             TextView step1 = new TextView(this);
             step1.setText("Step 1");
             step1.setTextColor(Color.WHITE);
@@ -194,28 +208,89 @@ public class MainActivity extends Activity {
             layout.addView(proxyButton);
         }
 
+        GradientDrawable logBorder = new GradientDrawable();
+        logBorder.setColor(Color.BLACK);
+        int borderWidth = (int) (2 * getResources().getDisplayMetrics().density);
+        logBorder.setStroke(borderWidth, Color.WHITE);
         logScroll = new ScrollView(this);
-        LinearLayout.LayoutParams logParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
+        FrameLayout.LayoutParams logParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
                 (int) (200 * getResources().getDisplayMetrics().density));
+        logParams.gravity = Gravity.BOTTOM;
         logScroll.setLayoutParams(logParams);
-        logScroll.setBackgroundColor(Color.BLACK);
+        logScroll.setBackground(logBorder);
         logScroll.setVisibility(View.GONE);
-        TextView logView = new TextView(this);
+        logView = new TextView(this);
         logView.setText("");
         logView.setTextColor(Color.WHITE);
         logView.setTypeface(Typeface.MONOSPACE);
         logView.setTextSize(12);
+        int logPad = (int) (8 * getResources().getDisplayMetrics().density);
+        logView.setPadding(logPad, logPad, logPad, logPad);
         logScroll.addView(logView);
-        layout.addView(logScroll);
+        root.addView(logScroll);
 
-        setContentView(layout);
+        setContentView(root);
         updateProxyUI();
     }
 
     private void toggleProxy() {
         proxyRunning = !proxyRunning;
+        if (proxyRunning) {
+            writeProxyParams();
+        } else {
+            if (logView != null) {
+                logView.setText("");
+            }
+        }
         updateProxyUI();
+    }
+
+    private void writeProxyParams() {
+        String phoneIp = getPhoneWifiIp();
+        String ztIp = getZeroTierIp();
+        if (logView != null) {
+            logView.setText("PHONE_IP = " + phoneIp + "\nZT_IP = " + ztIp + "\n");
+        }
+    }
+
+    private String getPhoneWifiIp() {
+        try {
+            WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifi != null) {
+                int ip = wifi.getConnectionInfo().getIpAddress();
+                if (ip != 0) {
+                    return (ip & 0xff) + "." + ((ip >> 8) & 0xff) + "." + ((ip >> 16) & 0xff) + "." + ((ip >> 24) & 0xff);
+                }
+            }
+        } catch (Exception e) {
+        }
+        return "not found";
+    }
+
+    private String getZeroTierIp() {
+        try {
+            Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
+            while (interfaces.hasMoreElements()) {
+                NetworkInterface ni = interfaces.nextElement();
+                Enumeration<InetAddress> addresses = ni.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    InetAddress addr = addresses.nextElement();
+                    if (addr.isLoopbackAddress() || addr.isLinkLocalAddress()) {
+                        continue;
+                    }
+                    String host = addr.getHostAddress();
+                    if (host == null) {
+                        continue;
+                    }
+                    if (host.startsWith("10.147.") || ni.getName().toLowerCase().contains("zt")) {
+                        return host;
+                    }
+                }
+            }
+        } catch (Exception e) {
+        }
+        return "not found";
     }
 
     private void updateProxyUI() {
@@ -238,14 +313,26 @@ public class MainActivity extends Activity {
                 logoImage.setColorFilter(new ColorMatrixColorFilter(matrix));
             }
         }
-        if (ringProgress != null) {
+        if (ringDrawable != null && ringView != null) {
+            int strokeWidth = (int) (4 * getResources().getDisplayMetrics().density);
+            int dashWidth = (int) (12 * getResources().getDisplayMetrics().density);
+            int dashGap = (int) (8 * getResources().getDisplayMetrics().density);
             if (proxyRunning) {
-                ringProgress.setIndeterminate(true);
-                ringProgress.setIndeterminateTintList(ColorStateList.valueOf(Color.RED));
+                ringDrawable.setStroke(strokeWidth, Color.RED, dashWidth, dashGap);
+                if (ringAnimator == null) {
+                    ringAnimator = ObjectAnimator.ofFloat(ringView, "rotation", 0f, 360f);
+                    ringAnimator.setDuration(1500);
+                    ringAnimator.setRepeatCount(ValueAnimator.INFINITE);
+                    ringAnimator.setInterpolator(new LinearInterpolator());
+                }
+                if (!ringAnimator.isRunning()) {
+                    ringAnimator.start();
+                }
             } else {
-                ringProgress.setIndeterminate(false);
-                ringProgress.setProgress(100);
-                ringProgress.setProgressTintList(ColorStateList.valueOf(Color.GRAY));
+                if (ringAnimator != null && ringAnimator.isRunning()) {
+                    ringAnimator.cancel();
+                }
+                ringDrawable.setStroke(strokeWidth, Color.GRAY, dashWidth, dashGap);
             }
         }
     }
