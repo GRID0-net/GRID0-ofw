@@ -58,6 +58,10 @@ public class MainActivity extends Activity {
     private View ringDotView;
     private GradientDrawable ringDotDrawable;
     private ObjectAnimator ringAnimator;
+    private View rippleViewA;
+    private View rippleViewB;
+    private ValueAnimator rippleAnimator;
+    private ValueAnimator saturationAnimator;
     private TextView statusText;
     private ScrollView logScroll;
     private TextView logView;
@@ -196,6 +200,15 @@ public class MainActivity extends Activity {
         logoParams.gravity = Gravity.CENTER;
         logoImage.setLayoutParams(logoParams);
         logoFrame.addView(logoImage);
+
+        rippleViewA = makeRippleView();
+        rippleViewB = makeRippleView();
+        logoFrame.addView(rippleViewA);
+        logoFrame.addView(rippleViewB);
+        logoFrame.setClipChildren(false);
+        homeContent.setClipChildren(false);
+        main.setClipChildren(false);
+        root.setClipChildren(false);
         homeContent.addView(logoFrame);
 
         statusText = new TextView(this);
@@ -658,6 +671,57 @@ public class MainActivity extends Activity {
         return "not found";
     }
 
+    private View makeRippleView() {
+        GradientDrawable d = new GradientDrawable();
+        d.setShape(GradientDrawable.OVAL);
+        d.setColor(Color.TRANSPARENT);
+        int stroke = (int) (3 * getResources().getDisplayMetrics().density);
+        d.setStroke(stroke, Color.RED);
+        View v = new View(this);
+        v.setBackground(d);
+        int size = (int) (160 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(size, size);
+        p.gravity = Gravity.CENTER;
+        v.setLayoutParams(p);
+        v.setVisibility(View.INVISIBLE);
+        return v;
+    }
+
+    private void startRipple() {
+        if (rippleViewA == null || rippleViewB == null) return;
+        stopRipple();
+        rippleViewA.setVisibility(View.VISIBLE);
+        rippleViewB.setVisibility(View.VISIBLE);
+        rippleAnimator = ValueAnimator.ofFloat(0f, 1f);
+        rippleAnimator.setDuration(1200);
+        rippleAnimator.setRepeatCount(2);
+        rippleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator a) {
+                float f = (Float) a.getAnimatedValue();
+                drawRipple(rippleViewA, f);
+                drawRipple(rippleViewB, (f + 0.5f) % 1f);
+            }
+        });
+        rippleAnimator.start();
+    }
+
+    private void drawRipple(View v, float f) {
+        float scale = 1f + 0.75f * f;
+        v.setScaleX(scale);
+        v.setScaleY(scale);
+        v.setAlpha(0.9f * (1f - f));
+    }
+
+    private void stopRipple() {
+        if (rippleAnimator != null) {
+            rippleAnimator.cancel();
+            rippleAnimator = null;
+        }
+        if (rippleViewA != null) rippleViewA.setVisibility(View.INVISIBLE);
+        if (rippleViewB != null) rippleViewB.setVisibility(View.INVISIBLE);
+    }
+
     private void updateProxyUI() {
         if (proxyButton != null) {
             proxyButton.setText(proxyRunning ? "Stop Proxy" : "Start Proxy");
@@ -682,9 +746,23 @@ public class MainActivity extends Activity {
         }
 
         if (logoImage != null) {
+            if (saturationAnimator != null) saturationAnimator.cancel();
             if (proxyRunning) {
-                logoImage.clearColorFilter();
+                saturationAnimator = ValueAnimator.ofFloat(0f, 1f);
+                saturationAnimator.setDuration(800);
+                saturationAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator a) {
+                        float s = (Float) a.getAnimatedValue();
+                        ColorMatrix matrix = new ColorMatrix();
+                        matrix.setSaturation(s);
+                        logoImage.setColorFilter(new ColorMatrixColorFilter(matrix));
+                    }
+                });
+                saturationAnimator.start();
+                startRipple();
             } else {
+                stopRipple();
                 ColorMatrix matrix = new ColorMatrix();
                 matrix.setSaturation(0);
                 logoImage.setColorFilter(new ColorMatrixColorFilter(matrix));
