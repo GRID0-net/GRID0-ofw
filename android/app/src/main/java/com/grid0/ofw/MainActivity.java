@@ -1,6 +1,5 @@
 package com.grid0.ofw;
 
-import android.animation.ObjectAnimator;
 import android.animation.ValueAnimator;
 import android.app.Activity;
 import android.content.ClipData;
@@ -26,7 +25,6 @@ import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
-import android.view.animation.LinearInterpolator;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
@@ -61,16 +59,15 @@ public class MainActivity extends Activity {
     private String isolationResult = "Not checked";
     private int currentTab = 0;
     private ImageView logoImage;
-    private FrameLayout ringContainer;
-    private View ringView;
-    private GradientDrawable ringDrawable;
-    private View ringDotView;
-    private GradientDrawable ringDotDrawable;
-    private ObjectAnimator ringAnimator;
     private PixelRippleView pixelRippleView;
     private ValueAnimator rippleAnimator;
+    private ValueAnimator waveAnimator;
     private ValueAnimator saturationAnimator;
     private TextView statusText;
+    private FrameLayout messageSlot;
+    private TextView step1Label;
+    private Button step1Button;
+    private TextView step2Label;
     private ScrollView logScroll;
     private TextView logView;
     private Button proxyButton;
@@ -123,7 +120,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
         mainParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        mainParams.topMargin = (int) (48 * getResources().getDisplayMetrics().density);
+        mainParams.topMargin = (int) (72 * getResources().getDisplayMetrics().density);
         main.setLayoutParams(mainParams);
         root.addView(main);
 
@@ -167,53 +164,33 @@ public class MainActivity extends Activity {
 
         FrameLayout logoFrame = new FrameLayout(this);
 
-        int ringSize = (int) (180 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams frameParams = new FrameLayout.LayoutParams(ringSize, ringSize);
+        int frameSize = (int) (360 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams frameParams = new FrameLayout.LayoutParams(frameSize, frameSize);
         frameParams.gravity = Gravity.CENTER;
         logoFrame.setLayoutParams(frameParams);
-
-        ringDrawable = new GradientDrawable();
-        ringDrawable.setShape(GradientDrawable.OVAL);
-        ringDrawable.setColor(Color.TRANSPARENT);
-        ringView = new View(this);
-        ringView.setBackground(ringDrawable);
-        FrameLayout.LayoutParams ringParams = new FrameLayout.LayoutParams(ringSize, ringSize);
-        ringParams.gravity = Gravity.CENTER;
-        ringView.setLayoutParams(ringParams);
-
-        ringContainer = new FrameLayout(this);
-        FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(ringSize, ringSize);
-        containerParams.gravity = Gravity.CENTER;
-        ringContainer.setLayoutParams(containerParams);
-        ringContainer.addView(ringView);
-
-        ringDotDrawable = new GradientDrawable();
-        ringDotDrawable.setShape(GradientDrawable.OVAL);
-        ringDotDrawable.setColor(Color.GRAY);
-        ringDotView = new View(this);
-        ringDotView.setBackground(ringDotDrawable);
-
-        int dotSize = (int) (12 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams dotParams = new FrameLayout.LayoutParams(dotSize, dotSize);
-        dotParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        ringDotView.setLayoutParams(dotParams);
-        ringContainer.addView(ringDotView);
-        logoFrame.addView(ringContainer);
 
         logoImage = new ImageView(this);
         logoImage.setImageResource(R.drawable.logo);
 
-        int logoSize = (int) (160 * getResources().getDisplayMetrics().density);
+        int logoSize = (int) (220 * getResources().getDisplayMetrics().density);
         FrameLayout.LayoutParams logoParams = new FrameLayout.LayoutParams(logoSize, logoSize);
         logoParams.gravity = Gravity.CENTER;
         logoImage.setLayoutParams(logoParams);
+        logoImage.setClickable(true);
+        logoImage.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleProxy();
+            }
+        });
         logoFrame.addView(logoImage);
 
         pixelRippleView = new PixelRippleView(this);
-        int rippleSize = (int) (340 * getResources().getDisplayMetrics().density);
+        int rippleSize = (int) (360 * getResources().getDisplayMetrics().density);
         FrameLayout.LayoutParams rippleParams = new FrameLayout.LayoutParams(rippleSize, rippleSize);
         rippleParams.gravity = Gravity.CENTER;
         pixelRippleView.setLayoutParams(rippleParams);
+        pixelRippleView.setClickable(false);
         logoFrame.addView(pixelRippleView);
         logoFrame.setClipChildren(false);
         homeContent.setClipChildren(false);
@@ -227,6 +204,13 @@ public class MainActivity extends Activity {
         statusText.setGravity(Gravity.CENTER);
         homeContent.addView(statusText);
 
+        messageSlot = new FrameLayout(this);
+        LinearLayout.LayoutParams slotParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (int) (70 * getResources().getDisplayMetrics().density));
+        messageSlot.setLayoutParams(slotParams);
+        homeContent.addView(messageSlot);
+
         if (!zeroTierInstalled) {
             TextView msg = new TextView(this);
             msg.setText("GRID0 needs ZeroTier to connect. Install ZeroTier One from the Play Store.");
@@ -234,54 +218,59 @@ public class MainActivity extends Activity {
             msg.setTextSize(16);
             msg.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
             msg.setGravity(Gravity.CENTER);
-            homeContent.addView(msg);
+            FrameLayout.LayoutParams msgParams = new FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT);
+            msgParams.gravity = Gravity.CENTER;
+            msg.setLayoutParams(msgParams);
+            messageSlot.addView(msg);
 
-            TextView step1 = new TextView(this);
-            step1.setText("Step 1");
-            step1.setTextColor(Color.WHITE);
-            step1.setTextSize(16);
-            step1.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-            step1.setGravity(Gravity.CENTER);
-            homeContent.addView(step1);
+            step1Label = new TextView(this);
+            step1Label.setText("Step 1");
+            step1Label.setTextColor(Color.WHITE);
+            step1Label.setTextSize(16);
+            step1Label.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            step1Label.setGravity(Gravity.CENTER);
+            homeContent.addView(step1Label);
 
-            Button install = new Button(this);
-            install.setText("Get ZeroTier");
-            install.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            install.setOnClickListener(new View.OnClickListener() {
+            step1Button = new Button(this);
+            step1Button.setText("Get ZeroTier");
+            step1Button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            step1Button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     openZeroTierStore();
                 }
             });
-            homeContent.addView(install);
+            homeContent.addView(step1Button);
         } else {
-            TextView step1 = new TextView(this);
-            step1.setText("Step 1");
-            step1.setTextColor(Color.WHITE);
-            step1.setTextSize(16);
-            step1.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-            step1.setGravity(Gravity.CENTER);
-            homeContent.addView(step1);
+            step1Label = new TextView(this);
+            step1Label.setText("Step 1");
+            step1Label.setTextColor(Color.WHITE);
+            step1Label.setTextSize(16);
+            step1Label.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            step1Label.setGravity(Gravity.CENTER);
+            homeContent.addView(step1Label);
 
-            Button connect = new Button(this);
-            connect.setText("Connect to GRID0 Network");
-            connect.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-            connect.setOnClickListener(new View.OnClickListener() {
+            step1Button = new Button(this);
+            step1Button.setText("Connect to GRID0 Network");
+            step1Button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            step1Button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     connectToGrid0Network();
                 }
             });
-            homeContent.addView(connect);
+            homeContent.addView(step1Button);
         }
 
-        TextView step2 = new TextView(this);
-        step2.setText("Step 2");
-        step2.setTextColor(Color.WHITE);
-        step2.setTextSize(16);
-        step2.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        step2.setGravity(Gravity.CENTER);
-        homeContent.addView(step2);
+        step2Label = new TextView(this);
+        step2Label.setText("Step 2");
+        step2Label.setTextColor(Color.WHITE);
+        step2Label.setTextSize(16);
+        step2Label.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        step2Label.setGravity(Gravity.CENTER);
+        homeContent.addView(step2Label);
 
         proxyButton = new Button(this);
         proxyButton.setText("Start Proxy");
@@ -851,12 +840,26 @@ public class MainActivity extends Activity {
             }
         });
         rippleAnimator.start();
+        waveAnimator = ValueAnimator.ofFloat(0f, 1f);
+        waveAnimator.setDuration(2000);
+        waveAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        waveAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator a) {
+                pixelRippleView.setWavePhase((Float) a.getAnimatedValue());
+            }
+        });
+        waveAnimator.start();
     }
 
     private void stopRipple() {
         if (rippleAnimator != null) {
             rippleAnimator.cancel();
             rippleAnimator = null;
+        }
+        if (waveAnimator != null) {
+            waveAnimator.cancel();
+            waveAnimator = null;
         }
         if (pixelRippleView != null) {
             pixelRippleView.reset();
@@ -865,25 +868,34 @@ public class MainActivity extends Activity {
     }
 
     private static class PixelRippleView extends View {
+        private static final int SIDES = 16;
         private static final int[] RING_COLORS = {0xFFFF0000, 0xFFFF0000, 0xFFD40000, 0xFF990000};
-        private static final float[] RING_RADII_DP = {95f, 125f, 145f, 165f};
-        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private static final float[] RING_RADII_DP = {125f, 150f, 160f, 170f};
+        private final Paint paint = new Paint();
         private final Path path = new Path();
         private final float[] ringProgress = {0f, 0f, 0f, 0f};
+        private float wavePhase = 0f;
 
         public PixelRippleView(Context context) {
             super(context);
             paint.setStyle(Paint.Style.STROKE);
+            paint.setAntiAlias(false);
             setVisibility(View.INVISIBLE);
         }
 
         public void reset() {
             for (int i = 0; i < 4; i++) ringProgress[i] = 0f;
+            wavePhase = 0f;
             invalidate();
         }
 
         public void setRingProgress(int i, float p) {
             ringProgress[i] = p;
+            invalidate();
+        }
+
+        public void setWavePhase(float phase) {
+            wavePhase = phase;
             invalidate();
         }
 
@@ -895,9 +907,10 @@ public class MainActivity extends Activity {
             paint.setStrokeWidth(3f * density);
             float p0 = ringProgress[0];
             if (p0 > 0f) {
+                float pulse = 1f + 0.03f * (float) Math.sin(wavePhase * 2f * Math.PI);
                 paint.setColor(RING_COLORS[0]);
                 paint.setAlpha((int) (0.85f * Math.min(p0 / 0.1f, 1f) * 255));
-                drawOctagon(canvas, cx, cy, RING_RADII_DP[0] * density, paint);
+                drawPolygon(canvas, cx, cy, RING_RADII_DP[0] * density * pulse, paint);
             }
             for (int i = 1; i < 4; i++) {
                 float p = ringProgress[i];
@@ -907,16 +920,22 @@ public class MainActivity extends Activity {
                 float r = RING_RADII_DP[i] * density * (0.7f + 0.3f * ease);
                 paint.setColor(RING_COLORS[i]);
                 paint.setAlpha((int) (0.9f * (1f - p) * 255));
-                drawOctagon(canvas, cx, cy, r, paint);
+                drawPolygon(canvas, cx, cy, r, paint);
             }
         }
 
-        private void drawOctagon(Canvas canvas, float cx, float cy, float r, Paint paint) {
+        private void drawPolygon(Canvas canvas, float cx, float cy, float r, Paint paint) {
+            float density = getResources().getDisplayMetrics().density;
+            float snap = 4f * density;
             path.reset();
-            for (int k = 0; k < 8; k++) {
-                double angle = Math.toRadians(-90 + k * 45);
-                float x = cx + (float) (r * Math.cos(angle));
-                float y = cy + (float) (r * Math.sin(angle));
+            for (int k = 0; k < SIDES; k++) {
+                double angle = Math.toRadians(-90 + k * (360.0 / SIDES));
+                float wobble = 1f + 0.04f * (float) Math.sin(2f * Math.PI * (k / (float) SIDES + wavePhase));
+                float vr = r * wobble;
+                float x = cx + (float) (vr * Math.cos(angle));
+                float y = cy + (float) (vr * Math.sin(angle));
+                x = Math.round(x / snap) * snap;
+                y = Math.round(y / snap) * snap;
                 if (k == 0) path.moveTo(x, y);
                 else path.lineTo(x, y);
             }
@@ -932,6 +951,24 @@ public class MainActivity extends Activity {
             boolean canStart = proxyRunning || isGrid0Connected();
             proxyButton.setEnabled(canStart);
             proxyButton.setAlpha(canStart ? 1.0f : 0.5f);
+        }
+
+        int stepVis = proxyRunning ? View.GONE : View.VISIBLE;
+
+        if (messageSlot != null) {
+            messageSlot.setVisibility(stepVis);
+        }
+
+        if (step1Label != null) {
+            step1Label.setVisibility(stepVis);
+        }
+
+        if (step1Button != null) {
+            step1Button.setVisibility(stepVis);
+        }
+
+        if (step2Label != null) {
+            step2Label.setVisibility(stepVis);
         }
 
         if (checkIsolationButton != null) {
@@ -969,47 +1006,6 @@ public class MainActivity extends Activity {
                 ColorMatrix matrix = new ColorMatrix();
                 matrix.setSaturation(0);
                 logoImage.setColorFilter(new ColorMatrixColorFilter(matrix));
-            }
-        }
-
-        if (ringDrawable != null && ringContainer != null) {
-            int strokeWidth = (int) (4 * getResources().getDisplayMetrics().density);
-
-            int dashWidth = (int) (12 * getResources().getDisplayMetrics().density);
-
-            int dashGap = (int) (8 * getResources().getDisplayMetrics().density);
-
-            if (proxyRunning) {
-                ringDrawable.setStroke(strokeWidth, Color.RED, dashWidth, dashGap);
-
-                if (ringDotDrawable != null) {
-                    ringDotDrawable.setColor(Color.RED);
-                }
-
-                if (ringAnimator == null) {
-                    ringAnimator = ObjectAnimator.ofFloat(ringContainer, "rotation", 0f, 360f);
-                    ringAnimator.setDuration(5000);
-                    ringAnimator.setRepeatCount(ValueAnimator.INFINITE);
-                    ringAnimator.setInterpolator(new LinearInterpolator());
-                }
-
-                if (!ringAnimator.isRunning()) {
-                    ringAnimator.start();
-                }
-            } else {
-                if (ringAnimator != null && ringAnimator.isRunning()) {
-                    ringAnimator.cancel();
-                }
-
-                if (ringContainer != null) {
-                    ringContainer.setRotation(0f);
-                }
-
-                ringDrawable.setStroke(strokeWidth, Color.GRAY, dashWidth, dashGap);
-
-                if (ringDotDrawable != null) {
-                    ringDotDrawable.setColor(Color.GRAY);
-                }
             }
         }
     }
