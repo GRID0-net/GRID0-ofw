@@ -8,9 +8,12 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
+import android.graphics.Paint;
+import android.graphics.Path;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -58,8 +61,7 @@ public class MainActivity extends Activity {
     private View ringDotView;
     private GradientDrawable ringDotDrawable;
     private ObjectAnimator ringAnimator;
-    private View rippleViewA;
-    private View rippleViewB;
+    private PixelRippleView pixelRippleView;
     private ValueAnimator rippleAnimator;
     private ValueAnimator saturationAnimator;
     private TextView statusText;
@@ -201,10 +203,12 @@ public class MainActivity extends Activity {
         logoImage.setLayoutParams(logoParams);
         logoFrame.addView(logoImage);
 
-        rippleViewA = makeRippleView();
-        rippleViewB = makeRippleView();
-        logoFrame.addView(rippleViewA);
-        logoFrame.addView(rippleViewB);
+        pixelRippleView = new PixelRippleView(this);
+        int rippleSize = (int) (340 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams rippleParams = new FrameLayout.LayoutParams(rippleSize, rippleSize);
+        rippleParams.gravity = Gravity.CENTER;
+        pixelRippleView.setLayoutParams(rippleParams);
+        logoFrame.addView(pixelRippleView);
         logoFrame.setClipChildren(false);
         homeContent.setClipChildren(false);
         main.setClipChildren(false);
@@ -671,46 +675,25 @@ public class MainActivity extends Activity {
         return "not found";
     }
 
-    private View makeRippleView() {
-        GradientDrawable d = new GradientDrawable();
-        d.setShape(GradientDrawable.OVAL);
-        d.setColor(Color.TRANSPARENT);
-        int stroke = (int) (3 * getResources().getDisplayMetrics().density);
-        d.setStroke(stroke, Color.RED);
-        View v = new View(this);
-        v.setBackground(d);
-        int size = (int) (160 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(size, size);
-        p.gravity = Gravity.CENTER;
-        v.setLayoutParams(p);
-        v.setVisibility(View.INVISIBLE);
-        return v;
-    }
-
     private void startRipple() {
-        if (rippleViewA == null || rippleViewB == null) return;
+        if (pixelRippleView == null) return;
         stopRipple();
-        rippleViewA.setVisibility(View.VISIBLE);
-        rippleViewB.setVisibility(View.VISIBLE);
+        pixelRippleView.setVisibility(View.VISIBLE);
+        pixelRippleView.reset();
         rippleAnimator = ValueAnimator.ofFloat(0f, 1f);
-        rippleAnimator.setDuration(1200);
-        rippleAnimator.setRepeatCount(2);
+        rippleAnimator.setDuration(9000);
         rippleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator a) {
-                float f = (Float) a.getAnimatedValue();
-                drawRipple(rippleViewA, f);
-                drawRipple(rippleViewB, (f + 0.5f) % 1f);
+                float t = (Float) a.getAnimatedValue();
+                long elapsed = (long) (t * 9000);
+                for (int i = 0; i < 4; i++) {
+                    float p = Math.min(Math.max((elapsed - i * 500f) / 8000f, 0f), 1f);
+                    pixelRippleView.setRingProgress(i, p);
+                }
             }
         });
         rippleAnimator.start();
-    }
-
-    private void drawRipple(View v, float f) {
-        float scale = 1f + 0.75f * f;
-        v.setScaleX(scale);
-        v.setScaleY(scale);
-        v.setAlpha(0.9f * (1f - f));
     }
 
     private void stopRipple() {
@@ -718,8 +701,71 @@ public class MainActivity extends Activity {
             rippleAnimator.cancel();
             rippleAnimator = null;
         }
-        if (rippleViewA != null) rippleViewA.setVisibility(View.INVISIBLE);
-        if (rippleViewB != null) rippleViewB.setVisibility(View.INVISIBLE);
+        if (pixelRippleView != null) {
+            pixelRippleView.reset();
+            pixelRippleView.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    private static class PixelRippleView extends View {
+        private static final int[] RING_COLORS = {0xFFFF0000, 0xFFFF0000, 0xFFD40000, 0xFF990000};
+        private static final float[] RING_RADII_DP = {95f, 125f, 145f, 165f};
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path path = new Path();
+        private final float[] ringProgress = {0f, 0f, 0f, 0f};
+
+        public PixelRippleView(Context context) {
+            super(context);
+            paint.setStyle(Paint.Style.STROKE);
+            setVisibility(View.INVISIBLE);
+        }
+
+        public void reset() {
+            for (int i = 0; i < 4; i++) ringProgress[i] = 0f;
+            invalidate();
+        }
+
+        public void setRingProgress(int i, float p) {
+            ringProgress[i] = p;
+            invalidate();
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            float density = getResources().getDisplayMetrics().density;
+            float cx = getWidth() / 2f;
+            float cy = getHeight() / 2f;
+            paint.setStrokeWidth(3f * density);
+            float p0 = ringProgress[0];
+            if (p0 > 0f) {
+                paint.setColor(RING_COLORS[0]);
+                paint.setAlpha((int) (0.85f * Math.min(p0 / 0.1f, 1f) * 255));
+                drawOctagon(canvas, cx, cy, RING_RADII_DP[0] * density, paint);
+            }
+            for (int i = 1; i < 4; i++) {
+                float p = ringProgress[i];
+                if (p <= 0f) continue;
+                float grow = Math.min(p / 0.25f, 1f);
+                float ease = 1f - (1f - grow) * (1f - grow);
+                float r = RING_RADII_DP[i] * density * (0.7f + 0.3f * ease);
+                paint.setColor(RING_COLORS[i]);
+                paint.setAlpha((int) (0.9f * (1f - p) * 255));
+                drawOctagon(canvas, cx, cy, r, paint);
+            }
+        }
+
+        private void drawOctagon(Canvas canvas, float cx, float cy, float r, Paint paint) {
+            path.reset();
+            for (int k = 0; k < 8; k++) {
+                double angle = Math.toRadians(-90 + k * 45);
+                float x = cx + (float) (r * Math.cos(angle));
+                float y = cy + (float) (r * Math.sin(angle));
+                if (k == 0) path.moveTo(x, y);
+                else path.lineTo(x, y);
+            }
+            path.close();
+            canvas.drawPath(path, paint);
+        }
     }
 
     private void updateProxyUI() {
