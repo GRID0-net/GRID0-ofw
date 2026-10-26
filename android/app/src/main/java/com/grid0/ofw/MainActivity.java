@@ -18,6 +18,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.net.ConnectivityManager;
+import android.net.DhcpInfo;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
@@ -36,15 +37,20 @@ import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.grid0.ofw.nintendo.NintendoPrefixes;
-
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
     private static final String ZEROTIER_PACKAGE = "com.zerotier.one";
@@ -294,9 +300,30 @@ public class MainActivity extends Activity {
         moreContent.setVisibility(View.GONE);
         main.addView(moreContent);
 
+        LinearLayout tableBox = new LinearLayout(this);
+        tableBox.setOrientation(LinearLayout.VERTICAL);
+        GradientDrawable tableBorder = new GradientDrawable();
+        tableBorder.setColor(Color.TRANSPARENT);
+        tableBorder.setStroke((int) (1 * getResources().getDisplayMetrics().density), Color.LTGRAY);
+        tableBorder.setCornerRadius((int) (8 * getResources().getDisplayMetrics().density));
+        tableBox.setBackground(tableBorder);
+        int boxPad = (int) (4 * getResources().getDisplayMetrics().density);
+        tableBox.setPadding(boxPad, boxPad, boxPad, boxPad);
+        LinearLayout.LayoutParams boxParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        int boxMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        boxParams.leftMargin = boxMargin;
+        boxParams.rightMargin = boxMargin;
+        tableBox.setLayoutParams(boxParams);
+
         TableLayout table = new TableLayout(this);
         table.setStretchAllColumns(true);
-        moreContent.addView(table);
+        table.setLayoutParams(new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        tableBox.addView(table);
+        moreContent.addView(tableBox);
         moreValues.clear();
 
         addMoreRow(table, "ZeroTier installed", "zt_installed");
@@ -336,7 +363,7 @@ public class MainActivity extends Activity {
         moreContent.addView(checkIsolationButton);
 
         TextView isolationHelp = new TextView(this);
-        isolationHelp.setText("Turn on your Switch and make sure it is connected to the same network, then click Check Client Isolation.");
+        isolationHelp.setText("Scans this Wi-Fi network for any other device. If one answers, client isolation is off.");
         isolationHelp.setTextColor(Color.WHITE);
         isolationHelp.setTextSize(14);
         isolationHelp.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
@@ -517,7 +544,138 @@ public class MainActivity extends Activity {
     }
 
     private void checkClientIsolation() {
-        boolean foundSwitch = false;
+        if (checkIsolationButton != null) {
+            checkIsolationButton.setEnabled(false);
+            checkIsolationButton.setText("Checking...");
+        }
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final String result = scanForOtherDevices();
+                isolationResult = result;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (isolationResultView != null) {
+                            isolationResultView.setText(result);
+                        }
+
+                        setMoreValue("isolation", result);
+
+                        if (checkIsolationButton != null) {
+                            checkIsolationButton.setText("Check Client Isolation");
+                            checkIsolationButton.setEnabled(proxyRunning);
+                            checkIsolationButton.setAlpha(proxyRunning ? 1.0f : 0.5f);
+                        }
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private String scanForOtherDevices() {
+        int phoneIp = 0;
+        int mask = 0;
+        int gatewayIp = 0;
+
+        try {
+            WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+
+            if (wifi == null) return "Wi-Fi is not connected";
+
+            DhcpInfo dhcp = wifi.getDhcpInfo();
+
+            if (dhcp == null || dhcp.ipAddress == 0 || dhcp.netmask == 0) return "Wi-Fi is not connected";
+
+            phoneIp = Integer.reverseBytes(dhcp.ipAddress);
+            mask = Integer.reverseBytes(dhcp.netmask);
+            gatewayIp = Integer.reverseBytes(dhcp.gateway);
+        } catch (Exception e) {
+            return "Wi-Fi is not connected";
+        }
+
+        int network = phoneIp & mask;
+        int broadcast = network | ~mask;
+        int total = broadcast - network - 1;
+        List<Integer> hosts = new ArrayList<>();
+
+        if (total > 0 && total <= 256) {
+            for (int h = network + 1; h < broadcast; h++) {
+                if (h == phoneIp || h == gatewayIp) continue;
+                hosts.add(h);
+            }
+        } else {
+            int net24 = phoneIp & 0xFFFFFF00;
+            for (int last = 1; last < 255; last++) {
+                int h = net24 | last;
+                if (h == phoneIp || h == gatewayIp) continue;
+                hosts.add(h);
+            }
+        }
+
+        final DatagramSocket socket;
+
+        try {
+            socket = new DatagramSocket();
+            bindToWifi(socket);
+        } catch (Exception e) {
+            return "Could not open a socket";
+        }
+
+        try {
+            final byte[] ping = new byte[]{0};
+            ExecutorService pool = Executors.newFixedThreadPool(32);
+
+            for (final int host : hosts) {
+                pool.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            socket.send(new DatagramPacket(ping, 1, InetAddress.getByAddress(intToIpBytes(host)), 5353));
+                        } catch (Exception e) {
+                        }
+                    }
+                });
+            }
+
+            pool.shutdown();
+            pool.awaitTermination(5, TimeUnit.SECONDS);
+            Thread.sleep(2000);
+        } catch (Exception e) {
+        } finally {
+            socket.close();
+        }
+
+        int found = countArpDevices(phoneIp, gatewayIp);
+
+        if (found > 0) {
+            return "Client Isolation is Disabled, you're good to go";
+        }
+
+        return "No other device answered. Isolation may be on, or nothing else is awake.";
+    }
+
+    private void bindToWifi(DatagramSocket socket) {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+
+            if (cm == null) return;
+
+            for (Network network : cm.getAllNetworks()) {
+                NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+
+                if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                    network.bindSocket(socket);
+                    return;
+                }
+            }
+        } catch (Exception e) {
+        }
+    }
+
+    private int countArpDevices(int phoneIp, int gatewayIp) {
+        int found = 0;
 
         try {
             BufferedReader reader = new BufferedReader(new FileReader("/proc/net/arp"));
@@ -541,34 +699,33 @@ public class MainActivity extends Activity {
                     continue;
                 }
 
-                for (String prefix : NintendoPrefixes.PREFIXES) {
-                    if (mac.startsWith(prefix)) {
-                        foundSwitch = true;
-                        break;
-                    }
+                int ip = ipStringToInt(parts[0]);
+
+                if (ip == phoneIp || ip == gatewayIp) {
+                    continue;
                 }
 
-                if (foundSwitch) {
-                    break;
-                }
+                found++;
             }
 
             reader.close();
         } catch (Exception e) {
-            foundSwitch = false;
         }
 
-        if (foundSwitch) {
-            isolationResult = "Client Isolation is Disabled, you're good to go";
-        } else {
-            isolationResult = "Client Isolation may be Enabled";
-        }
+        return found;
+    }
 
-        if (isolationResultView != null) {
-            isolationResultView.setText(isolationResult);
-        }
+    private byte[] intToIpBytes(int ip) {
+        return new byte[]{(byte) ((ip >> 24) & 0xff), (byte) ((ip >> 16) & 0xff), (byte) ((ip >> 8) & 0xff), (byte) (ip & 0xff)};
+    }
 
-        setMoreValue("isolation", isolationResult);
+    private int ipStringToInt(String ip) {
+        try {
+            String[] p = ip.split("\\.");
+            return (Integer.parseInt(p[0]) << 24) | (Integer.parseInt(p[1]) << 16) | (Integer.parseInt(p[2]) << 8) | Integer.parseInt(p[3]);
+        } catch (Exception e) {
+            return 0;
+        }
     }
 
     private void toggleProxy() {
