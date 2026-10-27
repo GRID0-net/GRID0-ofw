@@ -12,7 +12,6 @@ import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
-import android.graphics.Path;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -22,7 +21,10 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -63,6 +65,7 @@ public class MainActivity extends Activity {
     private ValueAnimator rippleAnimator;
     private ValueAnimator waveAnimator;
     private ValueAnimator saturationAnimator;
+    private ValueAnimator borderAnimator;
     private TextView statusText;
     private FrameLayout messageSlot;
     private TextView step1Label;
@@ -71,8 +74,8 @@ public class MainActivity extends Activity {
     private ScrollView logScroll;
     private TextView logView;
     private Button proxyButton;
-    private Button tabHome;
-    private Button tabMore;
+    private TextView tabHome;
+    private TextView tabMore;
     private LinearLayout homeContent;
     private LinearLayout moreContent;
 
@@ -107,6 +110,64 @@ public class MainActivity extends Activity {
         buildLayout();
     }
 
+    private Button makeButton(String label, int widthDp) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextSize(14);
+        b.setTextColor(Color.BLACK);
+        b.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xFFDDDDDD);
+        bg.setCornerRadius((int) (2 * getResources().getDisplayMetrics().density));
+        b.setBackground(bg);
+        b.setStateListAnimator(null);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                (int) (widthDp * getResources().getDisplayMetrics().density),
+                (int) (48 * getResources().getDisplayMetrics().density));
+        b.setLayoutParams(p);
+        return b;
+    }
+
+    private TextView makeTab(String label) {
+        TextView t = new TextView(this);
+        t.setText(label);
+        t.setAllCaps(false);
+        t.setTextSize(14);
+        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        t.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                (int) (152 * getResources().getDisplayMetrics().density),
+                (int) (40 * getResources().getDisplayMetrics().density));
+        p.gravity = Gravity.CENTER_VERTICAL;
+        t.setLayoutParams(p);
+        t.setClickable(true);
+        return t;
+    }
+
+    private void styleTab(TextView t, boolean active) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(active ? Color.BLACK : 0xFFDDDDDD);
+        bg.setCornerRadius((int) (20 * getResources().getDisplayMetrics().density));
+        t.setBackground(bg);
+        t.setTextColor(active ? Color.WHITE : Color.BLACK);
+    }
+
+    private void buzz() {
+        try {
+            Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+
+            if (v == null || !v.hasVibrator()) return;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                v.vibrate(25);
+            }
+        } catch (Exception e) {
+        }
+    }
+
     private void buildLayout() {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(Color.BLACK);
@@ -120,17 +181,19 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT);
         mainParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        mainParams.topMargin = (int) (72 * getResources().getDisplayMetrics().density);
+        mainParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
         main.setLayoutParams(mainParams);
         root.addView(main);
 
         LinearLayout tabs = new LinearLayout(this);
         tabs.setOrientation(LinearLayout.HORIZONTAL);
-        tabHome = new Button(this);
-        tabHome.setText("HOME");
-        tabHome.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        LinearLayout.LayoutParams tabParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
-        tabHome.setLayoutParams(tabParams);
+        LinearLayout.LayoutParams tabsParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                (int) (48 * getResources().getDisplayMetrics().density));
+        tabs.setLayoutParams(tabsParams);
+        tabHome = makeTab("HOME");
+        ((LinearLayout.LayoutParams) tabHome.getLayoutParams()).rightMargin =
+                (int) (8 * getResources().getDisplayMetrics().density);
         tabHome.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -140,10 +203,7 @@ public class MainActivity extends Activity {
             }
         });
         tabs.addView(tabHome);
-        tabMore = new Button(this);
-        tabMore.setText("MORE");
-        tabMore.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        tabMore.setLayoutParams(tabParams);
+        tabMore = makeTab("MORE");
         tabMore.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -164,8 +224,8 @@ public class MainActivity extends Activity {
 
         FrameLayout logoFrame = new FrameLayout(this);
 
-        int frameSize = (int) (360 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams frameParams = new FrameLayout.LayoutParams(frameSize, frameSize);
+        int frameSize = (int) (228 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams frameParams = new LinearLayout.LayoutParams(frameSize, frameSize);
         frameParams.gravity = Gravity.CENTER;
         logoFrame.setLayoutParams(frameParams);
 
@@ -202,12 +262,17 @@ public class MainActivity extends Activity {
         statusText.setTextSize(16);
         statusText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         statusText.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        statusParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
+        statusText.setLayoutParams(statusParams);
         homeContent.addView(statusText);
 
         messageSlot = new FrameLayout(this);
         LinearLayout.LayoutParams slotParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (int) (70 * getResources().getDisplayMetrics().density));
+                (int) (48 * getResources().getDisplayMetrics().density));
         messageSlot.setLayoutParams(slotParams);
         homeContent.addView(messageSlot);
 
@@ -233,9 +298,7 @@ public class MainActivity extends Activity {
             step1Label.setGravity(Gravity.CENTER);
             homeContent.addView(step1Label);
 
-            step1Button = new Button(this);
-            step1Button.setText("Get ZeroTier");
-            step1Button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            step1Button = makeButton("Get ZeroTier", 140);
             step1Button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -252,9 +315,7 @@ public class MainActivity extends Activity {
             step1Label.setGravity(Gravity.CENTER);
             homeContent.addView(step1Label);
 
-            step1Button = new Button(this);
-            step1Button.setText("Connect to GRID0 Network");
-            step1Button.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+            step1Button = makeButton("Connect to GRID0 Network", 250);
             step1Button.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -272,9 +333,7 @@ public class MainActivity extends Activity {
         step2Label.setGravity(Gravity.CENTER);
         homeContent.addView(step2Label);
 
-        proxyButton = new Button(this);
-        proxyButton.setText("Start Proxy");
-        proxyButton.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        proxyButton = makeButton("Start Proxy", 140);
         proxyButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -329,9 +388,7 @@ public class MainActivity extends Activity {
 
         addMoreRow(table, "Network ID", "network_id");
 
-        Button refresh = new Button(this);
-        refresh.setText("Refresh");
-        refresh.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        Button refresh = makeButton("Refresh", 110);
         refresh.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -340,9 +397,7 @@ public class MainActivity extends Activity {
         });
         moreContent.addView(refresh);
 
-        checkIsolationButton = new Button(this);
-        checkIsolationButton.setText("Check Client Isolation");
-        checkIsolationButton.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        checkIsolationButton = makeButton("Check Client Isolation", 220);
         checkIsolationButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -372,6 +427,8 @@ public class MainActivity extends Activity {
 
         Button discord = new Button(this);
         discord.setText("Discord");
+        discord.setAllCaps(false);
+        discord.setTextSize(14);
         discord.setTextColor(Color.WHITE);
         discord.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
 
@@ -379,6 +436,7 @@ public class MainActivity extends Activity {
         discordBg.setColor(0xFF5865F2);
         discordBg.setCornerRadius((int) (4 * getResources().getDisplayMetrics().density));
         discord.setBackground(discordBg);
+        discord.setStateListAnimator(null);
 
         try {
             Drawable discordIcon = getDrawable(R.drawable.ic_discord);
@@ -392,7 +450,10 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
         }
 
-        LinearLayout.LayoutParams socialParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
+        LinearLayout.LayoutParams socialParams = new LinearLayout.LayoutParams(
+                (int) (152 * getResources().getDisplayMetrics().density),
+                (int) (48 * getResources().getDisplayMetrics().density));
+        socialParams.rightMargin = (int) (4 * getResources().getDisplayMetrics().density);
         discord.setLayoutParams(socialParams);
         discord.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -404,10 +465,9 @@ public class MainActivity extends Activity {
         });
         social.addView(discord);
 
-        Button support = new Button(this);
-        support.setText("Support Us");
-        support.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        support.setLayoutParams(socialParams);
+        Button support = makeButton("Support Us", 152);
+        ((LinearLayout.LayoutParams) support.getLayoutParams()).leftMargin =
+                (int) (4 * getResources().getDisplayMetrics().density);
         support.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -486,22 +546,22 @@ public class MainActivity extends Activity {
             moreContent.setVisibility(View.GONE);
 
             if (tabHome != null) {
-                tabHome.setAlpha(1.0f);
+                styleTab(tabHome, true);
             }
 
             if (tabMore != null) {
-                tabMore.setAlpha(0.5f);
+                styleTab(tabMore, false);
             }
         } else {
             homeContent.setVisibility(View.GONE);
             moreContent.setVisibility(View.VISIBLE);
 
             if (tabHome != null) {
-                tabHome.setAlpha(0.5f);
+                styleTab(tabHome, false);
             }
 
             if (tabMore != null) {
-                tabMore.setAlpha(1.0f);
+                styleTab(tabMore, true);
             }
         }
     }
@@ -718,6 +778,8 @@ public class MainActivity extends Activity {
     }
 
     private void toggleProxy() {
+        buzz();
+
         if (!proxyRunning) {
             if (!isGrid0Connected()) {
                 Toast.makeText(this, "Connect to the GRID0 network first", Toast.LENGTH_LONG).show();
@@ -824,7 +886,6 @@ public class MainActivity extends Activity {
     private void startRipple() {
         if (pixelRippleView == null) return;
         stopRipple();
-        pixelRippleView.setVisibility(View.VISIBLE);
         pixelRippleView.reset();
         rippleAnimator = ValueAnimator.ofFloat(0f, 1f);
         rippleAnimator.setDuration(9000);
@@ -863,24 +924,26 @@ public class MainActivity extends Activity {
         }
         if (pixelRippleView != null) {
             pixelRippleView.reset();
-            pixelRippleView.setVisibility(View.INVISIBLE);
         }
     }
 
     private static class PixelRippleView extends View {
         private static final int SIDES = 16;
         private static final int[] RING_COLORS = {0xFFFF0000, 0xFFFF0000, 0xFFD40000, 0xFF990000};
-        private static final float[] RING_RADII_DP = {125f, 150f, 160f, 170f};
-        private final Paint paint = new Paint();
-        private final Path path = new Path();
+        private static final float[] RING_RADII_DP = {88f, 96f, 104f, 112f};
+        private static final float BORDER_RADIUS_DP = 112f;
+        private final Paint fillPaint = new Paint();
+        private final Paint strokePaint = new Paint();
         private final float[] ringProgress = {0f, 0f, 0f, 0f};
         private float wavePhase = 0f;
+        private float borderProgress = 0f;
 
         public PixelRippleView(Context context) {
             super(context);
-            paint.setStyle(Paint.Style.STROKE);
-            paint.setAntiAlias(false);
-            setVisibility(View.INVISIBLE);
+            fillPaint.setStyle(Paint.Style.FILL);
+            fillPaint.setAntiAlias(false);
+            strokePaint.setStyle(Paint.Style.STROKE);
+            strokePaint.setAntiAlias(false);
         }
 
         public void reset() {
@@ -899,48 +962,73 @@ public class MainActivity extends Activity {
             invalidate();
         }
 
+        public float getBorderProgress() {
+            return borderProgress;
+        }
+
+        public void setBorderProgress(float p) {
+            borderProgress = p;
+            invalidate();
+        }
+
         @Override
         protected void onDraw(Canvas canvas) {
             float density = getResources().getDisplayMetrics().density;
             float cx = getWidth() / 2f;
             float cy = getHeight() / 2f;
-            paint.setStrokeWidth(3f * density);
-            float p0 = ringProgress[0];
-            if (p0 > 0f) {
-                float pulse = 1f + 0.03f * (float) Math.sin(wavePhase * 2f * Math.PI);
-                paint.setColor(RING_COLORS[0]);
-                paint.setAlpha((int) (0.85f * Math.min(p0 / 0.1f, 1f) * 255));
-                drawPolygon(canvas, cx, cy, RING_RADII_DP[0] * density * pulse, paint);
-            }
-            for (int i = 1; i < 4; i++) {
+            float pulse = 1f + 0.02f * (float) Math.sin(wavePhase * 2f * Math.PI);
+            strokePaint.setStrokeWidth(3f * density);
+            strokePaint.setColor(lerpColor(0xFF808080, 0xFFFF0000, borderProgress));
+            canvas.drawCircle(cx, cy, BORDER_RADIUS_DP * density * pulse, strokePaint);
+            for (int i = 0; i < 4; i++) {
                 float p = ringProgress[i];
                 if (p <= 0f) continue;
                 float grow = Math.min(p / 0.25f, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
                 float r = RING_RADII_DP[i] * density * (0.7f + 0.3f * ease);
-                paint.setColor(RING_COLORS[i]);
-                paint.setAlpha((int) (0.9f * (1f - p) * 255));
-                drawPolygon(canvas, cx, cy, r, paint);
+                fillPaint.setColor(RING_COLORS[i]);
+                fillPaint.setAlpha((int) (0.9f * (1f - p) * 255));
+                drawSquareRing(canvas, cx, cy, r, fillPaint);
             }
         }
 
-        private void drawPolygon(Canvas canvas, float cx, float cy, float r, Paint paint) {
+        private void drawSquareRing(Canvas canvas, float cx, float cy, float r, Paint paint) {
             float density = getResources().getDisplayMetrics().density;
             float snap = 4f * density;
-            path.reset();
+            float sq = 6f * density;
+            float step = 12f * density;
+            float[][] v = new float[SIDES][2];
             for (int k = 0; k < SIDES; k++) {
                 double angle = Math.toRadians(-90 + k * (360.0 / SIDES));
                 float wobble = 1f + 0.04f * (float) Math.sin(2f * Math.PI * (k / (float) SIDES + wavePhase));
                 float vr = r * wobble;
                 float x = cx + (float) (vr * Math.cos(angle));
                 float y = cy + (float) (vr * Math.sin(angle));
-                x = Math.round(x / snap) * snap;
-                y = Math.round(y / snap) * snap;
-                if (k == 0) path.moveTo(x, y);
-                else path.lineTo(x, y);
+                v[k][0] = Math.round(x / snap) * snap;
+                v[k][1] = Math.round(y / snap) * snap;
             }
-            path.close();
-            canvas.drawPath(path, paint);
+            for (int k = 0; k < SIDES; k++) {
+                float x0 = v[k][0];
+                float y0 = v[k][1];
+                float x1 = v[(k + 1) % SIDES][0];
+                float y1 = v[(k + 1) % SIDES][1];
+                float len = (float) Math.hypot(x1 - x0, y1 - y0);
+                int n = Math.max(1, (int) (len / step));
+                for (int i = 0; i < n; i++) {
+                    float t = (i + 0.5f) / n;
+                    float x = Math.round((x0 + (x1 - x0) * t) / snap) * snap;
+                    float y = Math.round((y0 + (y1 - y0) * t) / snap) * snap;
+                    canvas.drawRect(x - sq / 2f, y - sq / 2f, x + sq / 2f, y + sq / 2f, paint);
+                }
+            }
+        }
+
+        private static int lerpColor(int from, int to, float t) {
+            int a = (int) (Color.alpha(from) + (Color.alpha(to) - Color.alpha(from)) * t);
+            int r = (int) (Color.red(from) + (Color.red(to) - Color.red(from)) * t);
+            int g = (int) (Color.green(from) + (Color.green(to) - Color.green(from)) * t);
+            int b = (int) (Color.blue(from) + (Color.blue(to) - Color.blue(from)) * t);
+            return Color.argb(a, r, g, b);
         }
     }
 
@@ -1007,6 +1095,19 @@ public class MainActivity extends Activity {
                 matrix.setSaturation(0);
                 logoImage.setColorFilter(new ColorMatrixColorFilter(matrix));
             }
+        }
+
+        if (pixelRippleView != null) {
+            if (borderAnimator != null) borderAnimator.cancel();
+            borderAnimator = ValueAnimator.ofFloat(pixelRippleView.getBorderProgress(), proxyRunning ? 1f : 0f);
+            borderAnimator.setDuration(800);
+            borderAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator a) {
+                    pixelRippleView.setBorderProgress((Float) a.getAnimatedValue());
+                }
+            });
+            borderAnimator.start();
         }
     }
 
