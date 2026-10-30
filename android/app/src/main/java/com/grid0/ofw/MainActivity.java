@@ -97,7 +97,7 @@ public class MainActivity extends Activity {
     private View step3Row;
 
     private Map<String, TextView> moreValues = new HashMap<>();
-    private TextView isolationResultView;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -530,6 +530,7 @@ public class MainActivity extends Activity {
             float density = getResources().getDisplayMetrics().density;
             TableRow.LayoutParams bp = new TableRow.LayoutParams(
                     (int) (24 * density), (int) (24 * density));
+            bp.gravity = Gravity.CENTER_VERTICAL;
             isoRefresh.setLayoutParams(bp);
             isoRefresh.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -537,7 +538,7 @@ public class MainActivity extends Activity {
                     checkClientIsolation();
                 }
             });
-            isoRow.addView(isoRefresh);
+            isoRow.addView(isoRefresh, 1);
         }
 
         addMoreRow(table, "ZeroTier status", "zt_status");
@@ -555,21 +556,7 @@ public class MainActivity extends Activity {
         });
         moreContent.addView(refresh);
 
-        TextView isolationHelp = new TextView(this);
-        isolationHelp.setText("Scans this Wi-Fi network for any other device. If one answers, client isolation is off.");
-        isolationHelp.setTextColor(Color.WHITE);
-        isolationHelp.setTextSize(14);
-        isolationHelp.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
-        isolationHelp.setGravity(Gravity.CENTER);
-        moreContent.addView(isolationHelp);
 
-        isolationResultView = new TextView(this);
-        isolationResultView.setText(isolationResult);
-        isolationResultView.setTextColor(Color.WHITE);
-        isolationResultView.setTextSize(14);
-        isolationResultView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        isolationResultView.setGravity(Gravity.CENTER);
-        moreContent.addView(isolationResultView);
 
         LinearLayout social = new LinearLayout(this);
         social.setOrientation(LinearLayout.HORIZONTAL);
@@ -742,6 +729,9 @@ public class MainActivity extends Activity {
                     (int) (frameDp * density), (int) (frameDp * density));
             fp.gravity = Gravity.CENTER;
             fp.topMargin = (int) (16 * density);
+            if (!tutorial) {
+                fp.bottomMargin = (int) (20 * density);
+            }
             logoFrame.setLayoutParams(fp);
         }
     }
@@ -831,10 +821,6 @@ public class MainActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (isolationResultView != null) {
-                            isolationResultView.setText(result);
-                        }
-
                         setMoreValue("isolation", result);
                     }
                 });
@@ -1203,7 +1189,7 @@ public class MainActivity extends Activity {
             if (rippleStartMs < 0L) return;
             long rippleT = SystemClock.uptimeMillis() - rippleStartMs;
             float logoEdge = tutorialMode ? 80f : 100f;
-            int count = tutorialMode ? 6 : 48;
+            int count = tutorialMode ? 6 : 16;
             float stagger = tutorialMode ? RIPPLE_STAGGER_MS : 30f;
             float fizzle = 0f;
             if (tutorialMode) {
@@ -1214,7 +1200,7 @@ public class MainActivity extends Activity {
                 if (born < 0L) continue;
                 float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 2f * i + 0.05f * i * i);
+                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 12f + 3f * i + 0.15f * i * i);
                 float r = (logoEdge + (targetR - logoEdge) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
                 int color;
@@ -1230,7 +1216,7 @@ public class MainActivity extends Activity {
                         color = RIPPLE_COLORS[0];
                     }
                 } else {
-                    color = lerpColor(0xFFFF0000, 0xFF800000, i / 47f);
+                    color = lerpColor(0xFFFF0000, 0xFF800000, i / 15f);
                 }
                 if (alpha <= 0f) continue;
                 fillPaint.setColor(color);
