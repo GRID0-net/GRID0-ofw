@@ -473,32 +473,6 @@ public class MainActivity extends Activity {
         step3Row = makeStepRow(step3Button);
         homeContent.addView(step3Row);
 
-        tutorialToggle = new ToggleButton(this);
-        tutorialToggle.setTextOn("TUTORIAL");
-        tutorialToggle.setTextOff("TUTORIAL");
-        tutorialToggle.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", true));
-        tutorialToggle.setTextSize(12);
-        tutorialToggle.setTextColor(Color.WHITE);
-        tutorialToggle.setStateListAnimator(null);
-        FrameLayout.LayoutParams toggleParams = new FrameLayout.LayoutParams(
-                (int) (110 * getResources().getDisplayMetrics().density),
-                (int) (36 * getResources().getDisplayMetrics().density));
-        toggleParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
-        int toggleMargin = (int) (16 * getResources().getDisplayMetrics().density);
-        toggleParams.leftMargin = toggleMargin;
-        toggleParams.bottomMargin = toggleMargin;
-        tutorialToggle.setLayoutParams(toggleParams);
-        updateToggleBg();
-        tutorialToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton b, boolean on) {
-                getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
-                updateToggleBg();
-                updateTutorialUI();
-            }
-        });
-        root.addView(tutorialToggle);
-
         moreContent = new LinearLayout(this);
         moreContent.setOrientation(LinearLayout.VERTICAL);
         moreContent.setGravity(Gravity.CENTER);
@@ -639,6 +613,30 @@ public class MainActivity extends Activity {
         social.addView(support);
         moreContent.addView(social);
 
+        tutorialToggle = new ToggleButton(this);
+        tutorialToggle.setTextOn("TUTORIAL");
+        tutorialToggle.setTextOff("TUTORIAL");
+        tutorialToggle.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", true));
+        tutorialToggle.setTextSize(11);
+        tutorialToggle.setTextColor(Color.WHITE);
+        tutorialToggle.setStateListAnimator(null);
+        LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(
+                (int) (90 * getResources().getDisplayMetrics().density),
+                (int) (28 * getResources().getDisplayMetrics().density));
+        toggleParams.gravity = Gravity.CENTER_HORIZONTAL;
+        toggleParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        tutorialToggle.setLayoutParams(toggleParams);
+        updateToggleBg();
+        tutorialToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
+                updateToggleBg();
+                updateTutorialUI();
+            }
+        });
+        moreContent.addView(tutorialToggle);
+
         GradientDrawable logBorder = new GradientDrawable();
         logBorder.setColor(Color.BLACK);
 
@@ -683,7 +681,7 @@ public class MainActivity extends Activity {
     private void updateToggleBg() {
         if (tutorialToggle == null) return;
         GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius((int) (18 * getResources().getDisplayMetrics().density));
+        bg.setCornerRadius((int) (14 * getResources().getDisplayMetrics().density));
         bg.setColor(tutorialToggle.isChecked() ? 0xFF4CAF50 : 0xFF555555);
         tutorialToggle.setBackground(bg);
     }
@@ -710,6 +708,9 @@ public class MainActivity extends Activity {
             }
             homeContent.setLayoutParams(p);
         }
+        if (pixelRippleView != null) {
+            pixelRippleView.setTutorialMode(tutorial);
+        }
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {
@@ -735,10 +736,6 @@ public class MainActivity extends Activity {
     private void showTab() {
         if (homeContent == null || moreContent == null) {
             return;
-        }
-
-        if (tutorialToggle != null) {
-            tutorialToggle.setVisibility(currentTab == 0 ? View.VISIBLE : View.GONE);
         }
 
         if (currentTab == 0) {
@@ -1123,6 +1120,12 @@ public class MainActivity extends Activity {
         private long rippleStartMs = -1L;
         private float wavePhase = 0f;
         private float borderProgress = 0f;
+        private boolean tutorialMode = true;
+
+        public void setTutorialMode(boolean t) {
+            tutorialMode = t;
+            invalidate();
+        }
 
         public PixelRippleView(Context context) {
             super(context);
@@ -1176,21 +1179,37 @@ public class MainActivity extends Activity {
             strokePaint.setPathEffect(null);
             if (rippleStartMs < 0L) return;
             long rippleT = SystemClock.uptimeMillis() - rippleStartMs;
-            float fizzle = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
-            for (int i = 0; i < 6; i++) {
-                long born = rippleT - (long) (i * RIPPLE_STAGGER_MS);
+            int count = tutorialMode ? 6 : 24;
+            float stagger = tutorialMode ? RIPPLE_STAGGER_MS : 75f;
+            float fizzle = 0f;
+            if (tutorialMode) {
+                fizzle = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
+            }
+            for (int i = 0; i < count; i++) {
+                long born = rippleT - (long) (i * stagger);
                 if (born < 0L) continue;
                 float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float r = (LOGO_EDGE_DP + (RIPPLE_RADII_DP[i] - LOGO_EDGE_DP) * ease) * density;
+                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (96f + i * 4f);
+                float r = (LOGO_EDGE_DP + (targetR - LOGO_EDGE_DP) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
-                if (i >= 3) {
-                    alpha *= (1f - fizzle);
+                int color;
+                if (tutorialMode) {
+                    if (i >= 3) {
+                        alpha *= (1f - fizzle);
+                        color = RIPPLE_COLORS[i];
+                    } else if (i == 1) {
+                        color = lerpColor(RIPPLE_COLORS[1], RIPPLE_COLORS[3], fizzle);
+                    } else if (i == 2) {
+                        color = lerpColor(RIPPLE_COLORS[2], RIPPLE_COLORS[5], fizzle);
+                    } else {
+                        color = RIPPLE_COLORS[0];
+                    }
                 } else {
-                    alpha *= (1f - 0.5f * fizzle);
+                    color = lerpColor(0xFFFF0000, 0xFF800000, i / 23f);
                 }
                 if (alpha <= 0f) continue;
-                fillPaint.setColor(RIPPLE_COLORS[i]);
+                fillPaint.setColor(color);
                 fillPaint.setAlpha((int) (alpha * 255));
                 drawSquareRing(canvas, cx, cy, r, fillPaint);
             }
