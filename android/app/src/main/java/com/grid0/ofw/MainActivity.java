@@ -38,7 +38,8 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TableLayout;
-import android.widget.ToggleButton;
+import android.widget.Switch;
+import android.content.res.ColorStateList;
 import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -87,7 +88,7 @@ public class MainActivity extends Activity {
     private TextView tabMore;
     private LinearLayout homeContent;
     private LinearLayout moreContent;
-    private ToggleButton tutorialToggle;
+    private Switch tutorialSwitch;
     private View installMsgView;
     private View step1Row;
     private View step2Row;
@@ -368,7 +369,7 @@ public class MainActivity extends Activity {
         logoImage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (tutorialToggle != null && !tutorialToggle.isChecked() && !proxyRunning) {
+                if (tutorialSwitch != null && !tutorialSwitch.isChecked() && !proxyRunning) {
                     if (!zeroTierInstalled) {
                         Toast.makeText(MainActivity.this, "ZeroTier isn't installed", Toast.LENGTH_SHORT).show();
                         return;
@@ -613,29 +614,39 @@ public class MainActivity extends Activity {
         social.addView(support);
         moreContent.addView(social);
 
-        tutorialToggle = new ToggleButton(this);
-        tutorialToggle.setTextOn("TUTORIAL");
-        tutorialToggle.setTextOff("TUTORIAL");
-        tutorialToggle.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", true));
-        tutorialToggle.setTextSize(11);
-        tutorialToggle.setTextColor(Color.WHITE);
-        tutorialToggle.setStateListAnimator(null);
-        LinearLayout.LayoutParams toggleParams = new LinearLayout.LayoutParams(
-                (int) (90 * getResources().getDisplayMetrics().density),
-                (int) (28 * getResources().getDisplayMetrics().density));
-        toggleParams.gravity = Gravity.CENTER_HORIZONTAL;
-        toggleParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
-        tutorialToggle.setLayoutParams(toggleParams);
-        updateToggleBg();
-        tutorialToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        LinearLayout toggleRow = new LinearLayout(this);
+        toggleRow.setOrientation(LinearLayout.HORIZONTAL);
+        toggleRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowParams.gravity = Gravity.CENTER_HORIZONTAL;
+        rowParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        toggleRow.setLayoutParams(rowParams);
+
+        TextView toggleLabel = new TextView(this);
+        toggleLabel.setText("Tutorial");
+        toggleLabel.setTextColor(Color.WHITE);
+        toggleLabel.setTextSize(14);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        labelParams.rightMargin = (int) (12 * getResources().getDisplayMetrics().density);
+        toggleLabel.setLayoutParams(labelParams);
+        toggleRow.addView(toggleLabel);
+
+        tutorialSwitch = new Switch(this);
+        tutorialSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", true));
+        int[][] swStates = new int[][] { new int[] { android.R.attr.state_checked }, new int[] {} };
+        tutorialSwitch.setTrackTintList(new ColorStateList(swStates, new int[] { 0xFFFF0000, 0xFF555555 }));
+        tutorialSwitch.setThumbTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton b, boolean on) {
                 getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
-                updateToggleBg();
                 updateTutorialUI();
             }
         });
-        moreContent.addView(tutorialToggle);
+        toggleRow.addView(tutorialSwitch);
+        moreContent.addView(toggleRow);
 
         GradientDrawable logBorder = new GradientDrawable();
         logBorder.setColor(Color.BLACK);
@@ -678,16 +689,8 @@ public class MainActivity extends Activity {
         updateTutorialUI();
     }
 
-    private void updateToggleBg() {
-        if (tutorialToggle == null) return;
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius((int) (14 * getResources().getDisplayMetrics().density));
-        bg.setColor(tutorialToggle.isChecked() ? 0xFF4CAF50 : 0xFF555555);
-        tutorialToggle.setBackground(bg);
-    }
-
     private void updateTutorialUI() {
-        boolean tutorial = tutorialToggle == null || tutorialToggle.isChecked();
+        boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
         int vis = tutorial ? View.VISIBLE : View.GONE;
         if (installMsgView != null) installMsgView.setVisibility(vis);
         if (step1Label != null) step1Label.setVisibility(vis);
@@ -710,6 +713,14 @@ public class MainActivity extends Activity {
         }
         if (pixelRippleView != null) {
             pixelRippleView.setTutorialMode(tutorial);
+        }
+        if (logoImage != null) {
+            float density = getResources().getDisplayMetrics().density;
+            int logoDp = tutorial ? 160 : 200;
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    (int) (logoDp * density), (int) (logoDp * density));
+            lp.gravity = Gravity.CENTER_HORIZONTAL;
+            logoImage.setLayoutParams(lp);
         }
     }
 
@@ -1174,13 +1185,15 @@ public class MainActivity extends Activity {
             }
             strokePaint.setPathEffect(new DashPathEffect(new float[]{12f * density, 8f * density}, dashPhase));
             Path ringPath = new Path();
-            ringPath.addCircle(cx, cy, DASH_RING_RADIUS_DP * density, Path.Direction.CW);
+            float dashR = (tutorialMode ? 80f : 100f) + 10f;
+            ringPath.addCircle(cx, cy, dashR * density, Path.Direction.CW);
             canvas.drawPath(ringPath, strokePaint);
             strokePaint.setPathEffect(null);
             if (rippleStartMs < 0L) return;
             long rippleT = SystemClock.uptimeMillis() - rippleStartMs;
-            int count = tutorialMode ? 6 : 24;
-            float stagger = tutorialMode ? RIPPLE_STAGGER_MS : 75f;
+            float logoEdge = tutorialMode ? 80f : 100f;
+            int count = tutorialMode ? 6 : 48;
+            float stagger = tutorialMode ? RIPPLE_STAGGER_MS : 30f;
             float fizzle = 0f;
             if (tutorialMode) {
                 fizzle = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
@@ -1190,8 +1203,8 @@ public class MainActivity extends Activity {
                 if (born < 0L) continue;
                 float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (96f + i * 4f);
-                float r = (LOGO_EDGE_DP + (targetR - LOGO_EDGE_DP) * ease) * density;
+                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (96f + 2f * i + 0.05f * i * i);
+                float r = (logoEdge + (targetR - logoEdge) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
                 int color;
                 if (tutorialMode) {
@@ -1206,7 +1219,7 @@ public class MainActivity extends Activity {
                         color = RIPPLE_COLORS[0];
                     }
                 } else {
-                    color = lerpColor(0xFFFF0000, 0xFF800000, i / 23f);
+                    color = lerpColor(0xFFFF0000, 0xFF800000, i / 47f);
                 }
                 if (alpha <= 0f) continue;
                 fillPaint.setColor(color);
