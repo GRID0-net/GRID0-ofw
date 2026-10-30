@@ -536,6 +536,25 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         tableBox.addView(table);
+
+        ImageButton reloadBtn = new ImageButton(this);
+        reloadBtn.setImageResource(android.R.drawable.ic_popup_sync);
+        reloadBtn.setBackgroundColor(Color.TRANSPARENT);
+        LinearLayout.LayoutParams reloadParams = new LinearLayout.LayoutParams(
+                (int) (32 * getResources().getDisplayMetrics().density),
+                (int) (32 * getResources().getDisplayMetrics().density));
+        reloadParams.gravity = Gravity.END;
+        reloadParams.rightMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        reloadParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
+        reloadParams.bottomMargin = (int) (4 * getResources().getDisplayMetrics().density);
+        reloadBtn.setLayoutParams(reloadParams);
+        reloadBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                refreshMoreTab();
+            }
+        });
+        moreContent.addView(reloadBtn);
         moreContent.addView(tableBox);
         moreValues.clear();
 
