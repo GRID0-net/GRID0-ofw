@@ -557,6 +557,11 @@ public class MainActivity extends Activity {
 
         LinearLayout social = new LinearLayout(this);
         social.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams socialParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        socialParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
+        social.setLayoutParams(socialParams);
 
         Button discord = new Button(this);
         discord.setText("Discord");
