@@ -536,6 +536,18 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         tableBox.addView(table);
+        ImageButton reloadBtn = new ImageButton(this);
+        reloadBtn.setImageResource(android.R.drawable.ic_popup_sync);
+        reloadBtn.setBackgroundColor(0);
+        LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(96, 96);
+        rlp.gravity = 5;
+        reloadBtn.setLayoutParams(rlp);
+        reloadBtn.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                refreshMoreTab();
+            }
+        });
+        moreContent.addView(reloadBtn);
         moreContent.addView(tableBox);
         moreValues.clear();
 
@@ -557,6 +569,9 @@ public class MainActivity extends Activity {
 
         LinearLayout social = new LinearLayout(this);
         social.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams slp = new LinearLayout.LayoutParams(-1, -2);
+        slp.topMargin = 72;
+        social.setLayoutParams(slp);
 
         Button discord = new Button(this);
         discord.setText("Discord");
