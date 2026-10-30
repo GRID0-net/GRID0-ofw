@@ -73,6 +73,7 @@ public class MainActivity extends Activity {
     private ImageView logoImage;
     private PixelRippleView pixelRippleView;
     private ValueAnimator waveAnimator;
+    private ValueAnimator spinAnimator;
     private ValueAnimator saturationAnimator;
     private ValueAnimator borderAnimator;
     private TextView statusText;
@@ -398,7 +399,7 @@ public class MainActivity extends Activity {
         logoFrame.addView(logoImage);
 
         pixelRippleView = new PixelRippleView(this);
-        int rippleSize = (int) (360 * getResources().getDisplayMetrics().density);
+        int rippleSize = (int) (600 * getResources().getDisplayMetrics().density);
         FrameLayout.LayoutParams rippleParams = new FrameLayout.LayoutParams(rippleSize, rippleSize);
         rippleParams.gravity = Gravity.CENTER;
         pixelRippleView.setLayoutParams(rippleParams);
@@ -544,26 +545,6 @@ public class MainActivity extends Activity {
         addMoreRow(table, "Phone IP", "phone_ip");
 
         addMoreRow(table, "Client isolation", "isolation");
-        // tiny refresh button beside the isolation value, inside the box
-        TextView isolationValue = moreValues.get("isolation");
-        if (isolationValue != null && isolationValue.getParent() instanceof TableRow) {
-            TableRow isoRow = (TableRow) isolationValue.getParent();
-            ImageButton isoRefresh = new ImageButton(this);
-            isoRefresh.setImageResource(android.R.drawable.ic_popup_sync);
-            isoRefresh.setBackgroundColor(Color.TRANSPARENT);
-            float density = getResources().getDisplayMetrics().density;
-            TableRow.LayoutParams bp = new TableRow.LayoutParams(
-                    (int) (24 * density), (int) (24 * density));
-            bp.gravity = Gravity.CENTER_VERTICAL;
-            isoRefresh.setLayoutParams(bp);
-            isoRefresh.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    checkClientIsolation();
-                }
-            });
-            isoRow.addView(isoRefresh, 1);
-        }
 
         addMoreRow(table, "ZeroTier status", "zt_status");
 
@@ -1183,6 +1164,7 @@ public class MainActivity extends Activity {
         waveAnimator = ValueAnimator.ofFloat(0f, 1f);
         waveAnimator.setDuration(2000);
         waveAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        waveAnimator.setInterpolator(new LinearInterpolator());
         waveAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator a) {
@@ -1190,11 +1172,28 @@ public class MainActivity extends Activity {
             }
         });
         waveAnimator.start();
+        spinAnimator = ValueAnimator.ofFloat(0f, (float)(2 * Math.PI));
+        spinAnimator.setDuration(45000);
+        spinAnimator.setRepeatCount(ValueAnimator.INFINITE);
+        spinAnimator.setInterpolator(new LinearInterpolator());
+        spinAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator a) {
+                pixelRippleView.setSpinAngle((Float) a.getAnimatedValue());
+            }
+        });
+        spinAnimator.start();
     }
 
     private void stopRipple() {
         if (waveAnimator != null) {
             waveAnimator.cancel();
+            waveAnimator = null;
+        }
+        if (spinAnimator != null) {
+            spinAnimator.cancel();
+            spinAnimator = null;
+        }
             waveAnimator = null;
         }
         if (pixelRippleView != null) {
@@ -1214,6 +1213,7 @@ public class MainActivity extends Activity {
         private final Paint strokePaint = new Paint();
         private long rippleStartMs = -1L;
         private float wavePhase = 0f;
+        private float spinAngle = 0f;
         private float borderProgress = 0f;
         private boolean tutorialMode = true;
 
@@ -1238,11 +1238,17 @@ public class MainActivity extends Activity {
         public void stopRipples() {
             rippleStartMs = -1L;
             wavePhase = 0f;
+            spinAngle = 0f;
             invalidate();
         }
 
         public void setWavePhase(float phase) {
             wavePhase = phase;
+            invalidate();
+        }
+
+        public void setSpinAngle(float angle) {
+            spinAngle = angle;
             invalidate();
         }
 
@@ -1271,7 +1277,6 @@ public class MainActivity extends Activity {
             float logoEdge = tutorialMode ? 92f : 118f;
             int count = tutorialMode ? 6 : 24;
             float stagger = tutorialMode ? RIPPLE_STAGGER_MS : 30f;
-            float spinAngle = (SystemClock.uptimeMillis() - rippleStartMs) * (float)(2 * Math.PI) / 45000f;
             float fizzle = 0f;
             if (tutorialMode) {
                 fizzle = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
@@ -1281,7 +1286,7 @@ public class MainActivity extends Activity {
                 if (born < 0L) continue;
                 float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 5f + 1.5f * i);
+                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 5f + 5f * i + 0.12f * i * i);
                 float r = (logoEdge + (targetR - logoEdge) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
                 int color;
