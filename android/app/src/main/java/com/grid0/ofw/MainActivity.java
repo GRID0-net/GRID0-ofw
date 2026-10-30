@@ -12,7 +12,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
-import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.Typeface;
@@ -37,8 +36,13 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TableLayout;
+import android.widget.Switch;
+import android.widget.ImageButton;
+import android.content.res.ColorStateList;
+import android.os.Handler;
+import android.os.Looper;
+import java.net.InetAddress;
 import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -72,6 +76,7 @@ public class MainActivity extends Activity {
     private ValueAnimator saturationAnimator;
     private ValueAnimator borderAnimator;
     private TextView statusText;
+    private TextView switchDetectedView;
     private TextView step1Label;
     private Button step1Button;
     private ImageView step1Check;
@@ -87,17 +92,41 @@ public class MainActivity extends Activity {
     private TextView tabMore;
     private LinearLayout homeContent;
     private LinearLayout moreContent;
+    private Switch tutorialSwitch;
+    private FrameLayout logoFrame;
+    private View installMsgView;
+    private View step1Row;
+    private View step2Row;
+    private View step3Row;
 
     private Map<String, TextView> moreValues = new HashMap<>();
-    private Button checkIsolationButton;
-    private TextView isolationResultView;
 
-    @Override
+
+    private final Handler switchCheckHandler = new Handler(Looper.getMainLooper());
+    private final Runnable switchCheckRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateSwitchDetected();
+            switchCheckHandler.postDelayed(this, 15000);
+        }
+    };
+
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                android.util.Log.e("GRID0_CRASH", "CRASH: " + e.toString());
+                for (StackTraceElement el : e.getStackTrace()) {
+                    android.util.Log.e("GRID0_CRASH", "  at " + el.toString());
+                }
+                System.exit(1);
+            }
+        });
         zeroTierInstalled = isZeroTierInstalled();
 
         buildLayout();
+        switchCheckHandler.postDelayed(switchCheckRunnable, 15000);
     }
 
     @Override
@@ -290,7 +319,7 @@ public class MainActivity extends Activity {
         main.setPadding(pad, pad, pad, pad);
         FrameLayout.LayoutParams mainParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
+                FrameLayout.LayoutParams.MATCH_PARENT);
         mainParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         mainParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
         main.setLayoutParams(mainParams);
@@ -344,7 +373,7 @@ public class MainActivity extends Activity {
         homeContent.setLayoutParams(homeParams);
         main.addView(homeContent);
 
-        FrameLayout logoFrame = new FrameLayout(this);
+        logoFrame = new FrameLayout(this);
 
         int frameSize = (int) (180 * getResources().getDisplayMetrics().density);
         LinearLayout.LayoutParams frameParams = new LinearLayout.LayoutParams(frameSize, frameSize);
@@ -355,7 +384,7 @@ public class MainActivity extends Activity {
         logoImage = new ImageView(this);
         logoImage.setImageResource(R.drawable.logo);
 
-        int logoSize = (int) (160 * getResources().getDisplayMetrics().density);
+        int logoSize = (int) (184 * getResources().getDisplayMetrics().density);
         FrameLayout.LayoutParams logoParams = new FrameLayout.LayoutParams(logoSize, logoSize);
         logoParams.gravity = Gravity.CENTER;
         logoImage.setLayoutParams(logoParams);
@@ -363,6 +392,16 @@ public class MainActivity extends Activity {
         logoImage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (tutorialSwitch != null && !tutorialSwitch.isChecked() && !proxyRunning) {
+                    if (!zeroTierInstalled) {
+                        Toast.makeText(MainActivity.this, "ZeroTier isn't installed", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (!isGrid0Connected()) {
+                        Toast.makeText(MainActivity.this, "You're not connected to GRID0", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
                 toggleProxy();
             }
         });
@@ -399,6 +438,18 @@ public class MainActivity extends Activity {
         statusText.setLayoutParams(statusParams);
         homeContent.addView(statusText);
 
+        switchDetectedView = new TextView(this);
+        switchDetectedView.setTextSize(14);
+        switchDetectedView.setTextColor(Color.WHITE);
+        switchDetectedView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams sdParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sdParams.gravity = Gravity.CENTER_HORIZONTAL;
+        sdParams.topMargin = (int) (32 * getResources().getDisplayMetrics().density);
+        switchDetectedView.setLayoutParams(sdParams);
+        switchDetectedView.setVisibility(View.GONE);
+        homeContent.addView(switchDetectedView);
+
         View spacer = new View(this);
         LinearLayout.LayoutParams spacerParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -414,6 +465,7 @@ public class MainActivity extends Activity {
             msg.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
             msg.setGravity(Gravity.CENTER);
             homeContent.addView(msg);
+            installMsgView = msg;
         }
 
         step1Label = makeStepLabel("Step 1", 8);
@@ -426,8 +478,8 @@ public class MainActivity extends Activity {
                 openZeroTierStore();
             }
         });
-        FrameLayout step1Row = makeStepRow(step1Button);
-        step1Check = addCheckToRow(step1Row);
+        step1Row = makeStepRow(step1Button);
+        step1Check = addCheckToRow((FrameLayout) step1Row);
         homeContent.addView(step1Row);
 
         step2Label = makeStepLabel("Step 2", 16);
@@ -440,8 +492,8 @@ public class MainActivity extends Activity {
                 connectToGrid0Network();
             }
         });
-        FrameLayout step2Row = makeStepRow(step2Button);
-        step2Check = addCheckToRow(step2Row);
+        step2Row = makeStepRow(step2Button);
+        step2Check = addCheckToRow((FrameLayout) step2Row);
         homeContent.addView(step2Row);
 
         step3Label = makeStepLabel("Step 3", 16);
@@ -454,32 +506,8 @@ public class MainActivity extends Activity {
                 toggleProxy();
             }
         });
-        homeContent.addView(makeStepRow(step3Button));
-
-        LinearLayout tutorialRow = new LinearLayout(this);
-        tutorialRow.setOrientation(LinearLayout.HORIZONTAL);
-        tutorialRow.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams tutorialParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        tutorialParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
-        tutorialRow.setLayoutParams(tutorialParams);
-        TextView tutorialLabel = new TextView(this);
-        tutorialLabel.setText("Tutorial");
-        tutorialLabel.setTextColor(Color.WHITE);
-        tutorialLabel.setTextSize(14);
-        tutorialLabel.setPadding(0, 0, (int) (8 * getResources().getDisplayMetrics().density), 0);
-        tutorialRow.addView(tutorialLabel);
-        Switch tutorialSwitch = new Switch(this);
-        tutorialSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", false));
-        tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton b, boolean on) {
-                getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
-            }
-        });
-        tutorialRow.addView(tutorialSwitch);
-        homeContent.addView(tutorialRow);
+        step3Row = makeStepRow(step3Button);
+        homeContent.addView(step3Row);
 
         moreContent = new LinearLayout(this);
         moreContent.setOrientation(LinearLayout.VERTICAL);
@@ -526,6 +554,26 @@ public class MainActivity extends Activity {
         addMoreRow(table, "Phone IP", "phone_ip");
 
         addMoreRow(table, "Client isolation", "isolation");
+        // tiny refresh button beside the isolation value, inside the box
+        TextView isolationValue = moreValues.get("isolation");
+        if (isolationValue != null && isolationValue.getParent() instanceof TableRow) {
+            TableRow isoRow = (TableRow) isolationValue.getParent();
+            ImageButton isoRefresh = new ImageButton(this);
+            isoRefresh.setImageResource(android.R.drawable.ic_popup_sync);
+            isoRefresh.setBackgroundColor(Color.TRANSPARENT);
+            float density = getResources().getDisplayMetrics().density;
+            TableRow.LayoutParams bp = new TableRow.LayoutParams(
+                    (int) (24 * density), (int) (24 * density));
+            bp.gravity = Gravity.CENTER_VERTICAL;
+            isoRefresh.setLayoutParams(bp);
+            isoRefresh.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    checkClientIsolation();
+                }
+            });
+            isoRow.addView(isoRefresh, 1);
+        }
 
         addMoreRow(table, "ZeroTier status", "zt_status");
 
@@ -542,30 +590,7 @@ public class MainActivity extends Activity {
         });
         moreContent.addView(refresh);
 
-        checkIsolationButton = makeButton("Check Client Isolation", 220);
-        checkIsolationButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                checkClientIsolation();
-            }
-        });
-        moreContent.addView(checkIsolationButton);
 
-        TextView isolationHelp = new TextView(this);
-        isolationHelp.setText("Scans this Wi-Fi network for any other device. If one answers, client isolation is off.");
-        isolationHelp.setTextColor(Color.WHITE);
-        isolationHelp.setTextSize(14);
-        isolationHelp.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
-        isolationHelp.setGravity(Gravity.CENTER);
-        moreContent.addView(isolationHelp);
-
-        isolationResultView = new TextView(this);
-        isolationResultView.setText(isolationResult);
-        isolationResultView.setTextColor(Color.WHITE);
-        isolationResultView.setTextSize(14);
-        isolationResultView.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        isolationResultView.setGravity(Gravity.CENTER);
-        moreContent.addView(isolationResultView);
 
         LinearLayout social = new LinearLayout(this);
         social.setOrientation(LinearLayout.HORIZONTAL);
@@ -621,6 +646,42 @@ public class MainActivity extends Activity {
         social.addView(support);
         moreContent.addView(social);
 
+        LinearLayout toggleRow = new LinearLayout(this);
+        toggleRow.setOrientation(LinearLayout.HORIZONTAL);
+        toggleRow.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowParams.gravity = Gravity.CENTER_HORIZONTAL;
+        rowParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        toggleRow.setLayoutParams(rowParams);
+
+        TextView toggleLabel = new TextView(this);
+        toggleLabel.setText("Tutorial");
+        toggleLabel.setTextColor(Color.WHITE);
+        toggleLabel.setTextSize(14);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        labelParams.rightMargin = (int) (12 * getResources().getDisplayMetrics().density);
+        toggleLabel.setLayoutParams(labelParams);
+        toggleRow.addView(toggleLabel);
+
+        tutorialSwitch = new Switch(this);
+        tutorialSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", true));
+        int[][] swStates = new int[][] { new int[] { android.R.attr.state_checked }, new int[] {} };
+        tutorialSwitch.setTrackTintList(new ColorStateList(swStates, new int[] { 0xFFFF0000, 0xFF555555 }));
+        tutorialSwitch.setThumbTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        tutorialSwitch.setScaleX(0.85f);
+        tutorialSwitch.setScaleY(0.85f);
+        tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
+                updateTutorialUI();
+            }
+        });
+        toggleRow.addView(tutorialSwitch);
+        moreContent.addView(toggleRow);
+
         GradientDrawable logBorder = new GradientDrawable();
         logBorder.setColor(Color.BLACK);
 
@@ -658,6 +719,56 @@ public class MainActivity extends Activity {
         showTab();
 
         updateProxyUI();
+
+        updateTutorialUI();
+    }
+
+    private void updateTutorialUI() {
+        boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
+        int vis = tutorial ? View.VISIBLE : View.GONE;
+        if (installMsgView != null) installMsgView.setVisibility(vis);
+        if (step1Label != null) step1Label.setVisibility(vis);
+        if (step1Row != null) step1Row.setVisibility(vis);
+        if (step2Label != null) step2Label.setVisibility(vis);
+        if (step2Row != null) step2Row.setVisibility(vis);
+        if (step3Label != null) step3Label.setVisibility(vis);
+        if (step3Row != null) step3Row.setVisibility(vis);
+        if (homeContent != null) {
+            float density = getResources().getDisplayMetrics().density;
+            LinearLayout.LayoutParams p = (LinearLayout.LayoutParams) homeContent.getLayoutParams();
+            if (tutorial) {
+                p.height = LinearLayout.LayoutParams.WRAP_CONTENT;
+                p.topMargin = (int) (16 * density);
+            } else {
+                p.height = LinearLayout.LayoutParams.MATCH_PARENT;
+                p.topMargin = 0;
+            }
+            homeContent.setLayoutParams(p);
+        }
+        if (pixelRippleView != null) {
+            pixelRippleView.setTutorialMode(tutorial);
+        }
+        if (logoImage != null) {
+            float density = getResources().getDisplayMetrics().density;
+            int logoDp = tutorial ? 184 : 236;
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    (int) (logoDp * density), (int) (logoDp * density));
+            lp.gravity = Gravity.CENTER_HORIZONTAL;
+            logoImage.setLayoutParams(lp);
+        }
+        if (logoFrame != null) {
+            float density = getResources().getDisplayMetrics().density;
+            int frameDp = tutorial ? 204 : 256;
+            LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(
+                    (int) (frameDp * density), (int) (frameDp * density));
+            fp.gravity = Gravity.CENTER;
+            fp.topMargin = (int) (16 * density);
+            if (!tutorial) {
+                fp.bottomMargin = (int) (20 * density);
+            }
+            logoFrame.setLayoutParams(fp);
+        }
+        updateSwitchDetected();
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {
@@ -736,12 +847,80 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void checkClientIsolation() {
-        if (checkIsolationButton != null) {
-            checkIsolationButton.setEnabled(false);
-            checkIsolationButton.setText("Checking...");
-        }
+    private static final String[] NINTENDO_OUIS = {
+        "60:6B:FF", "7C:BB:8A", "CC:9E:00", "8C:CD:E8", "40:F3:08", "34:AF:2C"
+    };
 
+    private String[] detectSwitch() {
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader("/proc/net/arp"));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("IP address")) continue;
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length < 4) continue;
+                String mac = parts[3].toUpperCase();
+                if (mac.equals("00:00:00:00:00:00")) continue;
+                for (String oui : NINTENDO_OUIS) {
+                    if (mac.startsWith(oui)) {
+                        String ip = parts[0];
+                        String name = tryResolveName(ip);
+                        reader.close();
+                        return new String[]{ip, mac, name};
+                    }
+                }
+            }
+            reader.close();
+        } catch (Exception e) {
+        }
+        return null;
+    }
+
+    private String tryResolveName(String ip) {
+        try {
+            String host = InetAddress.getByName(ip).getCanonicalHostName();
+            if (host != null && !host.equals(ip) && !host.equalsIgnoreCase("switch")) {
+                return host;
+            }
+        } catch (Exception e) {
+        }
+        return null;
+    }
+
+    private void updateSwitchDetected() {
+        if (switchDetectedView == null) return;
+        boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
+        if (tutorial || currentTab != 0) {
+            final boolean t = tutorial;
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    switchDetectedView.setVisibility(View.GONE);
+                }
+            });
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final String[] sw = detectSwitch();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (sw == null) {
+                            switchDetectedView.setVisibility(View.GONE);
+                            return;
+                        }
+                        String id = sw[2] != null ? sw[2] : sw[1];
+                        switchDetectedView.setText("Switch detected: " + id);
+                        switchDetectedView.setVisibility(View.VISIBLE);
+                    }
+                });
+            }
+        }).start();
+    }
+
+    private void checkClientIsolation() {
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -750,17 +929,7 @@ public class MainActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        if (isolationResultView != null) {
-                            isolationResultView.setText(result);
-                        }
-
                         setMoreValue("isolation", result);
-
-                        if (checkIsolationButton != null) {
-                            checkIsolationButton.setText("Check Client Isolation");
-                            checkIsolationButton.setEnabled(proxyRunning);
-                            setButtonFill(checkIsolationButton, proxyRunning);
-                        }
                     }
                 });
             }
@@ -922,9 +1091,8 @@ public class MainActivity extends Activity {
     }
 
     private void toggleProxy() {
-        buzz();
-
         if (!proxyRunning) {
+            buzz();
             if (!isGrid0Connected()) {
                 Toast.makeText(this, "Connect to the GRID0 network first", Toast.LENGTH_LONG).show();
 
@@ -1054,19 +1222,24 @@ public class MainActivity extends Activity {
     }
 
     private static class PixelRippleView extends View {
-        private static final float[] RIPPLE_RADII_DP = {96f, 104f, 112f, 120f, 128f, 136f};
+        private static final float[] RIPPLE_RADII_DP = {97f, 107f, 117f, 126f, 133f, 136f};
         private static final int[] RIPPLE_COLORS = {0xFFFF0000, 0xFFE60000, 0xFFCC0000, 0xFFB30000, 0xFF990000, 0xFF800000};
         private static final float LOGO_EDGE_DP = 80f;
         private static final float RIPPLE_STAGGER_MS = 150f;
         private static final float EXPAND_MS = 600f;
         private static final float FIZZLE_START_MS = 8000f;
         private static final float FIZZLE_MS = 12000f;
-        private static final float DASH_RING_RADIUS_DP = 90f;
         private final Paint fillPaint = new Paint();
         private final Paint strokePaint = new Paint();
         private long rippleStartMs = -1L;
         private float wavePhase = 0f;
         private float borderProgress = 0f;
+        private boolean tutorialMode = true;
+
+        public void setTutorialMode(boolean t) {
+            tutorialMode = t;
+            invalidate();
+        }
 
         public PixelRippleView(Context context) {
             super(context);
@@ -1107,50 +1280,64 @@ public class MainActivity extends Activity {
             float cx = getWidth() / 2f;
             float cy = getHeight() / 2f;
             int ringColor = lerpColor(0xFF808080, 0xFFFF0000, borderProgress);
-            strokePaint.setStrokeWidth(4f * density);
+            strokePaint.setStrokeWidth(3f * density);
             strokePaint.setColor(ringColor);
-            float dashPhase = 0f;
-            if (rippleStartMs >= 0L) {
-                dashPhase = -(SystemClock.uptimeMillis() - rippleStartMs) * 0.06f * density;
-            }
-            strokePaint.setPathEffect(new DashPathEffect(new float[]{12f * density, 8f * density}, dashPhase));
-            Path ringPath = new Path();
-            ringPath.addCircle(cx, cy, DASH_RING_RADIUS_DP * density, Path.Direction.CW);
-            canvas.drawPath(ringPath, strokePaint);
-            strokePaint.setPathEffect(null);
+            strokePaint.setAntiAlias(true);
+            float edgeR = (tutorialMode ? 92f : 118f) * density;
+            canvas.drawCircle(cx, cy, edgeR, strokePaint);
             if (rippleStartMs < 0L) return;
             long rippleT = SystemClock.uptimeMillis() - rippleStartMs;
-            float fizzle = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
-            for (int i = 0; i < 6; i++) {
-                long born = rippleT - (long) (i * RIPPLE_STAGGER_MS);
+            float logoEdge = tutorialMode ? 92f : 118f;
+            int count = tutorialMode ? 6 : 24;
+            float stagger = tutorialMode ? RIPPLE_STAGGER_MS : 30f;
+            float spinAngle = (SystemClock.uptimeMillis() - rippleStartMs) * (float)(2 * Math.PI) / 45000f;
+            float fizzle = 0f;
+            if (tutorialMode) {
+                fizzle = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
+            }
+            for (int i = 0; i < count; i++) {
+                long born = rippleT - (long) (i * stagger);
                 if (born < 0L) continue;
                 float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float r = (LOGO_EDGE_DP + (RIPPLE_RADII_DP[i] - LOGO_EDGE_DP) * ease) * density;
+                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 5f + 5f * i + 0.12f * i * i);
+                float r = (logoEdge + (targetR - logoEdge) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
-                if (i >= 3) {
-                    alpha *= (1f - fizzle);
+                int color;
+                if (tutorialMode) {
+                    if (i >= 3) {
+                        alpha *= (1f - fizzle);
+                        color = RIPPLE_COLORS[i];
+                    } else if (i == 1) {
+                        color = lerpColor(RIPPLE_COLORS[1], RIPPLE_COLORS[3], fizzle);
+                    } else if (i == 2) {
+                        color = lerpColor(RIPPLE_COLORS[2], RIPPLE_COLORS[5], fizzle);
+                    } else {
+                        color = RIPPLE_COLORS[0];
+                    }
                 } else {
-                    alpha *= (1f - 0.5f * fizzle);
+                    color = lerpColor(0xFFFF0000, 0xFF800000, i / 23f);
                 }
                 if (alpha <= 0f) continue;
-                fillPaint.setColor(RIPPLE_COLORS[i]);
+                fillPaint.setColor(color);
                 fillPaint.setAlpha((int) (alpha * 255));
-                drawSquareRing(canvas, cx, cy, r, fillPaint);
+                float sqDp = tutorialMode ? (4.5f - i * 0.5f) : (4.5f - i * (3f / 23f));
+                drawDotRing(canvas, cx, cy, r, targetR, spinAngle, fillPaint, sqDp);
             }
         }
 
-        private void drawSquareRing(Canvas canvas, float cx, float cy, float r, Paint paint) {
+        private void drawDotRing(Canvas canvas, float cx, float cy, float r, float targetR, float spinAngle, Paint paint, float sqDp) {
             float density = getResources().getDisplayMetrics().density;
-            float sq = 3f * density;
-            int n = Math.max(48, (int) Math.round((2 * Math.PI * r) / (6f * density)));
+            float sq = sqDp * density;
+            paint.setAntiAlias(true);
+            int n = Math.max(48, (int) Math.round((2 * Math.PI * targetR * density) / 6f));
             for (int j = 0; j < n; j++) {
-                double a = (j / (double) n) * 2 * Math.PI;
+                double a = (j / (double) n) * 2 * Math.PI - Math.PI / 2 + spinAngle;
                 float wobble = 1f + 0.03f * (float) Math.sin(2 * Math.PI * (j / (float) n * 4f + wavePhase));
                 float rr = r * wobble;
                 float x = cx + rr * (float) Math.cos(a);
                 float y = cy + rr * (float) Math.sin(a);
-                canvas.drawRect(x - sq / 2f, y - sq / 2f, x + sq / 2f, y + sq / 2f, paint);
+                canvas.drawCircle(x, y, sq / 2f, paint);
             }
         }
 
@@ -1165,11 +1352,6 @@ public class MainActivity extends Activity {
 
     private void updateProxyUI() {
         updateSteps();
-
-        if (checkIsolationButton != null) {
-            checkIsolationButton.setEnabled(proxyRunning);
-            setButtonFill(checkIsolationButton, proxyRunning);
-        }
 
         if (logScroll != null) {
             logScroll.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
