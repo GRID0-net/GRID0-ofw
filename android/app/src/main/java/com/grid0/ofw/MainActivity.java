@@ -102,7 +102,6 @@ public class MainActivity extends Activity {
     private Map<String, TextView> moreValues = new HashMap<>();
 
 
-    @Override
     private final Handler switchCheckHandler = new Handler(Looper.getMainLooper());
     private final Runnable switchCheckRunnable = new Runnable() {
         @Override
