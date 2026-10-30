@@ -522,7 +522,7 @@ public class MainActivity extends Activity {
         int boxMargin = (int) (16 * getResources().getDisplayMetrics().density);
         boxParams.leftMargin = boxMargin;
         boxParams.rightMargin = boxMargin;
-        boxParams.topMargin = (int) (15 * getResources().getDisplayMetrics().density);
+        boxParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
         tableBox.setLayoutParams(boxParams);
 
         TableLayout table = new TableLayout(this);
@@ -539,6 +539,7 @@ public class MainActivity extends Activity {
         reloadBtn.setLayoutParams(rlp);
         reloadBtn.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
+                v.animate().rotationBy(180f).setDuration(300).start();
                 refreshMoreTab();
             }
         });
@@ -552,11 +553,15 @@ public class MainActivity extends Activity {
 
         addMoreRow(table, "Phone IP", "phone_ip");
 
+        addMoreRow(table, "Switch IP", "switch_ip");
+
         addMoreRow(table, "Client isolation", "isolation");
 
         addMoreRow(table, "ZeroTier status", "zt_status");
 
-        addMoreRow(table, "GRID0 network", "grid0_network");
+        addMoreRow(table, "Wi-Fi Status", "wifi_status");
+
+        addMoreRow(table, "Network Status", "grid0_network");
 
         addMoreRow(table, "Network ID", "network_id");
 
@@ -754,13 +759,29 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(
                     (int) (frameDp * density), (int) (frameDp * density));
             fp.gravity = Gravity.CENTER;
-            fp.topMargin = (int) (16 * density);
+            fp.topMargin = (int) ((tutorial ? 16 : 8) * density);
             if (!tutorial) {
                 fp.bottomMargin = (int) (20 * density);
             }
             logoFrame.setLayoutParams(fp);
         }
         updateSwitchDetected();
+        if (logoFrame != null && pixelRippleView != null) {
+            logoFrame.post(new Runnable() {
+                @Override
+                public void run() {
+                    int[] loc = new int[2];
+                    logoFrame.getLocationOnScreen(loc);
+                    float centerY = loc[1] + logoFrame.getHeight() / 2f;
+                    int[] rootLoc = new int[2];
+                    View rootView = findViewById(android.R.id.content);
+                    if (rootView != null) {
+                        rootView.getLocationOnScreen(rootLoc);
+                        pixelRippleView.setCenterY(centerY - rootLoc[1]);
+                    }
+                }
+            });
+        }
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {
@@ -828,9 +849,13 @@ public class MainActivity extends Activity {
 
         setMoreValue("phone_ip", getPhoneWifiIp());
 
+        setMoreValue("switch_ip", "not detected");
+
         setMoreValue("isolation", isolationResult);
 
         setMoreValue("zt_status", isVpnConnected() ? "Connected" : "Not connected");
+
+        setMoreValue("wifi_status", "connected");
 
         setMoreValue("grid0_network", isGrid0Connected() ? "Connected" : "Not connected");
 
