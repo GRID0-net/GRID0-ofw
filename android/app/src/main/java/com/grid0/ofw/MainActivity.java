@@ -791,6 +791,9 @@ public class MainActivity extends Activity {
         if (currentTab == 0) {
             homeContent.setVisibility(View.VISIBLE);
             moreContent.setVisibility(View.GONE);
+            if (pixelRippleView != null) {
+                pixelRippleView.setVisibility(View.VISIBLE);
+            }
 
             if (tabHome != null) {
                 styleTab(tabHome, true);
@@ -802,6 +805,9 @@ public class MainActivity extends Activity {
         } else {
             homeContent.setVisibility(View.GONE);
             moreContent.setVisibility(View.VISIBLE);
+            if (pixelRippleView != null) {
+                pixelRippleView.setVisibility(View.GONE);
+            }
 
             if (tabHome != null) {
                 styleTab(tabHome, false);
