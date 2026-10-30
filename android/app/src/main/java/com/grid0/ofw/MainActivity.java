@@ -37,8 +37,8 @@ import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
-import android.widget.Switch;
 import android.widget.TableLayout;
+import android.widget.ToggleButton;
 import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -87,6 +87,11 @@ public class MainActivity extends Activity {
     private TextView tabMore;
     private LinearLayout homeContent;
     private LinearLayout moreContent;
+    private ToggleButton tutorialToggle;
+    private View installMsgView;
+    private View step1Row;
+    private View step2Row;
+    private View step3Row;
 
     private Map<String, TextView> moreValues = new HashMap<>();
     private Button checkIsolationButton;
@@ -290,7 +295,7 @@ public class MainActivity extends Activity {
         main.setPadding(pad, pad, pad, pad);
         FrameLayout.LayoutParams mainParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
+                FrameLayout.LayoutParams.MATCH_PARENT);
         mainParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
         mainParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
         main.setLayoutParams(mainParams);
@@ -363,6 +368,16 @@ public class MainActivity extends Activity {
         logoImage.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (tutorialToggle != null && !tutorialToggle.isChecked() && !proxyRunning) {
+                    if (!zeroTierInstalled) {
+                        Toast.makeText(MainActivity.this, "ZeroTier isn't installed", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (!isGrid0Connected()) {
+                        Toast.makeText(MainActivity.this, "You're not connected to GRID0", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                }
                 toggleProxy();
             }
         });
@@ -414,6 +429,7 @@ public class MainActivity extends Activity {
             msg.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
             msg.setGravity(Gravity.CENTER);
             homeContent.addView(msg);
+            installMsgView = msg;
         }
 
         step1Label = makeStepLabel("Step 1", 8);
@@ -426,8 +442,8 @@ public class MainActivity extends Activity {
                 openZeroTierStore();
             }
         });
-        FrameLayout step1Row = makeStepRow(step1Button);
-        step1Check = addCheckToRow(step1Row);
+        step1Row = makeStepRow(step1Button);
+        step1Check = addCheckToRow((FrameLayout) step1Row);
         homeContent.addView(step1Row);
 
         step2Label = makeStepLabel("Step 2", 16);
@@ -440,8 +456,8 @@ public class MainActivity extends Activity {
                 connectToGrid0Network();
             }
         });
-        FrameLayout step2Row = makeStepRow(step2Button);
-        step2Check = addCheckToRow(step2Row);
+        step2Row = makeStepRow(step2Button);
+        step2Check = addCheckToRow((FrameLayout) step2Row);
         homeContent.addView(step2Row);
 
         step3Label = makeStepLabel("Step 3", 16);
@@ -454,32 +470,34 @@ public class MainActivity extends Activity {
                 toggleProxy();
             }
         });
-        homeContent.addView(makeStepRow(step3Button));
+        step3Row = makeStepRow(step3Button);
+        homeContent.addView(step3Row);
 
-        LinearLayout tutorialRow = new LinearLayout(this);
-        tutorialRow.setOrientation(LinearLayout.HORIZONTAL);
-        tutorialRow.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams tutorialParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        tutorialParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
-        tutorialRow.setLayoutParams(tutorialParams);
-        TextView tutorialLabel = new TextView(this);
-        tutorialLabel.setText("Tutorial");
-        tutorialLabel.setTextColor(Color.WHITE);
-        tutorialLabel.setTextSize(14);
-        tutorialLabel.setPadding(0, 0, (int) (8 * getResources().getDisplayMetrics().density), 0);
-        tutorialRow.addView(tutorialLabel);
-        Switch tutorialSwitch = new Switch(this);
-        tutorialSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", false));
-        tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+        tutorialToggle = new ToggleButton(this);
+        tutorialToggle.setTextOn("TUTORIAL");
+        tutorialToggle.setTextOff("TUTORIAL");
+        tutorialToggle.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", true));
+        tutorialToggle.setTextSize(12);
+        tutorialToggle.setTextColor(Color.WHITE);
+        tutorialToggle.setStateListAnimator(null);
+        FrameLayout.LayoutParams toggleParams = new FrameLayout.LayoutParams(
+                (int) (110 * getResources().getDisplayMetrics().density),
+                (int) (36 * getResources().getDisplayMetrics().density));
+        toggleParams.gravity = Gravity.BOTTOM | Gravity.LEFT;
+        int toggleMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        toggleParams.leftMargin = toggleMargin;
+        toggleParams.bottomMargin = toggleMargin;
+        tutorialToggle.setLayoutParams(toggleParams);
+        updateToggleBg();
+        tutorialToggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton b, boolean on) {
                 getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
+                updateToggleBg();
+                updateTutorialUI();
             }
         });
-        tutorialRow.addView(tutorialSwitch);
-        homeContent.addView(tutorialRow);
+        root.addView(tutorialToggle);
 
         moreContent = new LinearLayout(this);
         moreContent.setOrientation(LinearLayout.VERTICAL);
@@ -658,6 +676,40 @@ public class MainActivity extends Activity {
         showTab();
 
         updateProxyUI();
+
+        updateTutorialUI();
+    }
+
+    private void updateToggleBg() {
+        if (tutorialToggle == null) return;
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius((int) (18 * getResources().getDisplayMetrics().density));
+        bg.setColor(tutorialToggle.isChecked() ? 0xFF4CAF50 : 0xFF555555);
+        tutorialToggle.setBackground(bg);
+    }
+
+    private void updateTutorialUI() {
+        boolean tutorial = tutorialToggle == null || tutorialToggle.isChecked();
+        int vis = tutorial ? View.VISIBLE : View.GONE;
+        if (installMsgView != null) installMsgView.setVisibility(vis);
+        if (step1Label != null) step1Label.setVisibility(vis);
+        if (step1Row != null) step1Row.setVisibility(vis);
+        if (step2Label != null) step2Label.setVisibility(vis);
+        if (step2Row != null) step2Row.setVisibility(vis);
+        if (step3Label != null) step3Label.setVisibility(vis);
+        if (step3Row != null) step3Row.setVisibility(vis);
+        if (homeContent != null) {
+            float density = getResources().getDisplayMetrics().density;
+            LinearLayout.LayoutParams p = (LinearLayout.LayoutParams) homeContent.getLayoutParams();
+            if (tutorial) {
+                p.height = LinearLayout.LayoutParams.WRAP_CONTENT;
+                p.topMargin = (int) (16 * density);
+            } else {
+                p.height = LinearLayout.LayoutParams.MATCH_PARENT;
+                p.topMargin = 0;
+            }
+            homeContent.setLayoutParams(p);
+        }
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {
@@ -683,6 +735,10 @@ public class MainActivity extends Activity {
     private void showTab() {
         if (homeContent == null || moreContent == null) {
             return;
+        }
+
+        if (tutorialToggle != null) {
+            tutorialToggle.setVisibility(currentTab == 0 ? View.VISIBLE : View.GONE);
         }
 
         if (currentTab == 0) {
