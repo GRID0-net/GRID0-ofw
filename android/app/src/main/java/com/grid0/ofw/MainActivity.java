@@ -87,6 +87,7 @@ public class MainActivity extends Activity {
     private TextView tabMore;
     private LinearLayout homeContent;
     private LinearLayout moreContent;
+    private Switch tutorialSwitch;
 
     private Map<String, TextView> moreValues = new HashMap<>();
     private Button checkIsolationButton;
@@ -456,30 +457,7 @@ public class MainActivity extends Activity {
         });
         homeContent.addView(makeStepRow(step3Button));
 
-        LinearLayout tutorialRow = new LinearLayout(this);
-        tutorialRow.setOrientation(LinearLayout.HORIZONTAL);
-        tutorialRow.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams tutorialParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        tutorialParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
-        tutorialRow.setLayoutParams(tutorialParams);
-        TextView tutorialLabel = new TextView(this);
-        tutorialLabel.setText("Tutorial");
-        tutorialLabel.setTextColor(Color.WHITE);
-        tutorialLabel.setTextSize(14);
-        tutorialLabel.setPadding(0, 0, (int) (8 * getResources().getDisplayMetrics().density), 0);
-        tutorialRow.addView(tutorialLabel);
-        Switch tutorialSwitch = new Switch(this);
-        tutorialSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", false));
-        tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton b, boolean on) {
-                getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
-            }
-        });
-        tutorialRow.addView(tutorialSwitch);
-        homeContent.addView(tutorialRow);
+        homeContent.addView(logoFrame);
 
         moreContent = new LinearLayout(this);
         moreContent.setOrientation(LinearLayout.VERTICAL);
@@ -620,6 +598,36 @@ public class MainActivity extends Activity {
         });
         social.addView(support);
         moreContent.addView(social);
+
+        LinearLayout toggleRow = new LinearLayout(this);
+        toggleRow.setOrientation(LinearLayout.HORIZONTAL);
+        toggleRow.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        rowParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        toggleRow.setLayoutParams(rowParams);
+
+        TextView toggleLabel = new TextView(this);
+        toggleLabel.setText("Tutorial");
+        toggleLabel.setTextColor(Color.WHITE);
+        toggleLabel.setTextSize(14);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        labelParams.rightMargin = (int) (12 * getResources().getDisplayMetrics().density);
+        toggleLabel.setLayoutParams(labelParams);
+        toggleRow.addView(toggleLabel);
+
+        tutorialSwitch = new Switch(this);
+        tutorialSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", true));
+        tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
+            }
+        });
+        toggleRow.addView(tutorialSwitch);
+        moreContent.addView(toggleRow);
 
         GradientDrawable logBorder = new GradientDrawable();
         logBorder.setColor(Color.BLACK);
