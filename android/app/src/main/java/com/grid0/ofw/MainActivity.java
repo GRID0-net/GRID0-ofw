@@ -113,13 +113,19 @@ public class MainActivity extends Activity {
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        final android.content.Context ctx = this;
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
-                android.util.Log.e("GRID0_CRASH", "CRASH: " + e.toString());
-                for (StackTraceElement el : e.getStackTrace()) {
-                    android.util.Log.e("GRID0_CRASH", "  at " + el.toString());
-                }
+                try {
+                    java.io.File f = new java.io.File(ctx.getExternalFilesDir(null), "grid0_crash.log");
+                    java.io.PrintWriter pw = new java.io.PrintWriter(f);
+                    pw.println("CRASH: " + e.toString());
+                    for (StackTraceElement el : e.getStackTrace()) {
+                        pw.println("  at " + el.toString());
+                    }
+                    pw.close();
+                } catch (Exception ex) {}
                 System.exit(1);
             }
         });
