@@ -76,7 +76,6 @@ public class MainActivity extends Activity {
     private ValueAnimator saturationAnimator;
     private ValueAnimator borderAnimator;
     private TextView statusText;
-    private LinearLayout switchDetectedLayout;
     private TextView switchDetectedView;
     private TextView step1Label;
     private Button step1Button;
@@ -430,22 +429,17 @@ public class MainActivity extends Activity {
         statusText.setLayoutParams(statusParams);
         homeContent.addView(statusText);
 
-        switchDetectedLayout = new LinearLayout(this);
-        switchDetectedLayout.setOrientation(LinearLayout.HORIZONTAL);
-        switchDetectedLayout.setGravity(Gravity.CENTER);
+        switchDetectedView = new TextView(this);
+        switchDetectedView.setTextSize(14);
+        switchDetectedView.setTextColor(Color.WHITE);
+        switchDetectedView.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams sdParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         sdParams.gravity = Gravity.CENTER_HORIZONTAL;
         sdParams.topMargin = (int) (32 * getResources().getDisplayMetrics().density);
-        switchDetectedLayout.setLayoutParams(sdParams);
-        switchDetectedLayout.setVisibility(View.GONE);
-        float density = getResources().getDisplayMetrics().density;
-        // Switch logo temporarily disabled
-        switchDetectedView = new TextView(this);
-        switchDetectedView.setTextSize(14);
-        switchDetectedView.setTextColor(Color.WHITE);
-        switchDetectedLayout.addView(switchDetectedView);
-        homeContent.addView(switchDetectedLayout);
+        switchDetectedView.setLayoutParams(sdParams);
+        switchDetectedView.setVisibility(View.GONE);
+        homeContent.addView(switchDetectedView);
 
         View spacer = new View(this);
         LinearLayout.LayoutParams spacerParams = new LinearLayout.LayoutParams(
@@ -544,50 +538,48 @@ public class MainActivity extends Activity {
         moreContent.addView(tableBox);
         moreValues.clear();
 
-        // Refresh-all button, top-right above the rows
-        TableRow refreshRow = new TableRow(this);
-        refreshRow.setGravity(Gravity.END);
-        ImageButton refreshAll = new ImageButton(this);
-        refreshAll.setImageResource(android.R.drawable.ic_popup_sync);
-        refreshAll.setBackgroundColor(Color.TRANSPARENT);
-        float rdensity = getResources().getDisplayMetrics().density;
-        TableRow.LayoutParams rbp = new TableRow.LayoutParams(
-                (int) (24 * rdensity), (int) (24 * rdensity));
-        refreshAll.setLayoutParams(rbp);
-        refreshAll.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                refreshMoreTab();
-            }
-        });
-        refreshRow.addView(refreshAll);
-        table.addView(refreshRow);
-
         addMoreRow(table, "ZeroTier installed", "zt_installed");
 
         addMoreRow(table, "ZeroTier IP", "zt_ip");
 
         addMoreRow(table, "Phone IP", "phone_ip");
 
-        addMoreRow(table, "Switch IP", "switch_ip");
-
         addMoreRow(table, "Client isolation", "isolation");
+        // tiny refresh button beside the isolation value, inside the box
+        TextView isolationValue = moreValues.get("isolation");
+        if (isolationValue != null && isolationValue.getParent() instanceof TableRow) {
+            TableRow isoRow = (TableRow) isolationValue.getParent();
+            ImageButton isoRefresh = new ImageButton(this);
+            isoRefresh.setImageResource(android.R.drawable.ic_popup_sync);
+            isoRefresh.setBackgroundColor(Color.TRANSPARENT);
+            float density = getResources().getDisplayMetrics().density;
+            TableRow.LayoutParams bp = new TableRow.LayoutParams(
+                    (int) (24 * density), (int) (24 * density));
+            bp.gravity = Gravity.CENTER_VERTICAL;
+            isoRefresh.setLayoutParams(bp);
+            isoRefresh.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    checkClientIsolation();
+                }
+            });
+            isoRow.addView(isoRefresh, 1);
+        }
+
         addMoreRow(table, "ZeroTier status", "zt_status");
 
-        addMoreRow(table, "Wi-Fi Status", "wifi_status");
-
-        addMoreRow(table, "Network Status", "grid0_network");
+        addMoreRow(table, "GRID0 network", "grid0_network");
 
         addMoreRow(table, "Network ID", "network_id");
 
-        Button checkUpdates = makeButton("Check for Updates", 200);
-        checkUpdates.setOnClickListener(new View.OnClickListener() {
+        Button refresh = makeButton("Refresh", 110);
+        refresh.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Toast.makeText(MainActivity.this, "Checking for updates...", Toast.LENGTH_SHORT).show();
+                refreshMoreTab();
             }
         });
-        moreContent.addView(checkUpdates);
+        moreContent.addView(refresh);
 
 
 
@@ -686,56 +678,28 @@ public class MainActivity extends Activity {
 
         int borderWidth = (int) (2 * getResources().getDisplayMetrics().density);
         logBorder.setStroke(borderWidth, Color.WHITE);
-        FrameLayout logFrame = new FrameLayout(this);
+        logScroll = new ScrollView(this);
         LinearLayout.LayoutParams logParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 (int) (140 * getResources().getDisplayMetrics().density));
+
         int margin = (int) (16 * getResources().getDisplayMetrics().density);
         logParams.leftMargin = margin;
         logParams.rightMargin = margin;
         logParams.topMargin = margin;
-        logFrame.setLayoutParams(logParams);
-        logFrame.setVisibility(View.GONE);
-        logScroll = new ScrollView(this);
-        FrameLayout.LayoutParams scrollParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT);
-        logScroll.setLayoutParams(scrollParams);
+        logScroll.setLayoutParams(logParams);
         logScroll.setBackground(logBorder);
+        logScroll.setVisibility(View.GONE);
         logView = new TextView(this);
         logView.setText("");
         logView.setTextColor(Color.WHITE);
         logView.setTypeface(Typeface.MONOSPACE);
         logView.setTextSize(12);
+
         int logPad = (int) (8 * getResources().getDisplayMetrics().density);
         logView.setPadding(logPad, logPad, logPad, logPad);
         logScroll.addView(logView);
-        logFrame.addView(logScroll);
-        Button copyBtn = new Button(this);
-        copyBtn.setText("Copy");
-        copyBtn.setTextSize(12);
-        FrameLayout.LayoutParams copyParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT);
-        copyParams.gravity = Gravity.TOP | Gravity.END;
-        copyParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
-        copyParams.rightMargin = (int) (8 * getResources().getDisplayMetrics().density);
-        copyBtn.setLayoutParams(copyParams);
-        copyBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (logView != null) {
-                    android.content.ClipboardManager cm =
-                        (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                    cm.setPrimaryClip(android.content.ClipData.newPlainText("log", logView.getText()));
-                    Toast.makeText(MainActivity.this, "Copied", Toast.LENGTH_SHORT).show();
-                }
-            }
-        });
-        logFrame.addView(copyBtn);
-        moreContent.addView(logFrame);
-        // Keep reference for visibility toggling (use logFrame instead of logScroll)
-        logScroll.setTag(logFrame);
+        moreContent.addView(logScroll);
 
         setContentView(root);
 
@@ -857,14 +821,9 @@ public class MainActivity extends Activity {
 
         setMoreValue("phone_ip", getPhoneWifiIp());
 
-        String[] sw = detectSwitch();
-        setMoreValue("switch_ip", sw != null ? sw[0] : "Not detected");
-
         setMoreValue("isolation", isolationResult);
 
         setMoreValue("zt_status", isVpnConnected() ? "Connected" : "Not connected");
-
-        setMoreValue("wifi_status", isWifiConnected() ? "Connected" : "Not connected");
 
         setMoreValue("grid0_network", isGrid0Connected() ? "Connected" : "Not connected");
 
@@ -920,14 +879,14 @@ public class MainActivity extends Activity {
     }
 
     private void updateSwitchDetected() {
-        if (switchDetectedLayout == null) return;
+        if (switchDetectedView == null) return;
         boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
         if (tutorial || currentTab != 0) {
             final boolean t = tutorial;
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    switchDetectedLayout.setVisibility(View.GONE);
+                    switchDetectedView.setVisibility(View.GONE);
                 }
             });
             return;
@@ -940,18 +899,12 @@ public class MainActivity extends Activity {
                     @Override
                     public void run() {
                         if (sw == null) {
-                            switchDetectedLayout.setVisibility(View.GONE);
+                            switchDetectedView.setVisibility(View.GONE);
                             return;
                         }
-                        String id = sw[2] != null ? sw[2] : (sw[1] != null ? sw[1] : sw[0]);
-                        String prefix = "Now proxying: ";
-                        android.text.SpannableString ss = new android.text.SpannableString(prefix + id);
-                        ss.setSpan(new android.text.style.StyleSpan(android.graphics.Typeface.BOLD),
-                                prefix.length(), ss.length(), 0);
-                        ss.setSpan(new android.text.style.UnderlineSpan(),
-                                prefix.length(), ss.length(), 0);
-                        switchDetectedView.setText(ss);
-                        switchDetectedLayout.setVisibility(View.VISIBLE);
+                        String id = sw[2] != null ? sw[2] : sw[1];
+                        switchDetectedView.setText("Switch detected: " + id);
+                        switchDetectedView.setVisibility(View.VISIBLE);
                     }
                 });
             }
@@ -1184,18 +1137,6 @@ public class MainActivity extends Activity {
         return false;
     }
 
-    private boolean isWifiConnected() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        if (cm == null) return false;
-        for (Network network : cm.getAllNetworks()) {
-            NetworkCapabilities caps = cm.getNetworkCapabilities(network);
-            if (caps != null && caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private String getPhoneWifiIp() {
         try {
             WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
@@ -1274,7 +1215,7 @@ public class MainActivity extends Activity {
     private static class PixelRippleView extends View {
         private static final float[] RIPPLE_RADII_DP = {97f, 107f, 117f, 126f, 133f, 136f};
         private static final int[] RIPPLE_COLORS = {0xFFFF0000, 0xFFE60000, 0xFFCC0000, 0xFFB30000, 0xFF990000, 0xFF800000};
-        private static final float LOGO_EDGE_DP = 92f;
+        private static final float LOGO_EDGE_DP = 80f;
         private static final float RIPPLE_STAGGER_MS = 150f;
         private static final float EXPAND_MS = 600f;
         private static final float FIZZLE_START_MS = 8000f;
@@ -1380,7 +1321,7 @@ public class MainActivity extends Activity {
             float density = getResources().getDisplayMetrics().density;
             float sq = sqDp * density;
             paint.setAntiAlias(true);
-            int n = Math.max(48, (int) Math.round((2 * Math.PI * targetR * density) / (6f * density)));
+            int n = Math.max(48, (int) Math.round((2 * Math.PI * targetR * density) / 6f));
             for (int j = 0; j < n; j++) {
                 double a = (j / (double) n) * 2 * Math.PI - Math.PI / 2 + spinAngle;
                 float wobble = 1f + 0.03f * (float) Math.sin(2 * Math.PI * (j / (float) n * 4f + wavePhase));
@@ -1404,8 +1345,7 @@ public class MainActivity extends Activity {
         updateSteps();
 
         if (logScroll != null) {
-            View lf = (View) logScroll.getTag();
-            if (lf != null) lf.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
+            logScroll.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
         }
 
         if (statusText != null) {
