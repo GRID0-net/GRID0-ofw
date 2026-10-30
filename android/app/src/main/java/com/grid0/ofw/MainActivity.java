@@ -26,6 +26,7 @@ import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.Gravity;
@@ -65,7 +66,6 @@ public class MainActivity extends Activity {
     private int currentTab = 0;
     private ImageView logoImage;
     private PixelRippleView pixelRippleView;
-    private ValueAnimator rippleAnimator;
     private ValueAnimator waveAnimator;
     private ValueAnimator saturationAnimator;
     private ValueAnimator borderAnimator;
@@ -307,7 +307,7 @@ public class MainActivity extends Activity {
         tabs.setBackground(trackBg);
         int trackPad = (int) (4 * getResources().getDisplayMetrics().density);
         tabs.setPadding(trackPad, trackPad, trackPad, trackPad);
-        tabHome = makeTab("HOME");
+        tabHome = makeTab("PLAY");
         tabHome.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -329,6 +329,7 @@ public class MainActivity extends Activity {
             }
         });
         tabs.addView(tabMore);
+        tabs.setElevation(8 * getResources().getDisplayMetrics().density);
         main.addView(tabs);
 
         homeContent = new LinearLayout(this);
@@ -378,9 +379,15 @@ public class MainActivity extends Activity {
         statusText.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         statusText.setGravity(Gravity.CENTER);
         statusText.setLetterSpacing(0.1f);
+        GradientDrawable pillBg = new GradientDrawable();
+        pillBg.setColor(Color.BLACK);
+        pillBg.setCornerRadius((int) (12 * getResources().getDisplayMetrics().density));
+        pillBg.setStroke((int) (1 * getResources().getDisplayMetrics().density), 0xFF3A3A3A);
+        statusText.setBackground(pillBg);
         LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
+                (int) (80 * getResources().getDisplayMetrics().density),
+                (int) (24 * getResources().getDisplayMetrics().density));
+        statusParams.gravity = Gravity.CENTER;
         statusParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
         statusText.setLayoutParams(statusParams);
         homeContent.addView(statusText);
@@ -419,7 +426,7 @@ public class MainActivity extends Activity {
         step2Label = makeStepLabel("Step 2", 16);
         homeContent.addView(step2Label);
 
-        step2Button = makeButton("Connect to GRID0 Network", 245);
+        step2Button = makeButton("Connect to GRID0", 245);
         step2Button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -583,15 +590,14 @@ public class MainActivity extends Activity {
         int borderWidth = (int) (2 * getResources().getDisplayMetrics().density);
         logBorder.setStroke(borderWidth, Color.WHITE);
         logScroll = new ScrollView(this);
-        FrameLayout.LayoutParams logParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
+        LinearLayout.LayoutParams logParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
                 (int) (140 * getResources().getDisplayMetrics().density));
-        logParams.gravity = Gravity.BOTTOM;
 
         int margin = (int) (16 * getResources().getDisplayMetrics().density);
         logParams.leftMargin = margin;
         logParams.rightMargin = margin;
-        logParams.bottomMargin = margin;
+        logParams.topMargin = margin;
         logScroll.setLayoutParams(logParams);
         logScroll.setBackground(logBorder);
         logScroll.setVisibility(View.GONE);
@@ -604,7 +610,7 @@ public class MainActivity extends Activity {
         int logPad = (int) (8 * getResources().getDisplayMetrics().density);
         logView.setPadding(logPad, logPad, logPad, logPad);
         logScroll.addView(logView);
-        root.addView(logScroll);
+        moreContent.addView(logScroll);
 
         setContentView(root);
 
@@ -987,21 +993,7 @@ public class MainActivity extends Activity {
     private void startRipple() {
         if (pixelRippleView == null) return;
         stopRipple();
-        pixelRippleView.reset();
-        rippleAnimator = ValueAnimator.ofFloat(0f, 1f);
-        rippleAnimator.setDuration(9000);
-        rippleAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator a) {
-                float t = (Float) a.getAnimatedValue();
-                long elapsed = (long) (t * 9000);
-                for (int i = 0; i < 4; i++) {
-                    float p = Math.min(Math.max((elapsed - i * 500f) / 8000f, 0f), 1f);
-                    pixelRippleView.setRingProgress(i, p);
-                }
-            }
-        });
-        rippleAnimator.start();
+        pixelRippleView.startRipples();
         waveAnimator = ValueAnimator.ofFloat(0f, 1f);
         waveAnimator.setDuration(2000);
         waveAnimator.setRepeatCount(ValueAnimator.INFINITE);
@@ -1015,28 +1007,27 @@ public class MainActivity extends Activity {
     }
 
     private void stopRipple() {
-        if (rippleAnimator != null) {
-            rippleAnimator.cancel();
-            rippleAnimator = null;
-        }
         if (waveAnimator != null) {
             waveAnimator.cancel();
             waveAnimator = null;
         }
         if (pixelRippleView != null) {
-            pixelRippleView.reset();
+            pixelRippleView.stopRipples();
         }
     }
 
     private static class PixelRippleView extends View {
-        private static final int SIDES = 16;
-        private static final int[] RING_COLORS = {0xFFFF0000, 0xFFFF0000, 0xFFD40000, 0xFF990000};
-        private static final float[] RING_RADII_DP = {72f, 80f, 88f, 96f};
+        private static final float[] RIPPLE_RADII_DP = {96f, 104f, 112f, 120f, 128f, 136f};
+        private static final int[] RIPPLE_COLORS = {0xFFFF0000, 0xFFE60000, 0xFFCC0000, 0xFFB30000, 0xFF990000, 0xFF800000};
+        private static final float LOGO_EDGE_DP = 80f;
+        private static final float RIPPLE_STAGGER_MS = 150f;
+        private static final float EXPAND_MS = 600f;
+        private static final float FIZZLE_START_MS = 8000f;
+        private static final float FIZZLE_MS = 12000f;
         private static final float DASH_RING_RADIUS_DP = 90f;
-        private static final float DOT_DP = 12f;
         private final Paint fillPaint = new Paint();
         private final Paint strokePaint = new Paint();
-        private final float[] ringProgress = {0f, 0f, 0f, 0f};
+        private long rippleStartMs = -1L;
         private float wavePhase = 0f;
         private float borderProgress = 0f;
 
@@ -1048,14 +1039,14 @@ public class MainActivity extends Activity {
             strokePaint.setAntiAlias(false);
         }
 
-        public void reset() {
-            for (int i = 0; i < 4; i++) ringProgress[i] = 0f;
-            wavePhase = 0f;
+        public void startRipples() {
+            rippleStartMs = SystemClock.uptimeMillis();
             invalidate();
         }
 
-        public void setRingProgress(int i, float p) {
-            ringProgress[i] = p;
+        public void stopRipples() {
+            rippleStartMs = -1L;
+            wavePhase = 0f;
             invalidate();
         }
 
@@ -1081,53 +1072,46 @@ public class MainActivity extends Activity {
             int ringColor = lerpColor(0xFF808080, 0xFFFF0000, borderProgress);
             strokePaint.setStrokeWidth(4f * density);
             strokePaint.setColor(ringColor);
-            strokePaint.setPathEffect(new DashPathEffect(new float[]{12f * density, 8f * density}, 0f));
+            float dashPhase = 0f;
+            if (rippleStartMs >= 0L) {
+                dashPhase = -(SystemClock.uptimeMillis() - rippleStartMs) * 0.06f * density;
+            }
+            strokePaint.setPathEffect(new DashPathEffect(new float[]{12f * density, 8f * density}, dashPhase));
             Path ringPath = new Path();
             ringPath.addCircle(cx, cy, DASH_RING_RADIUS_DP * density, Path.Direction.CW);
             canvas.drawPath(ringPath, strokePaint);
             strokePaint.setPathEffect(null);
-            fillPaint.setColor(ringColor);
-            canvas.drawCircle(cx, cy - DASH_RING_RADIUS_DP * density, DOT_DP / 2f * density, fillPaint);
-            for (int i = 0; i < 4; i++) {
-                float p = ringProgress[i];
-                if (p <= 0f) continue;
-                float grow = Math.min(p / 0.25f, 1f);
+            if (rippleStartMs < 0L) return;
+            long rippleT = SystemClock.uptimeMillis() - rippleStartMs;
+            for (int i = 0; i < 6; i++) {
+                long born = rippleT - (long) (i * RIPPLE_STAGGER_MS);
+                if (born < 0L) continue;
+                float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float r = RING_RADII_DP[i] * density * (0.7f + 0.3f * ease);
-                fillPaint.setColor(RING_COLORS[i]);
-                fillPaint.setAlpha((int) (0.9f * (1f - p) * 255));
+                float r = (LOGO_EDGE_DP + (RIPPLE_RADII_DP[i] - LOGO_EDGE_DP) * ease) * density;
+                float alpha = 0.9f * Math.min(born / 300f, 1f);
+                if (i >= 3) {
+                    float f = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
+                    alpha *= (1f - f);
+                }
+                if (alpha <= 0f) continue;
+                fillPaint.setColor(RIPPLE_COLORS[i]);
+                fillPaint.setAlpha((int) (alpha * 255));
                 drawSquareRing(canvas, cx, cy, r, fillPaint);
             }
         }
 
         private void drawSquareRing(Canvas canvas, float cx, float cy, float r, Paint paint) {
             float density = getResources().getDisplayMetrics().density;
-            float snap = 4f * density;
-            float sq = 6f * density;
-            float step = 12f * density;
-            float[][] v = new float[SIDES][2];
-            for (int k = 0; k < SIDES; k++) {
-                double angle = Math.toRadians(-90 + k * (360.0 / SIDES));
-                float wobble = 1f + 0.04f * (float) Math.sin(2f * Math.PI * (k / (float) SIDES + wavePhase));
-                float vr = r * wobble;
-                float x = cx + (float) (vr * Math.cos(angle));
-                float y = cy + (float) (vr * Math.sin(angle));
-                v[k][0] = Math.round(x / snap) * snap;
-                v[k][1] = Math.round(y / snap) * snap;
-            }
-            for (int k = 0; k < SIDES; k++) {
-                float x0 = v[k][0];
-                float y0 = v[k][1];
-                float x1 = v[(k + 1) % SIDES][0];
-                float y1 = v[(k + 1) % SIDES][1];
-                float len = (float) Math.hypot(x1 - x0, y1 - y0);
-                int n = Math.max(1, (int) (len / step));
-                for (int i = 0; i < n; i++) {
-                    float t = (i + 0.5f) / n;
-                    float x = Math.round((x0 + (x1 - x0) * t) / snap) * snap;
-                    float y = Math.round((y0 + (y1 - y0) * t) / snap) * snap;
-                    canvas.drawRect(x - sq / 2f, y - sq / 2f, x + sq / 2f, y + sq / 2f, paint);
-                }
+            float sq = 3f * density;
+            int n = Math.max(48, (int) Math.round((2 * Math.PI * r) / (6f * density)));
+            for (int j = 0; j < n; j++) {
+                double a = (j / (double) n) * 2 * Math.PI;
+                float wobble = 1f + 0.03f * (float) Math.sin(2 * Math.PI * (j / (float) n * 4f + wavePhase));
+                float rr = r * wobble;
+                float x = cx + rr * (float) Math.cos(a);
+                float y = cy + rr * (float) Math.sin(a);
+                canvas.drawRect(x - sq / 2f, y - sq / 2f, x + sq / 2f, y + sq / 2f, paint);
             }
         }
 
