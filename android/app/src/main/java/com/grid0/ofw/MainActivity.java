@@ -397,13 +397,14 @@ public class MainActivity extends Activity {
         });
         logoFrame.addView(logoImage);
 
-        pixelRippleView = new PixelRippleView(this);
-        int rippleSize = (int) (360 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams rippleParams = new FrameLayout.LayoutParams(rippleSize, rippleSize);
-        rippleParams.gravity = Gravity.CENTER;
-        pixelRippleView.setLayoutParams(rippleParams);
-        pixelRippleView.setClickable(false);
-        logoFrame.addView(pixelRippleView);
+        // DIAGNOSTIC: PixelRippleView disabled to isolate startup crash
+        // pixelRippleView = new PixelRippleView(this);
+        // int rippleSize = (int) (360 * getResources().getDisplayMetrics().density);
+        // FrameLayout.LayoutParams rippleParams = new FrameLayout.LayoutParams(rippleSize, rippleSize);
+        // rippleParams.gravity = Gravity.CENTER;
+        // pixelRippleView.setLayoutParams(rippleParams);
+        // pixelRippleView.setClickable(false);
+        // logoFrame.addView(pixelRippleView);
         logoFrame.setClipChildren(false);
         homeContent.setClipChildren(false);
         main.setClipChildren(false);
