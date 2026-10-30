@@ -31,6 +31,7 @@ import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.widget.Button;
 import android.widget.CompoundButton;
 import android.widget.FrameLayout;
@@ -697,9 +698,9 @@ public class MainActivity extends Activity {
         pixelRippleView.setVisibility(View.VISIBLE);
         root.addView(pixelRippleView, 0);
 
-        logoFrame.post(new Runnable() {
+        logoFrame.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
-            public void run() {
+            public void onGlobalLayout() {
                 int[] loc = new int[2];
                 logoFrame.getLocationOnScreen(loc);
                 float centerY = loc[1] + logoFrame.getHeight() / 2f;
@@ -766,22 +767,6 @@ public class MainActivity extends Activity {
             logoFrame.setLayoutParams(fp);
         }
         updateSwitchDetected();
-        if (logoFrame != null && pixelRippleView != null) {
-            logoFrame.post(new Runnable() {
-                @Override
-                public void run() {
-                    int[] loc = new int[2];
-                    logoFrame.getLocationOnScreen(loc);
-                    float centerY = loc[1] + logoFrame.getHeight() / 2f;
-                    int[] rootLoc = new int[2];
-                    View rootView = findViewById(android.R.id.content);
-                    if (rootView != null) {
-                        rootView.getLocationOnScreen(rootLoc);
-                        pixelRippleView.setCenterY(centerY - rootLoc[1]);
-                    }
-                }
-            });
-        }
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {
