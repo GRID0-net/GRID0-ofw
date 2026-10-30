@@ -1195,8 +1195,6 @@ public class MainActivity extends Activity {
             spinAnimator.cancel();
             spinAnimator = null;
         }
-            waveAnimator = null;
-        }
         if (pixelRippleView != null) {
             pixelRippleView.stopRipples();
         }
