@@ -117,15 +117,15 @@ public class MainActivity extends Activity {
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
-                try {
-                    java.io.File f = new java.io.File(ctx.getExternalFilesDir(null), "grid0_crash.log");
-                    java.io.PrintWriter pw = new java.io.PrintWriter(f);
-                    pw.println("CRASH: " + e.toString());
-                    for (StackTraceElement el : e.getStackTrace()) {
-                        pw.println("  at " + el.toString());
-                    }
-                    pw.close();
-                } catch (Exception ex) {}
+                StringBuilder sb = new StringBuilder();
+                sb.append(e.toString()).append("\n");
+                for (StackTraceElement el : e.getStackTrace()) {
+                    sb.append("  at ").append(el.toString()).append("\n");
+                }
+                android.content.Intent i = new android.content.Intent(ctx, CrashActivity.class);
+                i.putExtra("crash", sb.toString());
+                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
+                ctx.startActivity(i);
                 System.exit(1);
             }
         });
