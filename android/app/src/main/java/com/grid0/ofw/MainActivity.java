@@ -397,15 +397,10 @@ public class MainActivity extends Activity {
                 toggleProxy();
             }
         });
-        logoFrame.addView(logoImage);
-
         pixelRippleView = new PixelRippleView(this);
-        int rippleSize = (int) (600 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams rippleParams = new FrameLayout.LayoutParams(rippleSize, rippleSize);
-        rippleParams.gravity = Gravity.CENTER;
-        pixelRippleView.setLayoutParams(rippleParams);
         pixelRippleView.setClickable(false);
-        logoFrame.addView(pixelRippleView);
+        pixelRippleView.setVisibility(View.GONE);
+        logoFrame.addView(logoImage);
         logoFrame.setClipChildren(false);
         homeContent.setClipChildren(false);
         main.setClipChildren(false);
@@ -689,6 +684,25 @@ public class MainActivity extends Activity {
         moreContent.addView(logScroll);
 
         setContentView(root);
+
+        FrameLayout.LayoutParams rippleOverlayParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT);
+        pixelRippleView.setLayoutParams(rippleOverlayParams);
+        pixelRippleView.setVisibility(View.VISIBLE);
+        root.addView(pixelRippleView, 0);
+
+        logoFrame.post(new Runnable() {
+            @Override
+            public void run() {
+                int[] loc = new int[2];
+                logoFrame.getLocationOnScreen(loc);
+                float centerY = loc[1] + logoFrame.getHeight() / 2f;
+                int[] rootLoc = new int[2];
+                root.getLocationOnScreen(rootLoc);
+                pixelRippleView.setCenterY(centerY - rootLoc[1]);
+            }
+        });
 
         if (proxyRunning && !logText.isEmpty()) {
             logView.setText(logText);
@@ -1228,6 +1242,7 @@ public class MainActivity extends Activity {
         private long rippleStartMs = -1L;
         private float wavePhase = 0f;
         private float spinAngle = 0f;
+        private float centerY = -1f;
         private float borderProgress = 0f;
         private boolean tutorialMode = true;
 
@@ -1242,13 +1257,6 @@ public class MainActivity extends Activity {
             fillPaint.setAntiAlias(false);
             strokePaint.setStyle(Paint.Style.STROKE);
             strokePaint.setAntiAlias(false);
-        }
-
-        @Override
-        protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-            float density = getResources().getDisplayMetrics().density;
-            int size = (int) (600 * density);
-            setMeasuredDimension(size, size);
         }
 
         public void startRipples() {
@@ -1273,6 +1281,11 @@ public class MainActivity extends Activity {
             invalidate();
         }
 
+        public void setCenterY(float y) {
+            centerY = y;
+            invalidate();
+        }
+
         public float getBorderProgress() {
             return borderProgress;
         }
@@ -1286,7 +1299,7 @@ public class MainActivity extends Activity {
         protected void onDraw(Canvas canvas) {
             float density = getResources().getDisplayMetrics().density;
             float cx = getWidth() / 2f;
-            float cy = getHeight() / 2f;
+            float cy = centerY >= 0 ? centerY : getHeight() / 2f;
             int ringColor = lerpColor(0xFF808080, 0xFFFF0000, borderProgress);
             strokePaint.setStrokeWidth(3f * density);
             strokePaint.setColor(ringColor);
