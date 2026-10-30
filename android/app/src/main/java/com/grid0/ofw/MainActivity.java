@@ -823,11 +823,6 @@ public class MainActivity extends Activity {
     }
 
     private void checkClientIsolation() {
-        if (checkIsolationButton != null) {
-            checkIsolationButton.setEnabled(false);
-            checkIsolationButton.setText("Checking...");
-        }
-
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -1269,11 +1264,6 @@ public class MainActivity extends Activity {
 
     private void updateProxyUI() {
         updateSteps();
-
-        if (checkIsolationButton != null) {
-            checkIsolationButton.setEnabled(proxyRunning);
-            setButtonFill(checkIsolationButton, proxyRunning);
-        }
 
         if (logScroll != null) {
             logScroll.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
