@@ -1,6 +1,7 @@
 package com.grid0.ofw;
 
 import android.animation.ValueAnimator;
+import android.view.animation.LinearInterpolator;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
