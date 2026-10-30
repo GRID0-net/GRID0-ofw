@@ -113,22 +113,6 @@ public class MainActivity extends Activity {
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        final android.content.Context ctx = this;
-        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(Thread t, Throwable e) {
-                StringBuilder sb = new StringBuilder();
-                sb.append(e.toString()).append("\n");
-                for (StackTraceElement el : e.getStackTrace()) {
-                    sb.append("  at ").append(el.toString()).append("\n");
-                }
-                android.content.Intent i = new android.content.Intent(ctx, CrashActivity.class);
-                i.putExtra("crash", sb.toString());
-                i.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK | android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                ctx.startActivity(i);
-                System.exit(1);
-            }
-        });
         zeroTierInstalled = isZeroTierInstalled();
 
         buildLayout();
@@ -1336,7 +1320,7 @@ public class MainActivity extends Activity {
             float density = getResources().getDisplayMetrics().density;
             float sq = sqDp * density;
             paint.setAntiAlias(true);
-            int n = Math.max(48, (int) Math.round((2 * Math.PI * targetR * density) / 6f));
+            int n = Math.max(48, (int) Math.round((2 * Math.PI * targetR) / 6f));
             for (int j = 0; j < n; j++) {
                 double a = (j / (double) n) * 2 * Math.PI - Math.PI / 2 + spinAngle;
                 float wobble = 1f + 0.03f * (float) Math.sin(2 * Math.PI * (j / (float) n * 4f + wavePhase));
