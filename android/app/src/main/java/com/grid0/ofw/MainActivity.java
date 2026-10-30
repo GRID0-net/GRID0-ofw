@@ -32,10 +32,12 @@ import android.os.Vibrator;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TableLayout;
 import android.widget.TableRow;
 import android.widget.TextView;
@@ -335,6 +337,11 @@ public class MainActivity extends Activity {
         homeContent = new LinearLayout(this);
         homeContent.setOrientation(LinearLayout.VERTICAL);
         homeContent.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams homeParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        homeParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        homeContent.setLayoutParams(homeParams);
         main.addView(homeContent);
 
         FrameLayout logoFrame = new FrameLayout(this);
@@ -449,10 +456,40 @@ public class MainActivity extends Activity {
         });
         homeContent.addView(makeStepRow(step3Button));
 
+        LinearLayout tutorialRow = new LinearLayout(this);
+        tutorialRow.setOrientation(LinearLayout.HORIZONTAL);
+        tutorialRow.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams tutorialParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        tutorialParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
+        tutorialRow.setLayoutParams(tutorialParams);
+        TextView tutorialLabel = new TextView(this);
+        tutorialLabel.setText("Tutorial");
+        tutorialLabel.setTextColor(Color.WHITE);
+        tutorialLabel.setTextSize(14);
+        tutorialLabel.setPadding(0, 0, (int) (8 * getResources().getDisplayMetrics().density), 0);
+        tutorialRow.addView(tutorialLabel);
+        Switch tutorialSwitch = new Switch(this);
+        tutorialSwitch.setChecked(getPreferences(MODE_PRIVATE).getBoolean("tutorial_on", false));
+        tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton b, boolean on) {
+                getPreferences(MODE_PRIVATE).edit().putBoolean("tutorial_on", on).apply();
+            }
+        });
+        tutorialRow.addView(tutorialSwitch);
+        homeContent.addView(tutorialRow);
+
         moreContent = new LinearLayout(this);
         moreContent.setOrientation(LinearLayout.VERTICAL);
         moreContent.setGravity(Gravity.CENTER);
         moreContent.setVisibility(View.GONE);
+        LinearLayout.LayoutParams moreParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        moreParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        moreContent.setLayoutParams(moreParams);
         main.addView(moreContent);
 
         LinearLayout tableBox = new LinearLayout(this);
@@ -1083,6 +1120,7 @@ public class MainActivity extends Activity {
             strokePaint.setPathEffect(null);
             if (rippleStartMs < 0L) return;
             long rippleT = SystemClock.uptimeMillis() - rippleStartMs;
+            float fizzle = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
             for (int i = 0; i < 6; i++) {
                 long born = rippleT - (long) (i * RIPPLE_STAGGER_MS);
                 if (born < 0L) continue;
@@ -1091,8 +1129,9 @@ public class MainActivity extends Activity {
                 float r = (LOGO_EDGE_DP + (RIPPLE_RADII_DP[i] - LOGO_EDGE_DP) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
                 if (i >= 3) {
-                    float f = Math.min(Math.max((rippleT - FIZZLE_START_MS) / FIZZLE_MS, 0f), 1f);
-                    alpha *= (1f - f);
+                    alpha *= (1f - fizzle);
+                } else {
+                    alpha *= (1f - 0.5f * fizzle);
                 }
                 if (alpha <= 0f) continue;
                 fillPaint.setColor(RIPPLE_COLORS[i]);
