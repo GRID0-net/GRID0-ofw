@@ -39,6 +39,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TableLayout;
 import android.widget.Switch;
+import android.widget.ImageButton;
 import android.content.res.ColorStateList;
 import android.widget.TableRow;
 import android.widget.TextView;
@@ -89,13 +90,13 @@ public class MainActivity extends Activity {
     private LinearLayout homeContent;
     private LinearLayout moreContent;
     private Switch tutorialSwitch;
+    private FrameLayout logoFrame;
     private View installMsgView;
     private View step1Row;
     private View step2Row;
     private View step3Row;
 
     private Map<String, TextView> moreValues = new HashMap<>();
-    private Button checkIsolationButton;
     private TextView isolationResultView;
 
     @Override
@@ -350,7 +351,7 @@ public class MainActivity extends Activity {
         homeContent.setLayoutParams(homeParams);
         main.addView(homeContent);
 
-        FrameLayout logoFrame = new FrameLayout(this);
+        logoFrame = new FrameLayout(this);
 
         int frameSize = (int) (180 * getResources().getDisplayMetrics().density);
         LinearLayout.LayoutParams frameParams = new LinearLayout.LayoutParams(frameSize, frameSize);
@@ -519,6 +520,25 @@ public class MainActivity extends Activity {
         addMoreRow(table, "Phone IP", "phone_ip");
 
         addMoreRow(table, "Client isolation", "isolation");
+        // tiny refresh button beside the isolation value, inside the box
+        TextView isolationValue = moreValues.get("isolation");
+        if (isolationValue != null && isolationValue.getParent() instanceof TableRow) {
+            TableRow isoRow = (TableRow) isolationValue.getParent();
+            ImageButton isoRefresh = new ImageButton(this);
+            isoRefresh.setImageResource(android.R.drawable.ic_popup_sync);
+            isoRefresh.setBackgroundColor(Color.TRANSPARENT);
+            float density = getResources().getDisplayMetrics().density;
+            TableRow.LayoutParams bp = new TableRow.LayoutParams(
+                    (int) (24 * density), (int) (24 * density));
+            isoRefresh.setLayoutParams(bp);
+            isoRefresh.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    checkClientIsolation();
+                }
+            });
+            isoRow.addView(isoRefresh);
+        }
 
         addMoreRow(table, "ZeroTier status", "zt_status");
 
@@ -534,15 +554,6 @@ public class MainActivity extends Activity {
             }
         });
         moreContent.addView(refresh);
-
-        checkIsolationButton = makeButton("Check Client Isolation", 220);
-        checkIsolationButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                checkClientIsolation();
-            }
-        });
-        moreContent.addView(checkIsolationButton);
 
         TextView isolationHelp = new TextView(this);
         isolationHelp.setText("Scans this Wi-Fi network for any other device. If one answers, client isolation is off.");
@@ -638,6 +649,8 @@ public class MainActivity extends Activity {
         int[][] swStates = new int[][] { new int[] { android.R.attr.state_checked }, new int[] {} };
         tutorialSwitch.setTrackTintList(new ColorStateList(swStates, new int[] { 0xFFFF0000, 0xFF555555 }));
         tutorialSwitch.setThumbTintList(ColorStateList.valueOf(0xFFFFFFFF));
+        tutorialSwitch.setScaleX(0.85f);
+        tutorialSwitch.setScaleY(0.85f);
         tutorialSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
             public void onCheckedChanged(CompoundButton b, boolean on) {
@@ -721,6 +734,15 @@ public class MainActivity extends Activity {
                     (int) (logoDp * density), (int) (logoDp * density));
             lp.gravity = Gravity.CENTER_HORIZONTAL;
             logoImage.setLayoutParams(lp);
+        }
+        if (logoFrame != null) {
+            float density = getResources().getDisplayMetrics().density;
+            int frameDp = tutorial ? 180 : 200;
+            LinearLayout.LayoutParams fp = new LinearLayout.LayoutParams(
+                    (int) (frameDp * density), (int) (frameDp * density));
+            fp.gravity = Gravity.CENTER;
+            fp.topMargin = (int) (16 * density);
+            logoFrame.setLayoutParams(fp);
         }
     }
 
@@ -819,12 +841,6 @@ public class MainActivity extends Activity {
                         }
 
                         setMoreValue("isolation", result);
-
-                        if (checkIsolationButton != null) {
-                            checkIsolationButton.setText("Check Client Isolation");
-                            checkIsolationButton.setEnabled(proxyRunning);
-                            setButtonFill(checkIsolationButton, proxyRunning);
-                        }
                     }
                 });
             }
@@ -1203,7 +1219,7 @@ public class MainActivity extends Activity {
                 if (born < 0L) continue;
                 float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (96f + 2f * i + 0.05f * i * i);
+                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 2f * i + 0.05f * i * i);
                 float r = (logoEdge + (targetR - logoEdge) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
                 int color;
