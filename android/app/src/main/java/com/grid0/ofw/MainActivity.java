@@ -571,15 +571,6 @@ public class MainActivity extends Activity {
 
         addMoreRow(table, "Network ID", "network_id");
 
-        Button refresh = makeButton("Refresh", 110);
-        refresh.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                refreshMoreTab();
-            }
-        });
-        moreContent.addView(refresh);
-
 
 
         LinearLayout social = new LinearLayout(this);
@@ -1290,7 +1281,7 @@ public class MainActivity extends Activity {
                 if (born < 0L) continue;
                 float grow = Math.min(born / EXPAND_MS, 1f);
                 float ease = 1f - (1f - grow) * (1f - grow);
-                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 5f + 5f * i + 0.12f * i * i);
+                float targetR = tutorialMode ? RIPPLE_RADII_DP[i] : (logoEdge + 5f + 1.5f * i);
                 float r = (logoEdge + (targetR - logoEdge) * ease) * density;
                 float alpha = 0.9f * Math.min(born / 300f, 1f);
                 int color;
