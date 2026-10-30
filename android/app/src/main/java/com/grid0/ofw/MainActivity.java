@@ -512,16 +512,6 @@ public class MainActivity extends Activity {
         moreContent.setLayoutParams(moreParams);
         main.addView(moreContent);
 
-        FrameLayout boxContainer = new FrameLayout(this);
-        LinearLayout.LayoutParams containerParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        int boxMargin = (int) (16 * getResources().getDisplayMetrics().density);
-        containerParams.leftMargin = boxMargin;
-        containerParams.rightMargin = boxMargin;
-        containerParams.topMargin = (int) (15 * getResources().getDisplayMetrics().density);
-        boxContainer.setLayoutParams(containerParams);
-
         LinearLayout tableBox = new LinearLayout(this);
         tableBox.setOrientation(LinearLayout.VERTICAL);
         GradientDrawable tableBorder = new GradientDrawable();
@@ -531,9 +521,14 @@ public class MainActivity extends Activity {
         tableBox.setBackground(tableBorder);
         int boxPad = (int) (4 * getResources().getDisplayMetrics().density);
         tableBox.setPadding(boxPad, boxPad, boxPad, boxPad);
-        tableBox.setLayoutParams(new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT));
+        LinearLayout.LayoutParams boxParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        int boxMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        boxParams.leftMargin = boxMargin;
+        boxParams.rightMargin = boxMargin;
+        boxParams.topMargin = (int) (15 * getResources().getDisplayMetrics().density);
+        tableBox.setLayoutParams(boxParams);
 
         TableLayout table = new TableLayout(this);
         table.setStretchAllColumns(true);
@@ -541,26 +536,7 @@ public class MainActivity extends Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
         tableBox.addView(table);
-        boxContainer.addView(tableBox);
-
-        ImageButton reloadBtn = new ImageButton(this);
-        reloadBtn.setImageResource(android.R.drawable.ic_popup_sync);
-        reloadBtn.setBackgroundColor(Color.TRANSPARENT);
-        float density = getResources().getDisplayMetrics().density;
-        FrameLayout.LayoutParams reloadParams = new FrameLayout.LayoutParams(
-                (int) (32 * density), (int) (32 * density));
-        reloadParams.gravity = Gravity.TOP | Gravity.END;
-        reloadParams.topMargin = (int) (8 * density);
-        reloadParams.rightMargin = (int) (8 * density);
-        reloadBtn.setLayoutParams(reloadParams);
-        reloadBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                refreshMoreTab();
-            }
-        });
-        boxContainer.addView(reloadBtn);
-        moreContent.addView(boxContainer);
+        moreContent.addView(tableBox);
         moreValues.clear();
 
         addMoreRow(table, "ZeroTier installed", "zt_installed");
@@ -581,11 +557,6 @@ public class MainActivity extends Activity {
 
         LinearLayout social = new LinearLayout(this);
         social.setOrientation(LinearLayout.HORIZONTAL);
-        LinearLayout.LayoutParams socialParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT);
-        socialParams.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
-        social.setLayoutParams(socialParams);
 
         Button discord = new Button(this);
         discord.setText("Discord");
