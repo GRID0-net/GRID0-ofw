@@ -757,9 +757,9 @@ public class MainActivity extends Activity {
         if (logoImage != null) {
             float density = getResources().getDisplayMetrics().density;
             int logoDp = tutorial ? 184 : 236;
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
                     (int) (logoDp * density), (int) (logoDp * density));
-            lp.gravity = Gravity.CENTER_HORIZONTAL;
+            lp.gravity = Gravity.CENTER;
             logoImage.setLayoutParams(lp);
         }
         if (logoFrame != null) {
