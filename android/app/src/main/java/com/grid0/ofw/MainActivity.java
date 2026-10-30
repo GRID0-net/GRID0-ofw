@@ -41,6 +41,9 @@ import android.widget.TableLayout;
 import android.widget.Switch;
 import android.widget.ImageButton;
 import android.content.res.ColorStateList;
+import android.os.Handler;
+import android.os.Looper;
+import java.net.InetAddress;
 import android.widget.TableRow;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -74,6 +77,7 @@ public class MainActivity extends Activity {
     private ValueAnimator saturationAnimator;
     private ValueAnimator borderAnimator;
     private TextView statusText;
+    private TextView switchDetectedView;
     private TextView step1Label;
     private Button step1Button;
     private ImageView step1Check;
@@ -100,11 +104,21 @@ public class MainActivity extends Activity {
 
 
     @Override
+    private final Handler switchCheckHandler = new Handler(Looper.getMainLooper());
+    private final Runnable switchCheckRunnable = new Runnable() {
+        @Override
+        public void run() {
+            updateSwitchDetected();
+            switchCheckHandler.postDelayed(this, 15000);
+        }
+    };
+
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         zeroTierInstalled = isZeroTierInstalled();
 
         buildLayout();
+        switchCheckHandler.postDelayed(switchCheckRunnable, 15000);
     }
 
     @Override
@@ -415,6 +429,18 @@ public class MainActivity extends Activity {
         statusParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
         statusText.setLayoutParams(statusParams);
         homeContent.addView(statusText);
+
+        switchDetectedView = new TextView(this);
+        switchDetectedView.setTextSize(14);
+        switchDetectedView.setTextColor(Color.WHITE);
+        switchDetectedView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams sdParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sdParams.gravity = Gravity.CENTER_HORIZONTAL;
+        sdParams.topMargin = (int) (32 * getResources().getDisplayMetrics().density);
+        switchDetectedView.setLayoutParams(sdParams);
+        switchDetectedView.setVisibility(View.GONE);
+        homeContent.addView(switchDetectedView);
 
         View spacer = new View(this);
         LinearLayout.LayoutParams spacerParams = new LinearLayout.LayoutParams(
@@ -734,6 +760,7 @@ public class MainActivity extends Activity {
             }
             logoFrame.setLayoutParams(fp);
         }
+        updateSwitchDetected();
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {
@@ -810,6 +837,79 @@ public class MainActivity extends Activity {
         if (view != null) {
             view.setText(value);
         }
+    }
+
+    private static final String[] NINTENDO_OUIS = {
+        "60:6B:FF", "7C:BB:8A", "CC:9E:00", "8C:CD:E8", "40:F3:08", "34:AF:2C"
+    };
+
+    private String[] detectSwitch() {
+        try {
+            BufferedReader reader = new BufferedReader(new FileReader("/proc/net/arp"));
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.startsWith("IP address")) continue;
+                String[] parts = line.trim().split("\\s+");
+                if (parts.length < 4) continue;
+                String mac = parts[3].toUpperCase();
+                if (mac.equals("00:00:00:00:00:00")) continue;
+                for (String oui : NINTENDO_OUIS) {
+                    if (mac.startsWith(oui)) {
+                        String ip = parts[0];
+                        String name = tryResolveName(ip);
+                        reader.close();
+                        return new String[]{ip, mac, name};
+                    }
+                }
+            }
+            reader.close();
+        } catch (Exception e) {
+        }
+        return null;
+    }
+
+    private String tryResolveName(String ip) {
+        try {
+            String host = InetAddress.getByName(ip).getCanonicalHostName();
+            if (host != null && !host.equals(ip) && !host.equalsIgnoreCase("switch")) {
+                return host;
+            }
+        } catch (Exception e) {
+        }
+        return null;
+    }
+
+    private void updateSwitchDetected() {
+        if (switchDetectedView == null) return;
+        boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
+        if (tutorial || currentTab != 0) {
+            final boolean t = tutorial;
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    switchDetectedView.setVisibility(View.GONE);
+                }
+            });
+            return;
+        }
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final String[] sw = detectSwitch();
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        if (sw == null) {
+                            switchDetectedView.setVisibility(View.GONE);
+                            return;
+                        }
+                        String id = sw[2] != null ? sw[2] : sw[1];
+                        switchDetectedView.setText("Switch detected: " + id);
+                        switchDetectedView.setVisibility(View.VISIBLE);
+                    }
+                });
+            }
+        }).start();
     }
 
     private void checkClientIsolation() {
@@ -1221,13 +1321,14 @@ public class MainActivity extends Activity {
                 if (alpha <= 0f) continue;
                 fillPaint.setColor(color);
                 fillPaint.setAlpha((int) (alpha * 255));
-                drawSquareRing(canvas, cx, cy, r, fillPaint);
+                float sqDp = tutorialMode ? (4.5f - i * 0.5f) : (4.5f - i * 0.2f);
+                drawSquareRing(canvas, cx, cy, r, fillPaint, sqDp);
             }
         }
 
-        private void drawSquareRing(Canvas canvas, float cx, float cy, float r, Paint paint) {
+        private void drawSquareRing(Canvas canvas, float cx, float cy, float r, Paint paint, float sqDp) {
             float density = getResources().getDisplayMetrics().density;
-            float sq = 3f * density;
+            float sq = sqDp * density;
             int n = Math.max(48, (int) Math.round((2 * Math.PI * r) / (6f * density)));
             for (int j = 0; j < n; j++) {
                 double a = (j / (double) n) * 2 * Math.PI;
