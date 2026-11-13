@@ -9,20 +9,49 @@ DISCOVERY_PORT, GAME_PORT = 35000, 49152
 MAGIC = bytes.fromhex("32ab9864")
 ZSTD_MAGIC = bytes.fromhex("28b52ffd")
 
+def fetch_game_key():
+    import re, urllib.request
+    try:
+        with urllib.request.urlopen("https://raw.githubusercontent.com/kinnay/NintendoClientsWiki/master/Pia-Game-Keys.md", timeout=10) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+    for line in text.splitlines():
+        if "Splatoon 3" in line:
+            m = re.search(r"[0-9a-fA-F]{32}", line)
+            if m:
+                print("fetched the Splatoon 3 game key from NintendoClientsWiki", flush=True)
+                return bytes.fromhex(m.group(0))
+    return None
+
 def load_game_key():
     try:
         import proxy_crypto_prototype as _m
         return bytes(getattr(_m, "GAME_KEY", None) or _m.GAME_KEY_SPLATOON3)
     except Exception:
         pass
-    for p in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
-              os.path.expanduser("~/game_key.txt")):
+    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
+             os.path.expanduser("~/game_key.txt")]
+    env_path = os.environ.get("GAME_KEY_FILE")
+    if env_path:
+        paths.insert(0, env_path)
+    for p in paths:
         try:
             with open(p) as fh:
                 return bytes.fromhex(fh.read().strip())
         except Exception:
             continue
-    raise SystemExit("game key not found: no proxy_crypto_prototype module and no game_key.txt")
+    key = fetch_game_key()
+    if key:
+        for p in paths:
+            try:
+                with open(p, "w") as fh:
+                    fh.write(key.hex())
+                break
+            except Exception:
+                continue
+        return key
+    raise SystemExit("game key not found: no game_key.txt and the fetch from NintendoClientsWiki failed")
 
 GAME_KEY = load_game_key()
 

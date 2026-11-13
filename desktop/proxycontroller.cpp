@@ -52,7 +52,7 @@ void ProxyController::start(const Preferences &p, const QList<Adapter> &adapters
     const QString script = findProxyScript();
     if (script.isEmpty()) { emit message("The proxy script zttestproxyv228.py was not found next to the app."); return; }
     const QString keyFile = QFileInfo(script).dir().filePath("game_key.txt");
-    if (!QFileInfo::exists(keyFile)) { emit message("Put game_key.txt next to the proxy script: " + QFileInfo(script).dir().path()); return; }
+    if (!QFileInfo::exists(keyFile)) emit message("No game_key.txt found. The proxy will fetch the Splatoon 3 key from NintendoClientsWiki.");
     QString python = QStandardPaths::findExecutable("python3");
     if (python.isEmpty()) python = QStandardPaths::findExecutable("python");
     if (python.isEmpty()) { emit message("Python was not found. Install Python 3 to run the proxy."); return; }
