@@ -1814,7 +1814,7 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try {
                 HttpURLConnection conn = (HttpURLConnection) new java.net.URL(
-                        "https://raw.githubusercontent.com/GRID0-net/GRID0-ofw/3.0.0/android/version.json").openConnection();
+                        "https://raw.githubusercontent.com/GRID0-net/GRID0-ofw/final-ofw3/android/version.json").openConnection();
                 conn.setConnectTimeout(10000);
                 conn.setReadTimeout(10000);
 

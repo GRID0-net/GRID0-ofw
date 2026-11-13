@@ -48,9 +48,9 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'grid0pass' }}
         run: |
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | head -1)
-          "$APKSIGNER" sign --ks android/release.keystore --ks-pass pass:"$KEYSTORE_PASSWORD" --ks-key-alias "$KEY_ALIAS" --key-pass pass:"$KEY_PASSWORD" --out "android/app/build/outputs/apk/release/GRID0 ofw v3.0.13.apk" android/app/build/outputs/apk/release/app-release-unsigned.apk
+          "$APKSIGNER" sign --ks android/release.keystore --ks-pass pass:"$KEYSTORE_PASSWORD" --ks-key-alias "$KEY_ALIAS" --key-pass pass:"$KEY_PASSWORD" --out "android/app/build/outputs/apk/release/GRID0 ofw v3.0.0.apk" android/app/build/outputs/apk/release/app-release-unsigned.apk
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: GRID0-ofw-apk
-          path: android/app/build/outputs/apk/release/GRID0 ofw v3.0.13.apk
+          path: android/app/build/outputs/apk/release/GRID0 ofw v3.0.0.apk

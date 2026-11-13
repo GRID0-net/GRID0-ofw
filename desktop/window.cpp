@@ -104,12 +104,12 @@ Window::Window(bool preview) : previewMode(preview) {
     // back to a rectangular bezel rather than the standard macOS button.
     start = new QPushButton("Start relay"); start->setAutoDefault(true); start->setDefault(true);
     stop = new QPushButton("Stop relay");
-    manualMode = new QRadioButton("Manual"); autoMode = new QRadioButton("Automatic"); proxyMode = new QRadioButton("Proxy");
+    manualMode = new QRadioButton("Manual (the most difficult)"); autoMode = new QRadioButton("Automatic - DHCP (medium difficulty)"); proxyMode = new QRadioButton("Automatic - Proxy (easiest)");
     manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode"); proxyMode->setObjectName("proxyMode");
     actions->addWidget(start); actions->addWidget(stop); actions->addStretch();
     actions->addWidget(manualMode); actions->addWidget(autoMode); actions->addWidget(proxyMode);
     summaryLayout->addLayout(actions);
-    ztUsers = text("Users on ZeroTier: -"); ztUsers->setVisible(false); summaryLayout->addWidget(ztUsers);
+    ztUsers = text("on GRID0 ZT: -"); ztUsers->setVisible(false); summaryLayout->addWidget(ztUsers);
     playLayout->addWidget(summary);
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
@@ -634,7 +634,7 @@ void Window::save() {
 }
 void Window::refreshZtUsers() {
     const int n = zeroTierPeerCount();
-    ztUsers->setText(n >= 0 ? "Users on ZeroTier: " + QString::number(n) : "Users on ZeroTier: -");
+    ztUsers->setText(n >= 0 ? "on GRID0 ZT: " + QString::number(n) : "on GRID0 ZT: -");
 }
 void Window::updateState() {
     auto a = preferences.overlay(adapters);
