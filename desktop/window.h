@@ -1,5 +1,6 @@
 #pragma once
 #include "controller.h"
+#include "proxycontroller.h"
 #include "dependencies.h"
 #include <QMainWindow>
 #include <QTabWidget>
@@ -29,9 +30,11 @@ private:
     void promptForDependencies();
     void setupDependencies();
     void updateHeaderTheme();
+    void refreshZtUsers();
     Preferences preferences;
     QList<Adapter> adapters;
     RelayController relay;
+    ProxyController proxy;
     DependencyInstaller dependencies;
     QSettings settings;
     QTabWidget *tabs, *settingsTabs;
@@ -41,7 +44,9 @@ private:
     QComboBox *theme;
     QLabel *headerBadge;
     QPalette systemPalette;
-    QRadioButton *manualMode, *autoMode;
+    QRadioButton *manualMode, *autoMode, *proxyMode;
+    QLabel *ztUsers = nullptr;
+    QTimer *ztUsersTimer = nullptr;
     QRadioButton *dnsUsFirst, *dnsFrFirst;
     QGroupBox *switchSettingsGroup;
     QGroupBox *autoSettingsGroup;
