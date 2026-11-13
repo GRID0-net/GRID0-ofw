@@ -1,4 +1,5 @@
 name: Attach release asset
+# attaches the APK from build run 43391942375 to the v3.0.11 release
 
 on:
   workflow_dispatch:
