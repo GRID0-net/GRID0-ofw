@@ -25,6 +25,7 @@ QString appleScriptQuote(QString value);
 bool launchZeroTierIfPresent();
 void joinZeroTierNetwork(const QString &networkId = QStringLiteral("8bd5124fd68185ec"));
 QStringList getZeroTierNetworkIPs(const QString &networkId = QStringLiteral("8bd5124fd68185ec"));
+int zeroTierPeerCount();
 
 struct Preferences {
     QString localInterface, overlayInterface, gateway, relayPath;
