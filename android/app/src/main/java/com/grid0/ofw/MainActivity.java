@@ -592,7 +592,11 @@ public class MainActivity extends Activity {
             }
         });
         TextView versionView = new TextView(this);
-        versionView.setText("v3.0.0");
+        try {
+            versionView.setText("v" + getPackageManager().getPackageInfo(getPackageName(), 0).versionName);
+        } catch (Exception e) {
+            versionView.setText("");
+        }
         versionView.setTextColor(0xFFAAAAAA);
         versionView.setTextSize(12);
         LinearLayout.LayoutParams versionParams = new LinearLayout.LayoutParams(
@@ -1606,6 +1610,60 @@ public class MainActivity extends Activity {
         return ((ip >> 24) & 0xff) + "." + ((ip >> 16) & 0xff) + "." + ((ip >> 8) & 0xff) + "." + (ip & 0xff);
     }
 
+    private int prefixForIp(String ip, int fallback) {
+        try {
+            java.util.Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+
+            while (ifaces.hasMoreElements()) {
+                NetworkInterface ni = ifaces.nextElement();
+
+                for (java.net.InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                    InetAddress addr = ia.getAddress();
+
+                    if (addr != null && ip.equals(addr.getHostAddress())) {
+                        int p = ia.getNetworkPrefixLength();
+
+                        if (p > 0 && p < 32) {
+                            return p;
+                        }
+
+                        return fallback;
+                    }
+                }
+            }
+        } catch (Exception e) {
+        }
+
+        return fallback;
+    }
+
+    private int switchPrefixFor(String phoneIp) {
+        int p = prefixForIp(phoneIp, -1);
+
+        if (p > 0) {
+            return p;
+        }
+
+        try {
+            WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+
+            if (wifi != null) {
+                DhcpInfo dhcp = wifi.getDhcpInfo();
+
+                if (dhcp != null && dhcp.netmask != 0) {
+                    int bits = Integer.bitCount(Integer.reverseBytes(dhcp.netmask));
+
+                    if (bits > 0 && bits < 32) {
+                        return bits;
+                    }
+                }
+            }
+        } catch (Exception e) {
+        }
+
+        return 24;
+    }
+
     private void toggleProxy() {
         if (!proxyRunning) {
             buzz();
@@ -1632,6 +1690,8 @@ public class MainActivity extends Activity {
             Intent service = new Intent(this, ProxyService.class);
             service.putExtra("phoneIp", phoneIp);
             service.putExtra("ztIp", ztIp);
+            service.putExtra("switchPrefix", switchPrefixFor(phoneIp));
+            service.putExtra("hostPrefix", prefixForIp(ztIp, 24));
             service.putExtra("detailed", detailed);
 
             if (Build.VERSION.SDK_INT >= 26) {
