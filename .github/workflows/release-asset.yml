@@ -1,0 +1,21 @@
+name: Attach release asset
+
+on:
+  workflow_dispatch:
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: GRID0-ofw-apk
+          run-id: 43391942375
+          github-token: ${{ github.token }}
+      - name: Upload the APK to the v3.0.11 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v3.0.11 "GRID0 ofw v3.0.11.apk" --clobber --repo GRID0-net/GRID0-ofw
