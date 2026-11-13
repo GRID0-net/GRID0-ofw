@@ -47,6 +47,8 @@ public class ProxyService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String phoneIp = intent != null ? intent.getStringExtra("phoneIp") : null;
         String ztIp = intent != null ? intent.getStringExtra("ztIp") : null;
+        int switchPrefix = intent != null ? intent.getIntExtra("switchPrefix", 24) : 24;
+        int hostPrefix = intent != null ? intent.getIntExtra("hostPrefix", 24) : 24;
         boolean detailed = intent != null && intent.getBooleanExtra("detailed", false);
 
         if (phoneIp == null || ztIp == null) {
@@ -61,6 +63,8 @@ public class ProxyService extends Service {
         File files = getFilesDir();
         setProxyEnv("PHONE_IP", phoneIp);
         setProxyEnv("ZT_IP", ztIp);
+        setProxyEnv("SWITCH_PREFIX", String.valueOf(switchPrefix));
+        setProxyEnv("HOST_PREFIX", String.valueOf(hostPrefix));
         setProxyEnv("GAME_KEY_FILE", new File(files, "game_key.txt").getAbsolutePath());
         setProxyEnv("CAPTURE", new File(files, "proxy_capture").getAbsolutePath());
         setProxyEnv("EVENTS", new File(files, "proxy_events.jsonl").getAbsolutePath());
