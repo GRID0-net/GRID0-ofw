@@ -69,6 +69,31 @@ QStringList getZeroTierNetworkIPs(const QString &networkId) {
     return resultIPs;
 }
 
+int zeroTierPeerCount() {
+    QString cliPath;
+#ifdef Q_OS_WIN
+    cliPath = QStringLiteral("C:/Program Files (x86)/ZeroTier/One/zerotier-cli.bat");
+    if (!QFileInfo::exists(cliPath)) {
+        cliPath = QStringLiteral("C:/Program Files/ZeroTier/One/zerotier-cli.bat");
+    }
+#elif defined(Q_OS_MAC)
+    cliPath = QStringLiteral("/Library/Application Support/ZeroTier/One/zerotier-cli");
+#else
+    cliPath = QStringLiteral("/usr/bin/zerotier-cli");
+#endif
+    if (!QFileInfo::exists(cliPath)) return -1;
+    QProcess proc;
+    proc.start(cliPath, QStringList() << QStringLiteral("-j") << QStringLiteral("peers"));
+    if (!proc.waitForFinished(2000)) return -1;
+    QJsonDocument doc = QJsonDocument::fromJson(proc.readAllStandardOutput());
+    if (!doc.isArray()) return -1;
+    int count = 0;
+    for (const QJsonValue &val : doc.array()) {
+        if (val.toObject().value(QStringLiteral("role")).toString() == QStringLiteral("LEAF")) count++;
+    }
+    return count;
+}
+
 bool launchZeroTierIfPresent() {
     QStringList paths;
 
