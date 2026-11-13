@@ -2,6 +2,9 @@ name: Attach release asset
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["final-ofw3"]
+    paths: [".github/workflows/release-asset.yml"]
 
 jobs:
   attach:
