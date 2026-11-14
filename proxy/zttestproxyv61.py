@@ -1,34 +1,112 @@
 #!/usr/bin/env python3
-# GRID0 proxy v228
+# GRID0 proxy v6.1
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
 from Crypto.Cipher import AES
 import zstandard as zstd
 
 DISCOVERY_PORT, GAME_PORT = 35000, 49152
+GAME_PORTS = (49152, 49153, 49154, 49155)
+MK8D_PORT = 30000
+DISCOVERY_PORTS = (DISCOVERY_PORT, MK8D_PORT)
+GAME_NAMES = {"splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe"}
+CHAL_OFF = {"splatoon3": 27, "mk8d": 575}
+PARAM_OFF = {"splatoon3": 105, "mk8d": 1270}
 MAGIC = bytes.fromhex("32ab9864")
+
+def detect_game(data):
+    if len(data) == 325 and data[0] == 0:
+        return "splatoon3"
+    if len(data) == 873 and data[0] == 0 and int.from_bytes(data[1:5], "big") == 0x23A:
+        return "mk8d"
+    return None
 ZSTD_MAGIC = bytes.fromhex("28b52ffd")
 
+def fetch_game_key(game="Splatoon 3"):
+    import re, urllib.request
+    try:
+        with urllib.request.urlopen("https://raw.githubusercontent.com/kinnay/NintendoClientsWiki/master/Pia-Game-Keys.md", timeout=10) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+    for line in text.splitlines():
+        if game in line:
+            m = re.search(r"`([^`]+)`", line)
+            if not m:
+                continue
+            tok = m.group(1).strip()
+            if len(tok) == 32:
+                try:
+                    key = bytes.fromhex(tok)
+                except ValueError:
+                    continue
+                print(f"fetched the {game} game key from NintendoClientsWiki", flush=True)
+                return key
+            if len(tok) == 16:
+                print(f"fetched the {game} game key from NintendoClientsWiki", flush=True)
+                return tok.encode()
+    return None
+
 def load_game_key():
-    p = os.environ.get("GAME_KEY_FILE")
-    if p:
-        with open(p) as fh:
-            return bytes.fromhex(fh.read().strip())
     try:
         import proxy_crypto_prototype as _m
         return bytes(getattr(_m, "GAME_KEY", None) or _m.GAME_KEY_SPLATOON3)
     except Exception:
         pass
-    for p in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
-              os.path.expanduser("~/game_key.txt")):
+    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
+             os.path.expanduser("~/game_key.txt")]
+    env_path = os.environ.get("GAME_KEY_FILE")
+    if env_path:
+        paths.insert(0, env_path)
+    for p in paths:
         try:
             with open(p) as fh:
                 return bytes.fromhex(fh.read().strip())
         except Exception:
             continue
-    raise SystemExit("game key not found: no proxy_crypto_prototype module and no game_key.txt")
+    key = fetch_game_key()
+    if key:
+        for p in paths:
+            try:
+                with open(p, "w") as fh:
+                    fh.write(key.hex())
+                break
+            except Exception:
+                continue
+        return key
+    raise SystemExit("game key not found: no game_key.txt and the fetch from NintendoClientsWiki failed")
 
-GAME_KEY = None
+GAME_KEY = load_game_key()
+
+def load_game_key_mk8d():
+    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key_mk8d.txt"),
+             os.path.expanduser("~/game_key_mk8d.txt")]
+    env_path = os.environ.get("GAME_KEY_MK8D_FILE")
+    if env_path:
+        paths.insert(0, env_path)
+    for p in paths:
+        try:
+            with open(p) as fh:
+                raw = fh.read().strip()
+            if len(raw) == 32:
+                return bytes.fromhex(raw)
+            if len(raw) == 16:
+                return raw.encode()
+        except Exception:
+            continue
+    key = fetch_game_key("Mario Kart 8")
+    if key:
+        for p in paths:
+            try:
+                with open(p, "w") as fh:
+                    fh.write(key.hex())
+                break
+            except Exception:
+                continue
+        return key
+    return None
+
+GAME_KEY_MK8D = load_game_key_mk8d()
 
 def get_wifi_ip():
     import subprocess
@@ -142,6 +220,13 @@ def rewrite(body, table):
         body = body.replace(o, n)
     return body
 
+def id_fragments(pairs):
+    out = []
+    for o, n in pairs:
+        for p in GAME_PORTS:
+            out.append((o[2:4] + p.to_bytes(2, "big"), n[2:4] + p.to_bytes(2, "big")))
+    return [(o, n) for o, n in out if o != n]
+
 def open_game(key, src_ip, d):
     if len(d) < 29 or d[:4] != MAGIC:
         return None
@@ -162,6 +247,28 @@ def seal_game(key, my_ip, hdr, body):
     ct, tag = c.encrypt_and_digest(body + b"\xff" * pad)
     h[21:29] = tag
     return bytes(h) + ct
+
+def open_game_mk8d(key, src_ip, d):
+    if len(d) < 36 or d[:4] != MAGIC or d[4] != 2:
+        return None
+    try:
+        return AES.new(key, AES.MODE_GCM, nonce=src_ip + d[5:6] + d[13:20]).decrypt_and_verify(d[36:], d[20:36])
+    except ValueError:
+        return None
+
+def seal_game_mk8d(key, my_ip, hdr, body):
+    h = bytearray(hdr[:36])
+    c = AES.new(key, AES.MODE_GCM, nonce=my_ip + bytes(h[5:6]) + bytes(h[13:20]))
+    ct, tag = c.encrypt_and_digest(body)
+    h[20:36] = tag
+    return bytes(h) + ct
+
+def relay_game_mk8d(key, src_ip, my_ip, d, table):
+    plain = open_game_mk8d(key, src_ip, d)
+    if plain is None:
+        return None
+    new = rewrite(plain, table)
+    return seal_game_mk8d(key, my_ip, d, new), plain[:4].hex(), new != plain
 
 _CCTX = zstd.ZstdCompressor(level=3, write_content_size=True, write_checksum=False)
 
@@ -185,36 +292,6 @@ def trim_join_response(plain):
             cut = end
         pos = end
     return plain[:cut] if seen and cut is not None and cut < len(plain) else plain
-
-_LOG_STREAM = None
-_LOG_ORIG = None
-_DETAILED = False
-
-class _Tee:
-    def __init__(self, a, b):
-        self.a, self.b = a, b
-    def write(self, s):
-        self.a.write(s)
-        try:
-            self.b.write(s)
-        except Exception:
-            pass
-        return len(s)
-    def flush(self):
-        try:
-            self.a.flush()
-        except Exception:
-            pass
-        try:
-            self.b.flush()
-        except Exception:
-            pass
-
-_STOP_REQUESTED = False
-
-def request_stop():
-    global _STOP_REQUESTED
-    _STOP_REQUESTED = True
 
 TRIM_JOIN = False
 NO_BITS = False
@@ -277,22 +354,28 @@ def relay_game(key, src_ip, my_ip, d, table, ip_pairs=None):
     body = (_CCTX.compress(new) if compressed else new) if changed else raw
     return seal_game(key, my_ip, d, body), plain[:4].hex(), changed
 
-def session_key(game_key, reply):
-    param = bytearray(reply[105:137])
+def session_key(game_key, reply, off=105):
+    param = bytearray(reply[off:off + 32])
     param[-1] = (param[-1] + 1) & 0xFF
     return hmac.new(game_key, bytes(param), hashlib.sha256).digest()[:16]
 
-def reseal_request(game_key, req, old_bc, new_bc):
-    if len(req) != 325 or req[0] != 0:
+def mk8d_param_off(rep):
+    size = int.from_bytes(rep[1:5], "big")
+    if 32 <= size <= len(rep) - 5:
+        return 5 + size - 32
+    return PARAM_OFF["mk8d"]
+
+def reseal_request(game_key, req, old_bc, new_bc, chal_off=27):
+    if len(req) != chal_off + 298 or req[0] != 0:
         raise ValueError("not a browse request")
-    cr = req[27:]
+    cr = req[chal_off:]
     counter, chal, tag, ct = cr[2:10], cr[10:26], cr[26:42], cr[42:]
     k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
     pt = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(ct, tag)
     nct, ntag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
-    return req[:53] + ntag + nct, chal
+    return req[:chal_off + 26] + ntag + nct, chal
 
-def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host):
+def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host, param_off=105, frag=False):
     if rep[0] != 1:
         raise ValueError("not a browse reply")
     off = 5 + int.from_bytes(rep[1:5], "big")
@@ -302,12 +385,15 @@ def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host):
     pt = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(ct, tag)
     nct, ntag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
     out = bytearray(rep)
-    for o, n in ((old_host, new_host), (old_host[::-1], new_host[::-1])):
+    pats = [(old_host, new_host), (old_host[::-1], new_host[::-1])]
+    if frag:
+        pats += id_fragments([(old_host, new_host)])
+    for o, n in pats:
         i = 0
         while (i := bytes(out).find(o, i)) >= 0:
-            if not (105 <= i < 137 or off <= i < off + 58):
-                out[i:i + 4] = n
-            i += 4
+            if not (param_off <= i < param_off + 32 or off <= i < off + 58):
+                out[i:i + len(o)] = n
+            i += len(o)
     out[off + 26:off + 42] = ntag
     out[off + 42:off + 58] = nct
     return bytes(out)
@@ -369,7 +455,8 @@ class Capture:
 
 class Relay:
     def __init__(self, a):
-        self.game_key = GAME_KEY or load_game_key()
+        self.game_key = GAME_KEY
+        self.game_key_mk8d = GAME_KEY_MK8D
         self.sw_ip = a.switch_ip or get_wifi_ip()
         self.h_ip = a.host_ip or detect_zerotier_ip(a.host_peer)
         self.sw_prefix = a.switch_prefix
@@ -383,13 +470,22 @@ class Relay:
         self.switch = None
         self.host = (a.host_peer, GAME_PORT) if a.host_peer else None
         self.peer = None
+        self.rooms = {}
+        self.sessions = {}
         self.req_chals = []
         self.host_req_chals = []
+        self.mk8d_req_chals = []
+        self.mk8d_host_req_chals = []
         self.host_side = None
         self.last_sw_req = None
         self.last_sweep = 0.0
         self.key = None
+        self.key_mk8d = None
+        self.game = None
+        self.last_sw_game = "splatoon3"
         self.tables = None
+        self.sw_game_port = None
+        self.h_game_port = None
         self.log = []
         self.queue = []
         self.t0 = time.time()
@@ -405,44 +501,48 @@ class Relay:
                 zt_cands.append(cand)
         self.d_sw = udp_bind("0.0.0.0", DISCOVERY_PORT, broadcast=True)
         self.d_h = udp_bind(self.h_ip, DISCOVERY_PORT, broadcast=True, bind_devices=zt_cands)
-        self.g_sw = udp_bind(self.sw_ip, GAME_PORT)
-        self.g_h = udp_bind(self.h_ip, GAME_PORT, bind_devices=zt_cands)
+        self.d_sw2 = udp_bind("0.0.0.0", MK8D_PORT, broadcast=True)
+        self.d_h2 = udp_bind(self.h_ip, MK8D_PORT, broadcast=True, bind_devices=zt_cands)
+        self.g_sw = udp_bind(self.sw_ip, GAME_PORT, broadcast=True)
+        self.g_h = udp_bind(self.h_ip, GAME_PORT, broadcast=True, bind_devices=zt_cands)
+        self.gb_sw = udp_bind(socket.inet_ntoa(self.sw_bc), GAME_PORT, broadcast=True)
+        self.gb_h = udp_bind(socket.inet_ntoa(self.h_bc), GAME_PORT, broadcast=True, bind_devices=zt_cands)
+        self.gx = []
+        for p in GAME_PORTS[1:]:
+            self.gx.append((udp_bind(self.sw_ip, p, broadcast=True), "sw"))
+            self.gx.append((udp_bind(socket.inet_ntoa(self.sw_bc), p, broadcast=True), "sw"))
+            self.gx.append((udp_bind(self.h_ip, p, broadcast=True, bind_devices=zt_cands), "h"))
+            self.gx.append((udp_bind(socket.inet_ntoa(self.h_bc), p, broadcast=True, bind_devices=zt_cands), "h"))
         self.cap = Capture(a.capture) if a.capture else None
 
     def note(self, **kw):
         kw["t"] = round(time.time() - self.t0, 6)
         self.log.append(kw)
-        if _DETAILED and _LOG_STREAM is not None:
-            parts = [str(kw.get("ev", "event"))]
-            for k, v in kw.items():
-                if k in ("t", "ev"):
-                    continue
-                if k == "counts" and isinstance(v, dict):
-                    parts += [f"{a}={b}" for a, b in v.items()]
-                else:
-                    parts.append(f"{k}={v}")
-            try:
-                _LOG_STREAM.write(" ".join(parts) + "\n")
-                _LOG_STREAM.flush()
-            except Exception:
-                pass
 
     def session_peer(self):
         if self.host_side == "sw":
             return self.peer or self.host
         return self.host or self.peer
 
-    def build_tables(self):
-        peer = self.session_peer()
-        sw, h = ip4(self.switch[0]), ip4(peer[0])
-        self.tables = {
+    def tables_for(self, peer_ip):
+        sw, h = ip4(self.switch[0]), ip4(peer_ip)
+        tables = {
             "s2h": address_pairs([(self.sw_me, h), (sw, self.h_me)]),
             "h2s": address_pairs([(h, self.sw_me), (self.h_me, sw)]),
         }
-        self.ip_pairs = {
+        ip_pairs = {
             "s2h": [(o, n) for o, n in [(self.sw_me, h), (sw, self.h_me)] if o != n],
             "h2s": [(o, n) for o, n in [(h, self.sw_me), (self.h_me, sw)] if o != n],
         }
+        tables_mk8d = {
+            "s2h": tables["s2h"] + id_fragments([(self.sw_me, h), (sw, self.h_me)]),
+            "h2s": tables["h2s"] + id_fragments([(h, self.sw_me), (self.h_me, sw)]),
+        }
+        return tables, ip_pairs, tables_mk8d
+
+    def build_tables(self):
+        peer = self.session_peer()
+        self.tables, self.ip_pairs, self.tables_mk8d = self.tables_for(peer[0])
         if self.host_side == "sw":
             print(f"paired: Switch {self.switch[0]} is hosting, peer {peer[0]} joined", flush=True)
         elif self.host_side == "h":
@@ -493,6 +593,42 @@ class Relay:
         if self._disc_warn == 1 or self._disc_warn % 50 == 0:
             print(msg, flush=True)
 
+    def key_for(self, game):
+        return self.game_key if game == "splatoon3" else self.game_key_mk8d
+
+    def chals_for(self, direction, game):
+        if direction == "s2h":
+            return self.req_chals if game == "splatoon3" else self.mk8d_req_chals
+        return self.host_req_chals if game == "splatoon3" else self.mk8d_host_req_chals
+
+    def add_chal(self, direction, game, chal):
+        lst = self.chals_for(direction, game)
+        lst[:] = ([chal] + [c for c in lst if c != chal])[:8]
+
+    def note_game(self, game):
+        if game != self.game:
+            self.game = game
+            print(f"game: {GAME_NAMES[game]}", flush=True)
+
+    def port_for(self, game):
+        return MK8D_PORT if game == "mk8d" else DISCOVERY_PORT
+
+    def sock_for(self, leg, game):
+        if leg == "h":
+            return self.d_h2 if game == "mk8d" else self.d_h
+        return self.d_sw2 if game == "mk8d" else self.d_sw
+
+    def take_session_key(self, game, data):
+        off = mk8d_param_off(data) if game == "mk8d" else PARAM_OFF[game]
+        k = session_key(self.key_for(game), data, off)
+        if game == "mk8d":
+            if k != self.key_mk8d:
+                self.key_mk8d = k
+                print("session started", flush=True)
+        elif k != self.key:
+            self.key = k
+            print("session started", flush=True)
+
     def on_disc(self, data, src):
         if src[0] in (self.sw_ip, self.h_ip):
             return
@@ -509,103 +645,133 @@ class Relay:
             return
         if len(data) >= 64 and data[0] == 1:
             return self.on_reply_from_switch(data, src)
-        if len(data) != 325 or data[0] != 0:
+        game = detect_game(data)
+        if game is None:
             return
         try:
-            out, chal = reseal_request(self.game_key, data, self.sw_bc, self.h_bc)
+            out, chal = reseal_request(self.key_for(game), data, self.sw_bc, self.h_bc, CHAL_OFF[game])
         except Exception as e:
             self.disc_note(f"note: a browse request from {src} could not be opened")
             return
+        self.note_game(game)
         if self.switch and self.switch[0] != src[0]:
             print(f"console changed: {self.switch[0]} to {src[0]}", flush=True)
             self.switch = (src[0], GAME_PORT)
             if self.session_peer():
                 self.build_tables()
         self.switch = (src[0], self.switch[1] if self.switch else GAME_PORT)
-        self.req_chals = ([chal] + [c for c in self.req_chals if c != chal])[:8]
+        self.add_chal("s2h", game, chal)
         self.note(ev="rx", dir="s2h", kind="browse_req", src=src[0], len=len(data))
+        port = self.port_for(game)
+        sock = self.sock_for("h", game)
         if self.cap:
-            self.cap.save("disc", data, src[0], socket.inet_ntoa(self.sw_bc), src[1], DISCOVERY_PORT)
+            self.cap.save("disc", data, src[0], socket.inet_ntoa(self.sw_bc), src[1], port)
         self.last_sw_req = out
-        self.send(self.d_h, out, (socket.inet_ntoa(self.h_bc), DISCOVERY_PORT), "s2h", kind="browse_req")
+        self.last_sw_game = game
+        self.send(sock, out, (socket.inet_ntoa(self.h_bc), port), "s2h", kind="browse_req")
+        now = time.time()
+        self.rooms = {k: t for k, t in self.rooms.items() if now - t < 60}
+        targets = {ip for (g, ip) in self.rooms if g == game}
         if self.host:
-            self.send(self.d_h, out, (self.host[0], DISCOVERY_PORT), "s2h", kind="browse_req_uni")
-        elif time.time() - self.last_sweep >= 5:
-            self.last_sweep = time.time()
+            targets.add(self.host[0])
+        for ip in sorted(targets):
+            self.send(sock, out, (ip, port), "s2h", kind="browse_req_uni")
+        if not targets and now - self.last_sweep >= 5:
+            self.last_sweep = now
             count = min(self.h_net.num_addresses, 256)
             base = int(self.h_net.network_address)
             for i in range(count):
                 ip = str(ipaddress.IPv4Address(base + i))
                 if ip != self.h_ip and ip != socket.inet_ntoa(self.h_bc):
-                    self.send(self.d_h, out, (ip, DISCOVERY_PORT), "s2h", kind="browse_req_uni", probe=1)
+                    self.send(sock, out, (ip, port), "s2h", kind="browse_req_uni", probe=1)
 
     def on_disc_host(self, data, src):
-        if len(data) == 325 and data[0] == 0:
-            return self.on_request_from_host(data, src)
+        game = detect_game(data)
+        if game is not None:
+            return self.on_request_from_host(data, src, game)
         if len(data) >= 64 and data[0] == 1 and self.host is None:
             self.host = (src[0], GAME_PORT)
             if self.last_sw_req:
-                self.send(self.d_h, self.last_sw_req, (src[0], DISCOVERY_PORT), "s2h", kind="browse_req_uni")
+                g = self.last_sw_game
+                self.send(self.sock_for("h", g), self.last_sw_req, (src[0], self.port_for(g)), "s2h", kind="browse_req_uni")
         if len(data) < 64 or data[0] != 1 or not self.switch:
             return
-        out = None
-        for chal in self.req_chals:
-            try:
-                out = reseal_reply(self.game_key, data, chal, self.h_bc, self.sw_bc, ip4(src[0]), self.sw_me)
+        out, game = None, None
+        for g in ("splatoon3", "mk8d"):
+            for chal in self.chals_for("s2h", g):
+                try:
+                    out = reseal_reply(self.key_for(g), data, chal, self.h_bc, self.sw_bc,
+                                       ip4(src[0]), self.sw_me,
+                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
+                                       frag=(g == "mk8d"))
+                    game = g
+                    break
+                except Exception:
+                    continue
+            if out is not None:
                 break
-            except ValueError:
-                continue
         if out is None:
             self.disc_note(f"note: a browse reply from {src} matched no recent request")
             return
-        k = session_key(self.game_key, data)
-        if k != self.key:
-            self.key = k
-            print("session started", flush=True)
+        self.note_game(game)
+        self.take_session_key(game, data)
         self.host_side = "h"
         if self.host is None or self.host[0] != src[0]:
             self.host = (src[0], GAME_PORT)
             self.build_tables()
         elif self.tables is None:
             self.build_tables()
+        self.rooms[(game, src[0])] = time.time()
+        entry = self.sessions.setdefault(src[0], {"keys": {}, "tables": None})
+        entry["keys"][game] = self.key_mk8d if game == "mk8d" else self.key
+        entry["tables"] = self.tables_for(src[0])
         self.note(ev="rx", dir="h2s", kind="browse_reply", src=src[0], len=len(data))
+        port = self.port_for(game)
         if self.cap:
-            self.cap.save("disc", data, src[0], self.switch[0], src[1], DISCOVERY_PORT)
-        self.send(self.d_sw, out, (self.switch[0], DISCOVERY_PORT), "h2s", kind="browse_reply")
+            self.cap.save("disc", data, src[0], self.switch[0], src[1], port)
+        self.send(self.sock_for("sw", game), out, (self.switch[0], port), "h2s", kind="browse_reply")
 
-    def on_request_from_host(self, data, src):
+    def on_request_from_host(self, data, src, game):
         try:
-            out, chal = reseal_request(self.game_key, data, self.h_bc, self.sw_bc)
+            out, chal = reseal_request(self.key_for(game), data, self.h_bc, self.sw_bc, CHAL_OFF[game])
         except Exception as e:
             self.disc_note(f"note: a browse request from peer {src} could not be opened")
             return
+        self.note_game(game)
         self.peer = (src[0], self.peer[1] if self.peer else GAME_PORT)
-        self.host_req_chals = ([chal] + [c for c in self.host_req_chals if c != chal])[:8]
+        self.add_chal("h2s", game, chal)
         self.note(ev="rx", dir="h2s", kind="browse_req", src=src[0], len=len(data))
+        port = self.port_for(game)
+        sock = self.sock_for("sw", game)
         if self.cap:
-            self.cap.save("disc", data, src[0], socket.inet_ntoa(self.h_bc), src[1], DISCOVERY_PORT)
-        self.send(self.d_sw, out, (socket.inet_ntoa(self.sw_bc), DISCOVERY_PORT), "h2s", kind="browse_req")
+            self.cap.save("disc", data, src[0], socket.inet_ntoa(self.h_bc), src[1], port)
+        self.send(sock, out, (socket.inet_ntoa(self.sw_bc), port), "h2s", kind="browse_req")
         if self.switch:
-            self.send(self.d_sw, out, (self.switch[0], DISCOVERY_PORT), "h2s", kind="browse_req_uni")
+            self.send(sock, out, (self.switch[0], port), "h2s", kind="browse_req_uni")
 
     def on_reply_from_switch(self, data, src):
         dest_peer = self.peer or self.host
         if not dest_peer:
             return
-        out = None
-        for chal in self.host_req_chals:
-            try:
-                out = reseal_reply(self.game_key, data, chal, self.sw_bc, self.h_bc, ip4(src[0]), self.h_me)
+        out, game = None, None
+        for g in ("splatoon3", "mk8d"):
+            for chal in self.chals_for("h2s", g):
+                try:
+                    out = reseal_reply(self.key_for(g), data, chal, self.sw_bc, self.h_bc,
+                                       ip4(src[0]), self.h_me,
+                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
+                                       frag=(g == "mk8d"))
+                    game = g
+                    break
+                except Exception:
+                    continue
+            if out is not None:
                 break
-            except ValueError:
-                continue
         if out is None:
             self.disc_note(f"note: a Switch reply from {src} matched no recent peer request")
             return
-        k = session_key(self.game_key, data)
-        if k != self.key:
-            self.key = k
-            print("session started", flush=True)
+        self.note_game(game)
+        self.take_session_key(game, data)
         self.host_side = "sw"
         if self.switch is None or self.switch[0] != src[0]:
             self.switch = (src[0], GAME_PORT)
@@ -613,13 +779,16 @@ class Relay:
         elif self.tables is None:
             self.build_tables()
         self.note(ev="rx", dir="s2h", kind="browse_reply", src=src[0], len=len(data))
+        port = self.port_for(game)
         if self.cap:
-            self.cap.save("disc", data, src[0], dest_peer[0], src[1], DISCOVERY_PORT)
-        self.send(self.d_h, out, (dest_peer[0], DISCOVERY_PORT), "s2h", kind="browse_reply")
+            self.cap.save("disc", data, src[0], dest_peer[0], src[1], port)
+        self.send(self.sock_for("h", game), out, (dest_peer[0], port), "s2h", kind="browse_reply")
 
     def on_game(self, data, src, direction):
-        if not self.key or not self.tables:
+        if not self.tables or (not self.key and not self.key_mk8d):
             self.note(ev="drop_nokey", dir=direction, src=src[0], len=len(data))
+            return
+        if self.game == "mk8d" and self.dup(data, src):
             return
         if direction == "s2h":
             if self.switch is None or self.switch[0] != src[0]:
@@ -629,12 +798,74 @@ class Relay:
                 if self.session_peer():
                     self.build_tables()
             self.switch = src
-            r = relay_game(self.key, ip4(src[0]), self.h_me, data, self.tables["s2h"], self.ip_pairs["s2h"])
+            table, pairs, my_ip = self.tables["s2h"], self.ip_pairs["s2h"], self.h_me
             sock, dest = self.g_h, self.session_peer()
+            bdest = (socket.inet_ntoa(self.h_bc), GAME_PORT)
         else:
-            r = relay_game(self.key, ip4(src[0]), self.sw_me, data, self.tables["h2s"], self.ip_pairs["h2s"])
+            table, pairs, my_ip = self.tables["h2s"], self.ip_pairs["h2s"], self.sw_me
             sock, dest = self.g_sw, self.switch
+            bdest = (socket.inet_ntoa(self.sw_bc), GAME_PORT)
+        if direction == "s2h":
+            if src[1] in GAME_PORTS:
+                self.sw_game_port = src[1]
+            udest = (dest[0], self.h_game_port or GAME_PORT)
+            pknown = self.h_game_port is not None
+        else:
+            if src[1] in GAME_PORTS:
+                self.h_game_port = src[1]
+            udest = (dest[0], self.sw_game_port or GAME_PORT)
+            pknown = self.sw_game_port is not None
+        order = ("mk8d", "splatoon3") if self.game == "mk8d" else ("splatoon3", "mk8d")
+        r, used = None, None
+        for g in order:
+            k = self.key_mk8d if g == "mk8d" else self.key
+            if not k:
+                continue
+            tbl = getattr(self, "tables_mk8d", {}).get(direction, table) if g == "mk8d" else table
+            rr = relay_game_mk8d(k, ip4(src[0]), my_ip, data, tbl) if g == "mk8d" else \
+                relay_game(k, ip4(src[0]), my_ip, data, table, pairs)
+            if rr is not None:
+                r, used = rr, g
+                break
+        if r is None and self.host_side == "h" and len(self.sessions) > 1:
+            if direction == "s2h":
+                cands = sorted((ip for ip in self.sessions if not self.host or ip != self.host[0]),
+                               key=lambda ip: max((t for (g2, i2), t in self.rooms.items() if i2 == ip), default=0),
+                               reverse=True)
+            elif src[0] in self.sessions and (not self.host or src[0] != self.host[0]):
+                cands = [src[0]]
+            else:
+                cands = []
+            for ip in cands:
+                entry = self.sessions[ip]
+                t2, p2, tm2 = entry["tables"]
+                for g in order:
+                    k2 = entry["keys"].get(g)
+                    if not k2:
+                        continue
+                    tbl2 = tm2[direction] if g == "mk8d" else t2[direction]
+                    rr = relay_game_mk8d(k2, ip4(src[0]), my_ip, data, tbl2) if g == "mk8d" else \
+                        relay_game(k2, ip4(src[0]), my_ip, data, t2[direction], p2[direction])
+                    if rr is not None:
+                        r, used = rr, g
+                        break
+                if r is not None:
+                    self.host = (ip, self.host[1] if self.host and self.host[0] == ip else GAME_PORT)
+                    self.key = entry["keys"].get("splatoon3")
+                    self.key_mk8d = entry["keys"].get("mk8d")
+                    self.tables, self.ip_pairs, self.tables_mk8d = t2, p2, tm2
+                    table, pairs = t2[direction], p2[direction]
+                    if direction == "s2h":
+                        dest = self.session_peer()
+                        udest = (dest[0], self.h_game_port or GAME_PORT)
+                    print(f"session switched to host {ip}", flush=True)
+                    break
         if r is None:
+            if self.game == "mk8d" and len(data) >= 36 and data[:4] == MAGIC and data[4] == 1:
+                if not pknown:
+                    self.send(sock, data, bdest, direction, label="plain")
+                self.send(sock, data, udest, direction, label="plain")
+                return
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
             return
         if direction == "h2s":
@@ -642,14 +873,21 @@ class Relay:
                 self.peer = src
             else:
                 self.host = src
+        self.game = used
         out, label, changed = r
-        self.note(ev="rx", dir=direction, src=src[0], len=len(data), label=label, nonce=data[13:21].hex())
+        nonce = data[12:20] if used == "mk8d" else data[13:21]
+        self.note(ev="rx", dir=direction, src=src[0], len=len(data), label=label, nonce=nonce.hex())
         if self.cap:
             if direction == "s2h":
                 self.cap.save("sw-game", data, src[0], self.h_ip, src[1], GAME_PORT)
             else:
                 self.cap.save("hs-game", data, self.sw_ip, src[0], GAME_PORT, src[1])
-        self.send(sock, out, dest, direction, label=label, nonce=data[13:21].hex(), changed=changed)
+        if used == "mk8d":
+            if not pknown:
+                self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
+            self.send(sock, out, udest, direction, label=label, nonce=nonce.hex(), changed=changed)
+        else:
+            self.send(sock, out, dest, direction, label=label, nonce=nonce.hex(), changed=changed)
 
     def on_game_sock(self, data, src, bound_leg):
         if src[0] in (self.sw_ip, self.h_ip):
@@ -661,16 +899,18 @@ class Relay:
         self.note(ev="start", sw=self.sw_ip, h=self.h_ip,
                   host=(self.host[0] if self.host else None))
         socks = {self.d_sw: self.on_disc, self.d_h: self.on_disc,
+                 self.d_sw2: self.on_disc, self.d_h2: self.on_disc,
                  self.g_sw: lambda d, s: self.on_game_sock(d, s, "sw"),
-                 self.g_h: lambda d, s: self.on_game_sock(d, s, "h")}
+                 self.g_h: lambda d, s: self.on_game_sock(d, s, "h"),
+                 self.gb_sw: lambda d, s: self.on_game_sock(d, s, "sw"),
+                 self.gb_h: lambda d, s: self.on_game_sock(d, s, "h")}
+        for s, leg in self.gx:
+            socks[s] = lambda d, src, leg=leg: self.on_game_sock(d, src, leg)
         stop = [False]
-        try:
-            signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
-            signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
-        except Exception:
-            pass
+        signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
+        signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
         last_stat = time.time()
-        while not stop[0] and not _STOP_REQUESTED:
+        while not stop[0]:
             timeout = 0.5
             if self.queue:
                 timeout = max(0.0, min(timeout, self.queue[0][0] - time.time()))
@@ -710,24 +950,6 @@ class Args:
     pass
 
 def main():
-    global _STOP_REQUESTED, _LOG_STREAM, _LOG_ORIG, _DETAILED
-    _STOP_REQUESTED = False
-    _DETAILED = os.environ.get("DETAILED_LOG") == "1"
-    log_path = os.environ.get("PROXY_LOG")
-    if log_path:
-        try:
-            if _LOG_ORIG is None:
-                _LOG_ORIG = (sys.stdout, sys.stderr)
-            if _LOG_STREAM is not None:
-                try:
-                    _LOG_STREAM.close()
-                except Exception:
-                    pass
-            _LOG_STREAM = open(log_path, "w", buffering=1)
-            sys.stdout = _Tee(_LOG_ORIG[0], _LOG_STREAM)
-            sys.stderr = _Tee(_LOG_ORIG[1], _LOG_STREAM)
-        except Exception:
-            _LOG_STREAM = None
     a = Args()
     a.switch_ip = os.environ.get("PHONE_IP") or None
     a.host_ip = os.environ.get("ZT_IP") or None
@@ -743,7 +965,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v228", flush=True)
+    print("GRID0 proxy v6.1", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

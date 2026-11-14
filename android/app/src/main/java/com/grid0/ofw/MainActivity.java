@@ -26,6 +26,7 @@ import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
@@ -115,6 +116,7 @@ public class MainActivity extends Activity {
     private Button supportBtn;
     private LinearLayout toggleRow;
     private static boolean updateChecked = false;
+    private String pendingUpdateUrl = null;
     private TextView tabHome;
     private TextView tabMore;
     private LinearLayout homeContent;
@@ -162,6 +164,14 @@ public class MainActivity extends Activity {
         super.onResume();
 
         proxyRunning = ProxyService.running;
+
+        if (pendingUpdateUrl != null
+                && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O
+                    || getPackageManager().canRequestPackageInstalls())) {
+            String u = pendingUpdateUrl;
+            pendingUpdateUrl = null;
+            downloadUpdate(u);
+        }
 
         boolean nowInstalled = isZeroTierInstalled();
 
@@ -1686,7 +1696,7 @@ public class MainActivity extends Activity {
         } else {
             try {
                 if (Python.isStarted()) {
-                    Python.getInstance().getModule("zttestproxyv228").callAttr("request_stop");
+                    Python.getInstance().getModule("zttestproxyv61").callAttr("request_stop");
                 }
             } catch (Exception e) {
             }
@@ -1818,11 +1828,7 @@ public class MainActivity extends Activity {
                         builder.setNegativeButton("Later", null);
 
                         if (url != null && !url.isEmpty()) {
-                            builder.setPositiveButton("Update", (dialog, which) -> {
-                                Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                                web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                startActivity(web);
-                            });
+                            builder.setPositiveButton("Update", (dialog, which) -> downloadUpdate(url));
                         }
 
                         builder.show();
@@ -1831,6 +1837,68 @@ public class MainActivity extends Activity {
             } catch (Exception e) {
             }
         }).start();
+    }
+
+    private void downloadUpdate(String url) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                && !getPackageManager().canRequestPackageInstalls()) {
+            pendingUpdateUrl = url;
+            AlertDialog.Builder b = new AlertDialog.Builder(this);
+            b.setTitle("Allow installs");
+            b.setMessage("Android needs your OK before GRID0 ofw can install its own update. Turn on Allow from this source, then come back and the download starts on its own.");
+            b.setPositiveButton("Open settings", (d, w) -> {
+                Intent s = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName()));
+                s.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(s);
+            });
+            b.setNegativeButton("Cancel", null);
+            b.show();
+            return;
+        }
+
+        Toast.makeText(this, "Downloading update", Toast.LENGTH_SHORT).show();
+
+        new Thread(() -> {
+            File out = new File(getCacheDir(), "update.apk");
+            try {
+                HttpURLConnection conn = (HttpURLConnection) new java.net.URL(url).openConnection();
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(60000);
+                conn.setRequestProperty("User-Agent", "GRID0-ofw");
+
+                try (InputStream in = conn.getInputStream();
+                     FileOutputStream fos = new FileOutputStream(out)) {
+                    byte[] buf = new byte[65536];
+                    int n;
+                    while ((n = in.read(buf)) != -1) {
+                        fos.write(buf, 0, n);
+                    }
+                }
+                conn.disconnect();
+
+                if (out.length() == 0) {
+                    throw new Exception("empty download");
+                }
+
+                runOnUiThread(() -> installUpdate());
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Download failed, opening it in your browser instead", Toast.LENGTH_LONG).show();
+                    Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                    web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(web);
+                });
+            }
+        }).start();
+    }
+
+    private void installUpdate() {
+        Uri uri = Uri.parse("content://" + getPackageName() + ".update/update.apk");
+        Intent it = new Intent(Intent.ACTION_VIEW);
+        it.setDataAndType(uri, "application/vnd.android.package-archive");
+        it.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(it);
     }
 
     private boolean isNewerVersion(String remote, String local) {

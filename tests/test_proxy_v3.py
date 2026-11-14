@@ -10,12 +10,13 @@ import unittest
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PC_COPIES = [os.path.join(ROOT, "desktop", "proxy", "zttestproxyv228.py"),
-             os.path.join(ROOT, "proxy", "zttestproxyv228.py")]
-ANDROID_COPY = os.path.join(ROOT, "android", "app", "src", "main", "python", "zttestproxyv228.py")
+PC_COPIES = [os.path.join(ROOT, "desktop", "proxy", "zttestproxyv61.py"),
+             os.path.join(ROOT, "proxy", "zttestproxyv61.py")]
+ANDROID_COPY = os.path.join(ROOT, "android", "app", "src", "main", "python", "zttestproxyv61.py")
 
 KEY_A = bytes.fromhex("00112233445566778899aabbccddeeff")
 KEY_B = bytes.fromhex("ffeeddccbbaa99887766554433221100")
+MK8D_KEY = b"ABCDEFGHIJKLMNOP"
 WIKI_KEY = bytes.fromhex("78deee82d86875782c40b15278f37815")
 
 WIKI_PAGE = """In LDN and LAN mode, Pia derives encryption keys using a game-specific key.
@@ -37,11 +38,13 @@ def load_copy(src_path, beside_key=KEY_A, env_key=None, home_key=None):
     home = os.path.join(tmp, "home")
     os.makedirs(mod_dir)
     os.makedirs(home)
-    dst = os.path.join(mod_dir, "zttestproxyv228.py")
+    dst = os.path.join(mod_dir, "zttestproxyv61.py")
     shutil.copy(src_path, dst)
     if beside_key is not None:
         with open(os.path.join(mod_dir, "game_key.txt"), "w") as fh:
             fh.write(beside_key.hex())
+    with open(os.path.join(mod_dir, "game_key_mk8d.txt"), "w") as fh:
+        fh.write(b"ABCDEFGHIJKLMNOP".hex())
     if home_key is not None:
         with open(os.path.join(home, "game_key.txt"), "w") as fh:
             fh.write(home_key.hex())
@@ -122,6 +125,7 @@ def make_relay(m):
     import time
     r = m.Relay.__new__(m.Relay)
     r.game_key = KEY_A
+    r.game_key_mk8d = getattr(m, "GAME_KEY_MK8D", None) or getattr(m, "MK8D_KEY", None)
     r.sw_ip, r.h_ip = SW_PHONE, ZT_PHONE
     r.sw_prefix = r.h_prefix = 24
     r.sw_me, r.h_me = m.ip4(SW_PHONE), m.ip4(ZT_PHONE)
@@ -133,20 +137,33 @@ def make_relay(m):
     r.switch = None
     r.host = None
     r.peer = None
+    r.rooms = {}
+    r.sessions = {}
     r.req_chals = []
     r.host_req_chals = []
+    r.mk8d_req_chals = []
+    r.mk8d_host_req_chals = []
     r.host_side = None
     r.last_sw_req = None
+    r.last_sw_game = "splatoon3"
     r.last_sweep = 0.0
     r.key = None
+    r.key_mk8d = None
+    r.game = None
     r.tables = None
     r.ip_pairs = None
+    r.tables_mk8d = {}
     r.log = []
     r.queue = []
     r.t0 = time.time()
     r.seen = {}
     r.cap = None
     r.d_sw, r.d_h, r.g_sw, r.g_h = FakeSocket(), FakeSocket(), FakeSocket(), FakeSocket()
+    r.d_sw2, r.d_h2 = FakeSocket(), FakeSocket()
+    r.gb_sw, r.gb_h = FakeSocket(), FakeSocket()
+    r.gx = []
+    r.sw_game_port = None
+    r.h_game_port = None
     return r
 
 
@@ -280,6 +297,20 @@ class TestKeyFetch(unittest.TestCase):
     def test_fetch_network_error_returns_none(self):
         urllib.request.urlopen = lambda *a, **k: (_ for _ in ()).throw(OSError("down"))
         self.assertIsNone(self.m.fetch_game_key())
+
+    def test_fetch_picks_mk8d_ascii_key(self):
+        self.serve(WIKI_PAGE)
+        self.assertEqual(self.m.fetch_game_key("Mario Kart 8"), b"ABCDEFGHIJKLMNOP")
+
+    def test_load_mk8d_fetches_and_caches_beside_script(self):
+        beside = os.path.join(self.m._test_mod_dir, "game_key_mk8d.txt")
+        if os.path.exists(beside):
+            os.remove(beside)
+        self.serve(WIKI_PAGE)
+        key = self.m.load_game_key_mk8d()
+        self.assertEqual(key, b"ABCDEFGHIJKLMNOP")
+        with open(beside) as fh:
+            self.assertEqual(fh.read().strip(), b"ABCDEFGHIJKLMNOP".hex())
 
     def test_load_fetches_and_caches_beside_script(self):
         self.serve(WIKI_PAGE)
@@ -1041,7 +1072,7 @@ class TestMainEnv(unittest.TestCase):
             "SWITCH_IP": "192.168.4.30", "HOST_ZT": "10.147.17.99",
             "DELAY_S2H_MS": "25", "DELAY_H2S_MS": "0",
             "EVENTS": "my_events.jsonl",
-        }, ["zttestproxyv228.py"])
+        }, ["zttestproxyv61.py"])
         a = cap["args"]
         self.assertEqual(a.switch_ip, "192.168.1.50")
         self.assertEqual(a.host_ip, "10.147.17.50")
@@ -1056,7 +1087,7 @@ class TestMainEnv(unittest.TestCase):
         self.assertFalse(cap["no_bits"])
 
     def test_env_defaults_and_no_bit_flag(self):
-        m, cap = self.run_main({}, ["zttestproxyv228.py", "--no-bit-rewrite"])
+        m, cap = self.run_main({}, ["zttestproxyv61.py", "--no-bit-rewrite"])
         a = cap["args"]
         self.assertIsNone(a.switch_ip)
         self.assertIsNone(a.host_ip)
@@ -1285,6 +1316,344 @@ class TestUpdateSources(unittest.TestCase):
         src = self.read("android/app/src/main/java/com/grid0/ofw/MainActivity.java")
         self.assertIn("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest", src)
         self.assertNotIn("version.json", src)
+
+    def test_android_update_downloads_and_installs_in_app(self):
+        src = self.read("android/app/src/main/java/com/grid0/ofw/MainActivity.java")
+        self.assertIn("downloadUpdate(url)", src)
+        self.assertIn("canRequestPackageInstalls()", src)
+        self.assertIn("ACTION_MANAGE_UNKNOWN_APP_SOURCES", src)
+        self.assertIn("application/vnd.android.package-archive", src)
+        self.assertIn("FLAG_GRANT_READ_URI_PERMISSION", src)
+        self.assertIn(".update/update.apk", src)
+
+    def test_android_manifest_declares_update_provider(self):
+        src = self.read("android/app/src/main/AndroidManifest.xml")
+        self.assertIn("android.permission.REQUEST_INSTALL_PACKAGES", src)
+        self.assertIn(".UpdateProvider", src)
+        self.assertIn("com.grid0.ofw.update", src)
+        self.assertIn('android:grantUriPermissions="true"', src)
+
+    def test_update_provider_serves_cached_apk(self):
+        src = self.read("android/app/src/main/java/com/grid0/ofw/UpdateProvider.java")
+        self.assertIn("extends ContentProvider", src)
+        self.assertIn('getCacheDir(), "update.apk"', src)
+        self.assertIn("ParcelFileDescriptor.open", src)
+
+
+HOST_B = "10.147.17.98"
+
+
+class TestMultiRoom(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        self.r = make_relay(self.m)
+
+    def browse(self, seed):
+        req, chal, pt = make_browse_request(self.m, KEY_A, self.r.sw_bc,
+                                            chal=bytes([seed]) * 16,
+                                            counter=bytes([seed + 1]) * 8)
+        self.r.on_disc(req, (SWITCH, 35000))
+        return chal
+
+    def reply_from(self, host_ip, chal):
+        rep, pt = make_browse_reply(self.m, KEY_A, chal, self.r.h_bc, host_ip=host_ip)
+        self.r.on_disc(rep, (host_ip, 35000))
+        return rep
+
+    def test_browse_unicast_reaches_every_room_that_answered(self):
+        r = self.r
+        chal = self.browse(0x21)
+        self.reply_from(HOST, chal)
+        self.reply_from(HOST_B, chal)
+        before = len(r.d_h.sent)
+        self.browse(0x31)
+        dests = [d for _, d in r.d_h.sent[before:]]
+        self.assertIn((HOST, 35000), dests)
+        self.assertIn((HOST_B, 35000), dests)
+
+    def test_switch_can_join_first_room_after_second_replied(self):
+        r = self.r
+        chal = self.browse(0x21)
+        rep_a = self.reply_from(HOST, chal)
+        rep_b = self.reply_from(HOST_B, chal)
+        key_a = self.m.session_key(KEY_A, rep_a)
+        self.assertEqual(r.key, self.m.session_key(KEY_A, rep_b))
+        plain = b"\x07\x00\x00\x00" + self.m.ip4(SW_PHONE) + self.m.ip4(SWITCH) + b"\x00" * 24
+        pkt = self.m.seal_game(key_a, self.m.ip4(SWITCH), game_header(self.m), plain)
+        r.on_game(pkt, (SWITCH, 49152), "s2h")
+        self.assertFalse(any(e.get("ev") == "rx_unauth" for e in r.log))
+        self.assertTrue(r.g_h.sent)
+        data, dest = r.g_h.sent[-1]
+        self.assertEqual(dest, (HOST, 49152))
+        opened = self.m.open_game(key_a, self.m.ip4(ZT_PHONE), data)
+        self.assertIsNotNone(opened)
+        body = opened[0]
+        self.assertIn(self.m.ip4(HOST), body)
+        self.assertIn(self.m.ip4(ZT_PHONE), body)
+        self.assertNotIn(self.m.ip4(SW_PHONE), body)
+
+    def test_host_packet_from_first_room_still_relayed(self):
+        r = self.r
+        chal = self.browse(0x21)
+        rep_a = self.reply_from(HOST, chal)
+        rep_b = self.reply_from(HOST_B, chal)
+        key_a = self.m.session_key(KEY_A, rep_a)
+        plain = b"\x07\x00\x00\x00" + self.m.ip4(HOST) + b"\x00" * 28
+        pkt = self.m.seal_game(key_a, self.m.ip4(HOST), game_header(self.m), plain)
+        r.on_game(pkt, (HOST, 49152), "h2s")
+        self.assertFalse(any(e.get("ev") == "rx_unauth" for e in r.log))
+        self.assertTrue(r.g_sw.sent)
+        data, dest = r.g_sw.sent[-1]
+        self.assertEqual(dest, (SWITCH, 49152))
+        self.assertEqual(r.host, (HOST, 49152))
+
+
+FIXTURES = os.path.join(ROOT, "tests", "fixtures")
+
+
+def read_fixture(name):
+    with open(os.path.join(FIXTURES, name), "rb") as fh:
+        return fh.read()
+
+
+def make_mk8d_browse_request(m, bc, chal=b"\x21" * 16, counter=b"\x22" * 8, pt=None):
+    from Crypto.Cipher import AES
+    if pt is None:
+        pt = bytes(range(256))
+    k = AES.new(MK8D_KEY, AES.MODE_ECB).encrypt(chal)
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter).encrypt_and_digest(pt)
+    req = bytearray(873)
+    req[0] = 0
+    req[1:5] = (0x23A).to_bytes(4, "big")
+    req[575] = 1
+    req[576] = 1
+    req[577:585] = counter
+    req[585:601] = chal
+    req[601:617] = tag
+    req[617:873] = ct
+    return bytes(req), chal
+
+
+def make_mk8d_browse_reply(m, req_chal, bc, host_ip=None, param=None,
+                           rchal=b"\x55" * 16, counter=b"\x44" * 8, pt=b"\x33" * 16):
+    from Crypto.Cipher import AES
+    if param is None:
+        param = bytes(range(32, 64))
+    rep = bytearray(1361)
+    rep[0] = 1
+    rep[1:5] = (1298).to_bytes(4, "big")
+    if host_ip is not None:
+        rep[436:440] = m.ip4(host_ip)
+    rep[1271:1303] = param
+    k = hmac_mod.new(MK8D_KEY, rchal + req_chal, hashlib.sha256).digest()[:16]
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter).encrypt_and_digest(pt)
+    rep[1305:1313] = counter
+    rep[1313:1329] = rchal
+    rep[1329:1345] = tag
+    rep[1345:1361] = ct
+    return bytes(rep), pt
+
+
+class TestMK8D(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def test_detect_game_shapes(self):
+        m = self.m
+        req, chal, pt = make_browse_request(m, KEY_A, m.ip4("192.168.1.255"))
+        self.assertEqual(m.detect_game(req), "splatoon3")
+        mreq, mchal = make_mk8d_browse_request(m, m.ip4("192.168.1.255"))
+        self.assertEqual(m.detect_game(mreq), "mk8d")
+        self.assertIsNone(m.detect_game(b"\x00" * 100))
+        self.assertIsNone(m.detect_game(b"\x01" + b"\x00" * 872))
+
+    def test_real_capture_request_reseals(self):
+        m = self.m
+        req = read_fixture("mk8d_browse_request_wifi.bin")
+        self.assertEqual(m.detect_game(req), "mk8d")
+        out, chal = m.reseal_request(MK8D_KEY, req, m.ip4("192.168.2.255"),
+                                     m.ip4("10.147.17.255"), m.CHAL_OFF["mk8d"])
+        self.assertNotEqual(out, req)
+        back, _ = m.reseal_request(MK8D_KEY, out, m.ip4("10.147.17.255"),
+                                   m.ip4("192.168.2.255"), m.CHAL_OFF["mk8d"])
+        self.assertEqual(back, req)
+
+    def test_real_capture_wrong_key_and_wrong_broadcast_fail(self):
+        m = self.m
+        req = read_fixture("mk8d_browse_request_wifi.bin")
+        with self.assertRaises(Exception):
+            m.reseal_request(WIKI_KEY, req, m.ip4("192.168.2.255"),
+                             m.ip4("10.147.17.255"), m.CHAL_OFF["mk8d"])
+        with self.assertRaises(Exception):
+            m.reseal_request(MK8D_KEY, req, m.ip4("10.147.17.255"),
+                             m.ip4("192.168.2.255"), m.CHAL_OFF["mk8d"])
+
+    def test_zt_capture_still_bound_to_wifi_broadcast(self):
+        m = self.m
+        req = read_fixture("mk8d_browse_request_zt.bin")
+        self.assertEqual(m.detect_game(req), "mk8d")
+        out, chal = m.reseal_request(MK8D_KEY, req, m.ip4("192.168.2.255"),
+                                     m.ip4("192.168.1.255"), m.CHAL_OFF["mk8d"])
+        back, _ = m.reseal_request(MK8D_KEY, out, m.ip4("192.168.1.255"),
+                                   m.ip4("192.168.2.255"), m.CHAL_OFF["mk8d"])
+        self.assertEqual(back, req)
+
+    def test_session_key_uses_mk8d_param_offset(self):
+        m = self.m
+        param = bytes(range(32, 64))
+        rep, pt = make_mk8d_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), param=param)
+        self.assertEqual(len(rep), 1361)
+        self.assertEqual(m.mk8d_param_off(rep), 1271)
+        inc = bytearray(param)
+        inc[-1] = (inc[-1] + 1) & 0xFF
+        expect = hmac_mod.new(MK8D_KEY, bytes(inc), hashlib.sha256).digest()[:16]
+        self.assertEqual(m.session_key(MK8D_KEY, rep, m.mk8d_param_off(rep)), expect)
+        fake = bytearray(200)
+        fake[1:5] = (1297).to_bytes(4, "big")
+        self.assertEqual(m.mk8d_param_off(bytes(fake)), 1270)
+
+    def test_reply_reseal_round_trip_and_zones(self):
+        m = self.m
+        rep, pt = make_mk8d_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), host_ip=HOST)
+        out = m.reseal_reply(MK8D_KEY, rep, b"\x21" * 16, m.ip4("10.147.17.255"),
+                             m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4(SW_PHONE),
+                             m.mk8d_param_off(rep))
+        self.assertEqual(open_reply(m, MK8D_KEY, out, b"\x21" * 16, m.ip4("192.168.1.255")), pt)
+        self.assertEqual(out[436:440], m.ip4(SW_PHONE))
+        self.assertEqual(out[1271:1303], rep[1271:1303])
+        rep2 = bytearray(rep)
+        rep2[454:458] = m.ip4(HOST)[2:4] + (49154).to_bytes(2, "big")
+        out2 = m.reseal_reply(MK8D_KEY, bytes(rep2), b"\x21" * 16, m.ip4("10.147.17.255"),
+                              m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4(SW_PHONE),
+                              m.mk8d_param_off(rep), frag=True)
+        self.assertEqual(out2[454:458], m.ip4(SW_PHONE)[2:4] + (49154).to_bytes(2, "big"))
+        out3 = m.reseal_reply(MK8D_KEY, bytes(rep2), b"\x21" * 16, m.ip4("10.147.17.255"),
+                              m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4(SW_PHONE),
+                              m.mk8d_param_off(rep))
+        self.assertEqual(out3[454:458], bytes(rep2[454:458]))
+
+    def test_game_packet_round_trip(self):
+        m = self.m
+        key = bytes(range(48, 64))
+        hdr = bytearray(36)
+        hdr[0:4] = m.MAGIC
+        hdr[4] = 2
+        hdr[12:20] = b"\x66" * 8
+        body = b"\x07\x00\x00\x00" + b"\x00" * 28
+        pkt = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr), body)
+        self.assertEqual(m.open_game_mk8d(key, m.ip4(SWITCH), pkt), body)
+        self.assertIsNone(m.open_game_mk8d(key, m.ip4(HOST), pkt))
+        self.assertIsNone(m.open_game_mk8d(KEY_B, m.ip4(SWITCH), pkt))
+
+    def test_all_copies_expose_mk8d_api(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            with self.subTest(path=path):
+                m = load_copy(path)
+                for n in ("detect_game", "open_game_mk8d", "seal_game_mk8d", "relay_game_mk8d", "mk8d_param_off"):
+                    self.assertTrue(hasattr(m, n), n)
+                self.assertEqual(m.MK8D_PORT, 30000)
+        for path in PC_COPIES:
+            with self.subTest(path=path):
+                m = load_copy(path)
+                self.assertEqual(m.GAME_KEY_MK8D, MK8D_KEY)
+        m = load_copy(ANDROID_COPY)
+        self.assertEqual(m.MK8D_KEY, MK8D_KEY)
+
+
+class TestMK8DRelay(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        self.r = make_relay(self.m)
+
+    def pair_mk8d(self):
+        m, r = self.m, self.r
+        req, chal = make_mk8d_browse_request(m, r.sw_bc)
+        r.on_disc(req, (SWITCH, 30000))
+        rep, pt = make_mk8d_browse_reply(m, chal, r.h_bc, host_ip=HOST)
+        r.on_disc(rep, (HOST, 30000))
+        return req, chal, rep, pt
+
+    def test_request_forwarded_on_mk8d_port(self):
+        m, r = self.m, self.r
+        req, chal = make_mk8d_browse_request(m, r.sw_bc)
+        r.on_disc(req, (SWITCH, 30000))
+        self.assertEqual(r.game, "mk8d")
+        self.assertEqual(r.mk8d_req_chals, [chal])
+        self.assertEqual(r.req_chals, [])
+        self.assertEqual(r.d_h.sent, [])
+        dests = [d for _, d in r.d_h2.sent]
+        self.assertIn(("10.147.17.255", 30000), dests)
+        first = r.d_h2.sent[0][0]
+        back, _ = m.reseal_request(MK8D_KEY, first, r.h_bc, r.sw_bc, m.CHAL_OFF["mk8d"])
+        self.assertEqual(back, req)
+
+    def test_reply_sets_mk8d_session_key_only(self):
+        m, r = self.m, self.r
+        req, chal, rep, pt = self.pair_mk8d()
+        self.assertEqual(r.key_mk8d, m.session_key(MK8D_KEY, rep, m.mk8d_param_off(rep)))
+        self.assertIsNone(r.key)
+        self.assertEqual(r.host_side, "h")
+        data, dest = r.d_sw2.sent[-1]
+        self.assertEqual(dest, (SWITCH, 30000))
+        self.assertEqual(open_reply(m, MK8D_KEY, data, chal, r.sw_bc), pt)
+
+    def test_game_flows_after_mk8d_pairing(self):
+        m, r = self.m, self.r
+        self.pair_mk8d()
+        key = r.key_mk8d
+        hdr = bytearray(36)
+        hdr[0:4] = m.MAGIC
+        hdr[4] = 2
+        hdr[12:20] = b"\x77" * 8
+        body = m.ip4(SWITCH) + b"\x00" * 28
+        pkt = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr), body)
+        r.on_game(pkt, (SWITCH, 49153), "s2h")
+        self.assertEqual(len(r.g_h.sent), 2)
+        dests = [d for _, d in r.g_h.sent]
+        self.assertEqual(dests, [("10.147.17.255", 49152), (HOST, 49152)])
+        out = r.g_h.sent[0][0]
+        opened = m.open_game_mk8d(key, r.h_me, out)
+        self.assertIsNotNone(opened)
+        self.assertEqual(opened[:4], r.h_me)
+        r.on_game(pkt, (SWITCH, 49153), "s2h")
+        self.assertEqual(len(r.g_h.sent), 2)
+        plain = m.MAGIC + b"\x01" + b"\x00" * 40
+        r.on_game(plain, (SWITCH, 49153), "s2h")
+        self.assertEqual(len(r.g_h.sent), 4)
+        self.assertEqual(r.g_h.sent[-2][0], plain)
+        self.assertEqual(r.g_h.sent[-2][1], ("10.147.17.255", 49152))
+        self.assertEqual(r.g_h.sent[-1][0], plain)
+        self.assertEqual(r.g_h.sent[-1][1], (HOST, 49152))
+        self.assertEqual(r.sw_game_port, 49153)
+        hpkt = m.seal_game_mk8d(key, m.ip4(HOST), bytes(hdr), m.ip4(HOST) + b"\x00" * 28)
+        r.on_game(hpkt, (HOST, 49154), "h2s")
+        self.assertEqual(r.h_game_port, 49154)
+        hdests = [d for _, d in r.g_sw.sent]
+        self.assertEqual(hdests, [(SWITCH, 49153)])
+        hdr2 = bytearray(hdr)
+        hdr2[12:20] = b"\x78" * 8
+        pkt2 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr2), body)
+        r.on_game(pkt2, (SWITCH, 49153), "s2h")
+        self.assertEqual(r.g_h.sent[-1][1], (HOST, 49154))
+        body3 = b"\x00" * 8 + m.ip4(SWITCH)[2:4] + (49153).to_bytes(2, "big") + b"\x00" * 20
+        hdr3 = bytearray(hdr)
+        hdr3[12:20] = b"\x79" * 8
+        pkt3 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr3), body3)
+        r.on_game(pkt3, (SWITCH, 49153), "s2h")
+        opened3 = m.open_game_mk8d(key, r.h_me, r.g_h.sent[-1][0])
+        self.assertIsNotNone(opened3)
+        self.assertEqual(opened3[8:12], r.h_me[2:4] + (49153).to_bytes(2, "big"))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
 
 
 if __name__ == "__main__":
