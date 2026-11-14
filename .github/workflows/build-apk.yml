@@ -40,8 +40,9 @@ jobs:
           fi
       - name: Proxy v3 tests
         run: |
-          python3 -m pip install --quiet pycryptodome zstandard
-          python3 tests/test_proxy_v3.py
+          python3 -m venv "$RUNNER_TEMP/v3venv"
+          "$RUNNER_TEMP/v3venv/bin/python" -m pip install --quiet pycryptodome zstandard
+          "$RUNNER_TEMP/v3venv/bin/python" tests/test_proxy_v3.py
       - name: Android unit tests
         working-directory: android
         run: gradle testDebugUnitTest
