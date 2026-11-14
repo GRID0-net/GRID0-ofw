@@ -75,7 +75,7 @@ public final class V3Util {
             return null;
         }
 
-        String marker = "\"browser_download_url\": \"";
+        String marker = "\"browser_download_url\":";
         int idx = 0;
 
         while (true) {
@@ -85,7 +85,13 @@ public final class V3Util {
                 return null;
             }
 
-            int from = s + marker.length();
+            int from = valueStart(json, s + marker.length());
+
+            if (from < 0) {
+                idx = s + marker.length();
+                continue;
+            }
+
             int to = json.indexOf("\"", from);
 
             if (to < 0) {
@@ -102,15 +108,38 @@ public final class V3Util {
         }
     }
 
+    // Index of the first character inside the quotes of the value at or after
+    // from, tolerating whitespace after the colon, or -1 when there is no
+    // quoted value there. GitHub serves compact JSON with no space after the
+    // colon, so the value cannot be matched with a fixed ": " marker.
+    private static int valueStart(String json, int from) {
+        int i = from;
+
+        while (i < json.length() && Character.isWhitespace(json.charAt(i))) {
+            i++;
+        }
+
+        if (i >= json.length() || json.charAt(i) != '"') {
+            return -1;
+        }
+
+        return i + 1;
+    }
+
     private static String stringField(String json, String name) {
-        String marker = "\"" + name + "\": \"";
+        String marker = "\"" + name + "\":";
         int s = json.indexOf(marker);
 
         if (s < 0) {
             return null;
         }
 
-        int from = s + marker.length();
+        int from = valueStart(json, s + marker.length());
+
+        if (from < 0) {
+            return null;
+        }
+
         int to = json.indexOf("\"", from);
 
         return to > from ? json.substring(from, to) : null;

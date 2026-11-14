@@ -114,12 +114,13 @@ public class V3UtilTest {
         assertEquals(16, V3Util.prefixFromDhcpNetmask(16711935));
     }
 
+    // GitHub serves compact JSON with no space after the colons.
     private static final String RELEASE_JSON = "{"
-            + "\"tag_name\": \"v3.0.0\","
-            + "\"name\": \"GRID0 ofw v3.0.0\","
-            + "\"assets\": ["
-            + "{\"name\": \"GRID0-ofw-Windows-x64.zip\", \"browser_download_url\": \"https://github.com/GRID0-net/GRID0-ofw/releases/download/v3.0.0/GRID0-ofw-Windows-x64.zip\"},"
-            + "{\"name\": \"GRID0.ofw.v3.0.0.apk\", \"browser_download_url\": \"https://github.com/GRID0-net/GRID0-ofw/releases/download/v3.0.0/GRID0.ofw.v3.0.0.apk\"}"
+            + "\"tag_name\":\"v3.0.0\","
+            + "\"name\":\"GRID0 ofw v3.0.0\","
+            + "\"assets\":["
+            + "{\"name\":\"GRID0-ofw-Windows-x64.zip\",\"browser_download_url\":\"https://github.com/GRID0-net/GRID0-ofw/releases/download/v3.0.0/GRID0-ofw-Windows-x64.zip\"},"
+            + "{\"name\":\"GRID0.ofw.v3.0.0.apk\",\"browser_download_url\":\"https://github.com/GRID0-net/GRID0-ofw/releases/download/v3.0.0/GRID0.ofw.v3.0.0.apk\"}"
             + "]}";
 
     @Test
