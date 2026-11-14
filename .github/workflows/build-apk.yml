@@ -38,6 +38,13 @@ jobs:
           else
             echo "GAME_KEY_HEX secret not set, building without a game key"
           fi
+      - name: Proxy v3 tests
+        run: |
+          python3 -m pip install --quiet pycryptodome zstandard
+          python3 tests/test_proxy_v3.py
+      - name: Android unit tests
+        working-directory: android
+        run: gradle testDebugUnitTest
       - name: Build release APK
         working-directory: android
         run: gradle assembleRelease

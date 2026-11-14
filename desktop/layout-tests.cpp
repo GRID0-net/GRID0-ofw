@@ -1,12 +1,48 @@
 #include "window.h"
 #include <QApplication>
 #include <QGroupBox>
+#include <QLabel>
+#include <QPushButton>
+#include <QRadioButton>
 #include <QScrollArea>
 #include <QTextDocument>
 #include <QtTest>
 class LayoutTests : public QObject {
     Q_OBJECT
 private slots:
+    void proxyModeLabelsAndState() {
+        Window window(true);
+        window.show();
+        window.resize(QSize(640, 720).expandedTo(window.sizeHint()));
+        QTest::qWait(50);
+        QVERIFY(window.windowTitle().contains(QStringLiteral("3.0.0")));
+        auto *manual = window.findChild<QRadioButton *>("manualMode");
+        auto *automatic = window.findChild<QRadioButton *>("autoMode");
+        auto *proxy = window.findChild<QRadioButton *>("proxyMode");
+        QVERIFY(manual && automatic && proxy);
+        QCOMPARE(manual->text(), QStringLiteral("Manual (the most difficult)"));
+        QCOMPARE(automatic->text(), QStringLiteral("Automatic - DHCP (medium difficulty)"));
+        QCOMPARE(proxy->text(), QStringLiteral("Automatic - Proxy (easiest)"));
+        QPushButton *start = nullptr;
+        for (auto *button : window.findChildren<QPushButton *>())
+            if (button->text() == QStringLiteral("Start relay") || button->text() == QStringLiteral("Start proxy")) start = button;
+        QVERIFY(start);
+        auto *group = window.findChild<QGroupBox *>("switchSettings");
+        QVERIFY(group);
+        QVERIFY(group->isVisible());
+        proxy->setChecked(true);
+        QTest::qWait(50);
+        QCOMPARE(start->text(), QStringLiteral("Start proxy"));
+        QVERIFY(!group->isVisible());
+        bool ztSeen = false;
+        for (auto *label : window.findChildren<QLabel *>())
+            if (label->text().startsWith(QStringLiteral("on GRID0 ZT:"))) { ztSeen = true; QVERIFY(label->isVisible()); }
+        QVERIFY(ztSeen);
+        manual->setChecked(true);
+        QTest::qWait(50);
+        QCOMPARE(start->text(), QStringLiteral("Start relay"));
+        QVERIFY(group->isVisible());
+    }
     void switchSettingsStayReadable() {
         Window window(true);
         window.show();

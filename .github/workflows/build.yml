@@ -37,6 +37,10 @@ jobs:
           ./build/src/GRID0-ofw-cli --version
       - name: Relay forwarding and host-socket tests
         run: python3 tests/run_native_tests.py
+      - name: Proxy v3 tests
+        run: |
+          python3 -m pip install --quiet pycryptodome zstandard
+          python3 tests/test_proxy_v3.py
       - name: Name the CLI for its platform
         run: cp build/src/GRID0-ofw-cli GRID0-ofw-${{ matrix.slug }}
       - uses: actions/upload-artifact@v4

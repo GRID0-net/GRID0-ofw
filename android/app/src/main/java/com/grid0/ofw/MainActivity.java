@@ -992,34 +992,8 @@ public class MainActivity extends Activity {
             raf.readFully(buf);
             raf.close();
             String text = new String(buf, "UTF-8");
-            String found = null;
-            int idx = 0;
 
-            while (true) {
-                int d = text.indexOf("\"dir\": \"s2h\"", idx);
-
-                if (d < 0) {
-                    break;
-                }
-
-                int lineStart = text.lastIndexOf("\n", d) + 1;
-                int lineEnd = text.indexOf("\n", d);
-                String line = text.substring(lineStart, lineEnd < 0 ? text.length() : lineEnd);
-                int s = line.indexOf("\"src\": \"");
-
-                if (s >= 0) {
-                    int from = s + 8;
-                    int to = line.indexOf("\"", from);
-
-                    if (to > from) {
-                        found = line.substring(from, to);
-                    }
-                }
-
-                idx = d + 10;
-            }
-
-            return found;
+            return V3Util.lastSwitchIpFromEvents(text);
         } catch (Exception e) {
             return null;
         }
@@ -1038,13 +1012,8 @@ public class MainActivity extends Activity {
 
         String phone = getPhoneWifiIp();
 
-        if (phone != null && phone.contains(".")) {
-            String phoneNet = phone.substring(0, phone.lastIndexOf('.'));
-            String ipNet = ip.substring(0, ip.lastIndexOf('.'));
-
-            if (!phoneNet.equals(ipNet)) {
-                return;
-            }
+        if (phone != null && phone.contains(".") && !V3Util.sameSubnetPrefix(ip, phone)) {
+            return;
         }
 
         getPreferences(MODE_PRIVATE).edit().putString("switch_ip_known", ip).apply();
@@ -1651,9 +1620,9 @@ public class MainActivity extends Activity {
                 DhcpInfo dhcp = wifi.getDhcpInfo();
 
                 if (dhcp != null && dhcp.netmask != 0) {
-                    int bits = Integer.bitCount(Integer.reverseBytes(dhcp.netmask));
+                    int bits = V3Util.prefixFromDhcpNetmask(dhcp.netmask);
 
-                    if (bits > 0 && bits < 32) {
+                    if (bits > 0) {
                         return bits;
                     }
                 }
@@ -1858,22 +1827,7 @@ public class MainActivity extends Activity {
     }
 
     private boolean isNewerVersion(String remote, String local) {
-        try {
-            String[] r = remote.split("\\.");
-            String[] l = local.split("\\.");
-
-            for (int i = 0; i < Math.max(r.length, l.length); i++) {
-                int rv = i < r.length ? Integer.parseInt(r[i].replaceAll("[^0-9]", "")) : 0;
-                int lv = i < l.length ? Integer.parseInt(l[i].replaceAll("[^0-9]", "")) : 0;
-
-                if (rv != lv) {
-                    return rv > lv;
-                }
-            }
-        } catch (Exception e) {
-        }
-
-        return false;
+        return V3Util.isNewerVersion(remote, local);
     }
 
     private File prepareGameKeyFile() {

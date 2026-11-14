@@ -1,6 +1,7 @@
 #include "model.h"
 #include "../src/capture-name.h"
 #include "controller.h"
+#include "proxycontroller.h"
 #include <QTemporaryDir>
 #include <QFile>
 #include <QtTest>
@@ -107,6 +108,23 @@ private slots:
         restored = p; restored.gateway = "10.42.9.123"; QVERIFY(!restored.validate(adapters).isEmpty());
         restored = p; restored.gateway = "10.42.9.255"; QVERIFY(!restored.validate(adapters).isEmpty());
         restored = p; restored.overlayInterface = "{01234567-abcd-4321-abcd-0123456789ab}"; QVERIFY(!restored.validate(adapters).isEmpty());
+    }
+    void versionIs300() {
+        QVERIFY(QStringLiteral(LANPLAY_VERSION).endsWith(QStringLiteral("3.0.0")));
+    }
+    void proxyControllerStartsIdle() {
+        ProxyController controller;
+        QVERIFY(!controller.busy());
+    }
+    void proxyControllerNeedsAdapters() {
+        ProxyController controller;
+        QSignalSpy messages(&controller, &ProxyController::message);
+        Preferences preferences;
+        controller.start(preferences, {});
+        QCOMPARE(messages.count(), 1);
+        QCOMPARE(messages.first().first().toString(),
+                 QStringLiteral("Choose your local and ZeroTier adapters in Settings."));
+        QVERIFY(!controller.busy());
     }
     void quoting() {
         QCOMPARE(shellQuote("a'b $(touch /tmp/no)"), "'a'\"'\"'b $(touch /tmp/no)'");
