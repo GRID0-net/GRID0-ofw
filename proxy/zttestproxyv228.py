@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v234
+# GRID0 proxy v235
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
 from Crypto.Cipher import AES
@@ -174,8 +174,7 @@ def address_pairs(pairs, port=GAME_PORT):
     a = [(o, n) for o, n in pairs]
     a += [(o[3:] + o[2:3] + port.to_bytes(2, "little"), n[3:] + n[2:3] + port.to_bytes(2, "little")) for o, n in pairs]
     a += [(o[::-1], n[::-1]) for o, n in list(a)]
-    six = [(o + o[:2], n + n[:2]) for o, n in a if len(o) == 4]
-    return [(o, n) for o, n in six + a if o != n]
+    return [(o, n) for o, n in a if o != n]
 
 def rewrite(body, table):
     for o, n in table:
@@ -867,7 +866,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v234", flush=True)
+    print("GRID0 proxy v235", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

@@ -351,11 +351,24 @@ class TestAddressMath(unittest.TestCase):
         port = m.GAME_PORT.to_bytes(2, "little")
         variant = m.ip4(SWITCH)[3:] + m.ip4(SWITCH)[2:3] + port
         self.assertTrue(any(o == variant for o, n in pairs))
-        self.assertTrue(any(len(o) == 6 for o, n in pairs))
+        self.assertTrue(all(len(o) == 4 for o, n in pairs))
 
     def test_address_pairs_drops_identity(self):
         m = self.m
         self.assertEqual(m.address_pairs([(m.ip4(SWITCH), m.ip4(SWITCH))]), [])
+
+    def test_two_proxy_chain_keeps_adjacent_ips_intact(self):
+        m = self.m
+        d_sw, d_me = m.ip4("192.168.4.30"), m.ip4("192.168.6.207")
+        d_zt, m_zt = m.ip4("10.147.17.233"), m.ip4("10.147.17.190")
+        m_me, m_sw = m.ip4("192.168.2.134"), m.ip4("192.168.2.150")
+        body = d_sw + d_me
+        hop1_pairs = [(d_me, m_zt), (d_sw, d_zt)]
+        hop1 = m.rewrite_bits(m.rewrite(body, m.address_pairs(hop1_pairs)), hop1_pairs)
+        self.assertEqual(hop1, d_zt + m_zt)
+        hop2_pairs = [(d_zt, m_me), (m_zt, m_sw)]
+        hop2 = m.rewrite_bits(m.rewrite(hop1, m.address_pairs(hop2_pairs)), hop2_pairs)
+        self.assertEqual(hop2, m_me + m_sw)
 
 
 class TestRewriteBits(unittest.TestCase):
