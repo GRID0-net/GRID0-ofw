@@ -1432,18 +1432,22 @@ class TestMK8DRelay(unittest.TestCase):
         body = m.ip4(SWITCH) + b"\x00" * 28
         pkt = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr), body)
         r.on_game(pkt, (SWITCH, 49153), "s2h")
-        self.assertEqual(len(r.g_h.sent), 1)
-        out, dest = r.g_h.sent[0]
-        self.assertEqual(dest, ("10.147.17.255", 49152))
+        self.assertEqual(len(r.g_h.sent), 2)
+        dests = [d for _, d in r.g_h.sent]
+        self.assertEqual(dests, [("10.147.17.255", 49152), (HOST, 49152)])
+        out = r.g_h.sent[0][0]
         opened = m.open_game_mk8d(key, r.h_me, out)
         self.assertIsNotNone(opened)
         self.assertEqual(opened[:4], r.h_me)
         r.on_game(pkt, (SWITCH, 49153), "s2h")
-        self.assertEqual(len(r.g_h.sent), 1)
+        self.assertEqual(len(r.g_h.sent), 2)
         plain = m.MAGIC + b"\x01" + b"\x00" * 40
         r.on_game(plain, (SWITCH, 49153), "s2h")
+        self.assertEqual(len(r.g_h.sent), 4)
+        self.assertEqual(r.g_h.sent[-2][0], plain)
+        self.assertEqual(r.g_h.sent[-2][1], ("10.147.17.255", 49152))
         self.assertEqual(r.g_h.sent[-1][0], plain)
-        self.assertEqual(r.g_h.sent[-1][1], ("10.147.17.255", 49152))
+        self.assertEqual(r.g_h.sent[-1][1], (HOST, 49152))
 
 
 if __name__ == "__main__":

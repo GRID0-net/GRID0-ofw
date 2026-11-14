@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v230
+# GRID0 proxy v231
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
 from Crypto.Cipher import AES
@@ -753,6 +753,7 @@ class Relay:
         if r is None:
             if self.game == "mk8d" and len(data) >= 36 and data[:4] == MAGIC and data[4] == 1:
                 self.send(sock, data, bdest, direction, label="plain")
+                self.send(sock, data, (dest[0], GAME_PORT), direction, label="plain")
                 return
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
             return
@@ -765,7 +766,11 @@ class Relay:
                 self.cap.save("sw-game", data, src[0], self.h_ip, src[1], GAME_PORT)
             else:
                 self.cap.save("hs-game", data, self.sw_ip, src[0], GAME_PORT, src[1])
-        self.send(sock, out, bdest if used == "mk8d" else dest, direction, label=label, nonce=nonce.hex(), changed=changed)
+        if used == "mk8d":
+            self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
+            self.send(sock, out, (dest[0], GAME_PORT), direction, label=label, nonce=nonce.hex(), changed=changed)
+        else:
+            self.send(sock, out, dest, direction, label=label, nonce=nonce.hex(), changed=changed)
 
     def on_game_sock(self, data, src, bound_leg):
         if src[0] in (self.sw_ip, self.h_ip):
@@ -862,7 +867,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v230", flush=True)
+    print("GRID0 proxy v231", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
