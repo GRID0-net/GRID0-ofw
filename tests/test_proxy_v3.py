@@ -153,6 +153,7 @@ def make_relay(m):
     r.cap = None
     r.d_sw, r.d_h, r.g_sw, r.g_h = FakeSocket(), FakeSocket(), FakeSocket(), FakeSocket()
     r.d_sw2, r.d_h2 = FakeSocket(), FakeSocket()
+    r.gb_sw, r.gb_h = FakeSocket(), FakeSocket()
     return r
 
 
@@ -1273,18 +1274,18 @@ def make_mk8d_browse_reply(m, req_chal, bc, host_ip=None, param=None,
     from Crypto.Cipher import AES
     if param is None:
         param = bytes(range(32, 64))
-    rep = bytearray(1360)
+    rep = bytearray(1361)
     rep[0] = 1
-    rep[1:5] = (1297).to_bytes(4, "big")
+    rep[1:5] = (1298).to_bytes(4, "big")
     if host_ip is not None:
         rep[436:440] = m.ip4(host_ip)
-    rep[1270:1302] = param
+    rep[1271:1303] = param
     k = hmac_mod.new(m.MK8D_KEY, rchal + req_chal, hashlib.sha256).digest()[:16]
     ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter).encrypt_and_digest(pt)
-    rep[1304:1312] = counter
-    rep[1312:1328] = rchal
-    rep[1328:1344] = tag
-    rep[1344:1360] = ct
+    rep[1305:1313] = counter
+    rep[1313:1329] = rchal
+    rep[1329:1345] = tag
+    rep[1345:1361] = ct
     return bytes(rep), pt
 
 
@@ -1337,20 +1338,25 @@ class TestMK8D(unittest.TestCase):
         m = self.m
         param = bytes(range(32, 64))
         rep, pt = make_mk8d_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), param=param)
+        self.assertEqual(len(rep), 1361)
+        self.assertEqual(m.mk8d_param_off(rep), 1271)
         inc = bytearray(param)
         inc[-1] = (inc[-1] + 1) & 0xFF
         expect = hmac_mod.new(m.MK8D_KEY, bytes(inc), hashlib.sha256).digest()[:16]
-        self.assertEqual(m.session_key(m.MK8D_KEY, rep, m.PARAM_OFF["mk8d"]), expect)
+        self.assertEqual(m.session_key(m.MK8D_KEY, rep, m.mk8d_param_off(rep)), expect)
+        fake = bytearray(200)
+        fake[1:5] = (1297).to_bytes(4, "big")
+        self.assertEqual(m.mk8d_param_off(bytes(fake)), 1270)
 
     def test_reply_reseal_round_trip_and_zones(self):
         m = self.m
         rep, pt = make_mk8d_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), host_ip=HOST)
         out = m.reseal_reply(m.MK8D_KEY, rep, b"\x21" * 16, m.ip4("10.147.17.255"),
                              m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4(SW_PHONE),
-                             m.PARAM_OFF["mk8d"])
+                             m.mk8d_param_off(rep))
         self.assertEqual(open_reply(m, m.MK8D_KEY, out, b"\x21" * 16, m.ip4("192.168.1.255")), pt)
         self.assertEqual(out[436:440], m.ip4(SW_PHONE))
-        self.assertEqual(out[1270:1302], rep[1270:1302])
+        self.assertEqual(out[1271:1303], rep[1271:1303])
 
     def test_game_packet_round_trip(self):
         m = self.m
@@ -1369,7 +1375,7 @@ class TestMK8D(unittest.TestCase):
         for path in PC_COPIES + [ANDROID_COPY]:
             with self.subTest(path=path):
                 m = load_copy(path)
-                for n in ("detect_game", "open_game_mk8d", "seal_game_mk8d", "relay_game_mk8d"):
+                for n in ("detect_game", "open_game_mk8d", "seal_game_mk8d", "relay_game_mk8d", "mk8d_param_off"):
                     self.assertTrue(hasattr(m, n), n)
                 self.assertEqual(m.MK8D_KEY, b"ABCDEFGHIJKLMNOP")
                 self.assertEqual(m.MK8D_PORT, 30000)
@@ -1408,7 +1414,7 @@ class TestMK8DRelay(unittest.TestCase):
     def test_reply_sets_mk8d_session_key_only(self):
         m, r = self.m, self.r
         req, chal, rep, pt = self.pair_mk8d()
-        self.assertEqual(r.key_mk8d, m.session_key(m.MK8D_KEY, rep, m.PARAM_OFF["mk8d"]))
+        self.assertEqual(r.key_mk8d, m.session_key(m.MK8D_KEY, rep, m.mk8d_param_off(rep)))
         self.assertIsNone(r.key)
         self.assertEqual(r.host_side, "h")
         data, dest = r.d_sw2.sent[-1]
@@ -1428,13 +1434,16 @@ class TestMK8DRelay(unittest.TestCase):
         r.on_game(pkt, (SWITCH, 49153), "s2h")
         self.assertEqual(len(r.g_h.sent), 1)
         out, dest = r.g_h.sent[0]
-        self.assertEqual(dest, (HOST, 49152))
+        self.assertEqual(dest, ("10.147.17.255", 49152))
         opened = m.open_game_mk8d(key, r.h_me, out)
         self.assertIsNotNone(opened)
         self.assertEqual(opened[:4], r.h_me)
+        r.on_game(pkt, (SWITCH, 49153), "s2h")
+        self.assertEqual(len(r.g_h.sent), 1)
         plain = m.MAGIC + b"\x01" + b"\x00" * 40
         r.on_game(plain, (SWITCH, 49153), "s2h")
         self.assertEqual(r.g_h.sent[-1][0], plain)
+        self.assertEqual(r.g_h.sent[-1][1], ("10.147.17.255", 49152))
 
 
 if __name__ == "__main__":

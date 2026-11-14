@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v229
+# GRID0 proxy v230
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
 from Crypto.Cipher import AES
@@ -318,6 +318,12 @@ def session_key(game_key, reply, off=105):
     param[-1] = (param[-1] + 1) & 0xFF
     return hmac.new(game_key, bytes(param), hashlib.sha256).digest()[:16]
 
+def mk8d_param_off(rep):
+    size = int.from_bytes(rep[1:5], "big")
+    if 32 <= size <= len(rep) - 5:
+        return 5 + size - 32
+    return PARAM_OFF["mk8d"]
+
 def reseal_request(game_key, req, old_bc, new_bc, chal_off=27):
     if len(req) != chal_off + 298 or req[0] != 0:
         raise ValueError("not a browse request")
@@ -448,8 +454,10 @@ class Relay:
         self.d_h = udp_bind(self.h_ip, DISCOVERY_PORT, broadcast=True, bind_devices=zt_cands)
         self.d_sw2 = udp_bind("0.0.0.0", MK8D_PORT, broadcast=True)
         self.d_h2 = udp_bind(self.h_ip, MK8D_PORT, broadcast=True, bind_devices=zt_cands)
-        self.g_sw = udp_bind(self.sw_ip, GAME_PORT)
-        self.g_h = udp_bind(self.h_ip, GAME_PORT, bind_devices=zt_cands)
+        self.g_sw = udp_bind(self.sw_ip, GAME_PORT, broadcast=True)
+        self.g_h = udp_bind(self.h_ip, GAME_PORT, broadcast=True, bind_devices=zt_cands)
+        self.gb_sw = udp_bind(socket.inet_ntoa(self.sw_bc), GAME_PORT, broadcast=True)
+        self.gb_h = udp_bind(socket.inet_ntoa(self.h_bc), GAME_PORT, broadcast=True, bind_devices=zt_cands)
         self.cap = Capture(a.capture) if a.capture else None
 
     def note(self, **kw):
@@ -556,7 +564,8 @@ class Relay:
         return self.d_sw2 if game == "mk8d" else self.d_sw
 
     def take_session_key(self, game, data):
-        k = session_key(self.key_for(game), data, PARAM_OFF[game])
+        off = mk8d_param_off(data) if game == "mk8d" else PARAM_OFF[game]
+        k = session_key(self.key_for(game), data, off)
         if game == "mk8d":
             if k != self.key_mk8d:
                 self.key_mk8d = k
@@ -632,7 +641,8 @@ class Relay:
             for chal in self.chals_for("s2h", g):
                 try:
                     out = reseal_reply(self.key_for(g), data, chal, self.h_bc, self.sw_bc,
-                                       ip4(src[0]), self.sw_me, PARAM_OFF[g])
+                                       ip4(src[0]), self.sw_me,
+                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g])
                     game = g
                     break
                 except Exception:
@@ -682,7 +692,8 @@ class Relay:
             for chal in self.chals_for("h2s", g):
                 try:
                     out = reseal_reply(self.key_for(g), data, chal, self.sw_bc, self.h_bc,
-                                       ip4(src[0]), self.h_me, PARAM_OFF[g])
+                                       ip4(src[0]), self.h_me,
+                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g])
                     game = g
                     break
                 except Exception:
@@ -710,6 +721,8 @@ class Relay:
         if not self.tables or (not self.key and not self.key_mk8d):
             self.note(ev="drop_nokey", dir=direction, src=src[0], len=len(data))
             return
+        if self.game == "mk8d" and self.dup(data, src):
+            return
         if direction == "s2h":
             if self.switch is None or self.switch[0] != src[0]:
                 if self.only_switch and src[0] != self.only_switch:
@@ -720,10 +733,12 @@ class Relay:
             self.switch = src
             table, pairs, my_ip = self.tables["s2h"], self.ip_pairs["s2h"], self.h_me
             sock, dest = self.g_h, self.host
+            bdest = (socket.inet_ntoa(self.h_bc), GAME_PORT)
         else:
             self.host = src
             table, pairs, my_ip = self.tables["h2s"], self.ip_pairs["h2s"], self.sw_me
             sock, dest = self.g_sw, self.switch
+            bdest = (socket.inet_ntoa(self.sw_bc), GAME_PORT)
         order = ("mk8d", "splatoon3") if self.game == "mk8d" else ("splatoon3", "mk8d")
         r, used = None, None
         for g in order:
@@ -737,7 +752,7 @@ class Relay:
                 break
         if r is None:
             if self.game == "mk8d" and len(data) >= 36 and data[:4] == MAGIC and data[4] == 1:
-                self.send(sock, data, dest, direction, label="plain")
+                self.send(sock, data, bdest, direction, label="plain")
                 return
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
             return
@@ -750,7 +765,7 @@ class Relay:
                 self.cap.save("sw-game", data, src[0], self.h_ip, src[1], GAME_PORT)
             else:
                 self.cap.save("hs-game", data, self.sw_ip, src[0], GAME_PORT, src[1])
-        self.send(sock, out, dest, direction, label=label, nonce=nonce.hex(), changed=changed)
+        self.send(sock, out, bdest if used == "mk8d" else dest, direction, label=label, nonce=nonce.hex(), changed=changed)
 
     def on_game_sock(self, data, src, bound_leg):
         if src[0] in (self.sw_ip, self.h_ip):
@@ -764,7 +779,9 @@ class Relay:
         socks = {self.d_sw: self.on_disc, self.d_h: self.on_disc,
                  self.d_sw2: self.on_disc, self.d_h2: self.on_disc,
                  self.g_sw: lambda d, s: self.on_game_sock(d, s, "sw"),
-                 self.g_h: lambda d, s: self.on_game_sock(d, s, "h")}
+                 self.g_h: lambda d, s: self.on_game_sock(d, s, "h"),
+                 self.gb_sw: lambda d, s: self.on_game_sock(d, s, "sw"),
+                 self.gb_h: lambda d, s: self.on_game_sock(d, s, "h")}
         stop = [False]
         try:
             signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
@@ -845,7 +862,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v229", flush=True)
+    print("GRID0 proxy v230", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
