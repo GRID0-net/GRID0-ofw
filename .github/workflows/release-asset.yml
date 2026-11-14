@@ -1,0 +1,24 @@
+name: Attach release asset
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["final-ofw3"]
+    paths: [".github/workflows/release-asset.yml"]
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: GRID0-ofw-apk
+          run-id: 43460544866
+          github-token: ${{ github.token }}
+      - name: Create the v3.0.13 release with the APK attached
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create v3.0.13 "GRID0 ofw v3.0.13.apk" --repo GRID0-net/GRID0-ofw --target final-ofw3 --title "GRID0 ofw v3.0.13" --notes "Fixes the proxy on wide subnet networks, the app now passes the real subnet mask to the proxy. The MORE screen version label now shows the real version."

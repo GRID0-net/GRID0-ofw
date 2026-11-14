@@ -67,6 +67,8 @@ def main():
     shutil.copy2(root / 'docs/windows.md', app / 'README-Windows.md')
     shutil.copytree(root / 'desktop/licenses', app / 'licenses')
     shutil.copy2(root / 'desktop/THIRD-PARTY.md', app / 'THIRD-PARTY.md')
+    proxy_dir = app / 'proxy'; proxy_dir.mkdir()
+    shutil.copy2(root / 'desktop/proxy/zttestproxyv228.py', proxy_dir / 'zttestproxyv228.py')
     source = app / 'source'; source.mkdir()
     shutil.copy2(args.qt_source, source / args.qt_source.name)
     # Explicit source allowlist excludes session logs, PCAPs, build caches, and

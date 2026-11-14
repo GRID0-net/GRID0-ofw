@@ -104,11 +104,13 @@ Window::Window(bool preview) : previewMode(preview) {
     // back to a rectangular bezel rather than the standard macOS button.
     start = new QPushButton("Start relay"); start->setAutoDefault(true); start->setDefault(true);
     stop = new QPushButton("Stop relay");
-    manualMode = new QRadioButton("Manual"); autoMode = new QRadioButton("Automatic");
-    manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode");
+    manualMode = new QRadioButton("Manual (the most difficult)"); autoMode = new QRadioButton("Automatic - DHCP (medium difficulty)"); proxyMode = new QRadioButton("Automatic - Proxy (easiest)");
+    manualMode->setObjectName("manualMode"); autoMode->setObjectName("autoMode"); proxyMode->setObjectName("proxyMode");
     actions->addWidget(start); actions->addWidget(stop); actions->addStretch();
-    actions->addWidget(manualMode); actions->addWidget(autoMode);
-    summaryLayout->addLayout(actions); playLayout->addWidget(summary);
+    actions->addWidget(manualMode); actions->addWidget(autoMode); actions->addWidget(proxyMode);
+    summaryLayout->addLayout(actions);
+    ztUsers = text("on GRID0 ZT: -"); ztUsers->setVisible(false); summaryLayout->addWidget(ztUsers);
+    playLayout->addWidget(summary);
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
     auto *autoGroup = new QGroupBox("Windows Hotspot Setup");
@@ -295,12 +297,15 @@ Window::Window(bool preview) : previewMode(preview) {
     for (auto *edit : {gateway, executable}) connect(edit, &QLineEdit::textChanged, this, [this] { save(); });
     for (auto *check : {diagnostics, capture, discovery}) connect(check, &QCheckBox::toggled, this, [this] { save(); });
     manualMode->setChecked(!preferences.dhcp); autoMode->setChecked(preferences.dhcp);
-    for (auto *mode : {manualMode, autoMode}) connect(mode, &QRadioButton::toggled, this, [this] {
+    ztUsersTimer = new QTimer(this); ztUsersTimer->setInterval(15000);
+    connect(ztUsersTimer, &QTimer::timeout, this, [this] { if (proxyMode->isChecked()) refreshZtUsers(); });
+    for (auto *mode : {manualMode, autoMode, proxyMode}) connect(mode, &QRadioButton::toggled, this, [this] {
         if (loading) return;
         preferences.dhcp = autoMode->isChecked();
         preferences.autoSelectLocalAdapter(adapters);
         const int li = local->findData(preferences.localInterface);
         if (li >= 0) local->setCurrentIndex(li);
+        if (proxyMode->isChecked()) { refreshZtUsers(); ztUsersTimer->start(); } else ztUsersTimer->stop();
         save();
     });
     dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
@@ -313,10 +318,17 @@ Window::Window(bool preview) : previewMode(preview) {
     connect(&relay, &RelayController::stateChanged, choose, [this, choose] { choose->setEnabled(!relay.busy()); });
     connect(start, &QPushButton::clicked, this, [this] {
         if (previewMode) return;
-        refreshAdapters(); if (!preferences.validate(adapters).isEmpty()) return;
+        refreshAdapters();
+        if (proxyMode->isChecked()) {
+            log->clear(); switchStatus->setText("Looking for your Switch…"); proxy.start(preferences, adapters); return;
+        }
+        if (!preferences.validate(adapters).isEmpty()) return;
         log->clear(); switchStatus->setText("Looking for your Switch…"); relay.start(preferences, adapters);
     });
-    connect(stop, &QPushButton::clicked, &relay, &RelayController::stop);
+    connect(stop, &QPushButton::clicked, this, [this] { if (proxy.busy()) proxy.stop(); else relay.stop(); });
+    connect(&proxy, &ProxyController::lineReceived, log, &QPlainTextEdit::appendPlainText);
+    connect(&proxy, &ProxyController::message, status, &QLabel::setText);
+    connect(&proxy, &ProxyController::stateChanged, this, [this] { updateState(); if (closing && !proxy.busy() && !relay.busy()) close(); });
     connect(&relay, &RelayController::lineReceived, log, &QPlainTextEdit::appendPlainText);
     // The relay's DHCP server reports "GRID0_DHCP <kind> <ip> <mac>" events in
     // its output. Surface them as the Switch connection status.
@@ -336,7 +348,7 @@ Window::Window(bool preview) : previewMode(preview) {
     });
     connect(&relay, &RelayController::message, status, &QLabel::setText);
     connect(&relay, &RelayController::switchDetected, this, [this](const QString &s) { switchStatus->setText("Local console detected: " + s); });
-    connect(&relay, &RelayController::stateChanged, this, [this] { updateState(); if (closing && !relay.busy()) close(); });
+    connect(&relay, &RelayController::stateChanged, this, [this] { updateState(); if (closing && !relay.busy() && !proxy.busy()) close(); });
     connect(exportButton, &QPushButton::clicked, this, &Window::exportReport);
     connect(openFolder, &QPushButton::clicked, this, [] {
         QString dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/reports";
@@ -620,16 +632,27 @@ void Window::save() {
     }
     updateState();
 }
+void Window::refreshZtUsers() {
+    const int n = zeroTierPeerCount();
+    ztUsers->setText(n >= 0 ? "on GRID0 ZT: " + QString::number(n) : "on GRID0 ZT: -");
+}
 void Window::updateState() {
     auto a = preferences.overlay(adapters);
     address->setText(a.ip.isEmpty() ? "-" : a.ip); mask->setText(a.mask.isEmpty() ? "-" : a.mask);
     gatewayValue->setText(preferences.gateway.isEmpty() ? (a.gateway.isEmpty() ? "-" : a.gateway) : preferences.gateway);
     auto error = preferences.validate(adapters);
+    const bool proxyOn = proxyMode->isChecked();
+    if (proxyOn) {
+        error = preferences.localInterface.isEmpty() || preferences.overlayInterface.isEmpty()
+            ? "Choose your local and ZeroTier adapters in Settings."
+            : (a.ip.isEmpty() ? "The saved ZeroTier adapter is unavailable. Connect ZeroTier, then refresh Settings." : "");
+    }
     validation->setText(error);
     validation->setVisible(!error.isEmpty());
-    switchSettingsGroup->setVisible(!preferences.dhcp);
-    autoSettingsGroup->setVisible(preferences.dhcp);
-    settingsHint->setVisible(!preferences.dhcp);
+    switchSettingsGroup->setVisible(!preferences.dhcp && !proxyOn);
+    autoSettingsGroup->setVisible(preferences.dhcp && !proxyOn);
+    settingsHint->setVisible(!preferences.dhcp && !proxyOn);
+    if (ztUsers) ztUsers->setVisible(proxyOn);
     QString hotspotIp;
     for (const auto &ad : adapters) if (ad.hotspot && ad.up) { hotspotIp = ad.ip; break; }
     const bool hotspotOn = !hotspotIp.isEmpty();
@@ -657,11 +680,13 @@ void Window::updateState() {
         }
     }
     if (hotspotSetup) hotspotSetup->setVisible(!hotspotOn);
-    if (!relay.busy()) status->setText(error.isEmpty() ? "Ready to connect" : "Finish connection setup");
-    start->setEnabled(!relay.busy() && error.isEmpty()); stop->setEnabled(relay.busy() && relay.state() != RelayController::Stopping);
-    stop->setText(relay.state() == RelayController::Authorizing ? "Cancel" : "Stop relay");
-    configuration->setEnabled(!relay.busy());
-    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode, dnsUsFirst, dnsFrFirst}) w->setEnabled(!relay.busy());
+    const bool busy = relay.busy() || proxy.busy();
+    if (!busy) status->setText(error.isEmpty() ? "Ready to connect" : "Finish connection setup");
+    start->setText(proxyOn ? "Start proxy" : "Start relay");
+    start->setEnabled(!busy && error.isEmpty()); stop->setEnabled(busy && relay.state() != RelayController::Stopping);
+    stop->setText(proxy.busy() ? "Stop proxy" : (relay.state() == RelayController::Authorizing ? "Cancel" : "Stop relay"));
+    configuration->setEnabled(!busy);
+    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode, proxyMode, dnsUsFirst, dnsFrFirst}) w->setEnabled(!busy);
 }
 void Window::checkDependencies() {
     if (!requirements || !setupRequirements) return;
@@ -813,7 +838,7 @@ void Window::exportReport() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(dest));
 }
 void Window::closeEvent(QCloseEvent *event) {
-    if (relay.busy()) {
-        closing = true; status->setText("Stopping the relay before closing…"); relay.stop(); event->ignore();
+    if (relay.busy() || proxy.busy()) {
+        closing = true; status->setText("Stopping the relay before closing…"); relay.stop(); proxy.stop(); event->ignore();
     } else event->accept();
 }
