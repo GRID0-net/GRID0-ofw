@@ -1466,7 +1466,7 @@ class TestMK8DRelay(unittest.TestCase):
         r.on_game(hpkt, (HOST, 49154), "h2s")
         self.assertEqual(r.h_game_port, 49154)
         hdests = [d for _, d in r.g_sw.sent]
-        self.assertEqual(hdests, [("192.168.1.255", 49152), (SWITCH, 49153)])
+        self.assertEqual(hdests, [(SWITCH, 49153)])
         hdr2 = bytearray(hdr)
         hdr2[12:20] = b"\x78" * 8
         pkt2 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr2), body)
@@ -1477,7 +1477,7 @@ class TestMK8DRelay(unittest.TestCase):
         hdr3[12:20] = b"\x79" * 8
         pkt3 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr3), body3)
         r.on_game(pkt3, (SWITCH, 49153), "s2h")
-        opened3 = m.open_game_mk8d(key, r.h_me, r.g_h.sent[-2][0])
+        opened3 = m.open_game_mk8d(key, r.h_me, r.g_h.sent[-1][0])
         self.assertIsNotNone(opened3)
         self.assertEqual(opened3[8:12], r.h_me[2:4] + (49153).to_bytes(2, "big"))
 

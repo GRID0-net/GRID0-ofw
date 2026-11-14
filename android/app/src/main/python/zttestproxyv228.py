@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v233
+# GRID0 proxy v234
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
 from Crypto.Cipher import AES
@@ -768,10 +768,12 @@ class Relay:
             if src[1] in GAME_PORTS:
                 self.sw_game_port = src[1]
             udest = (dest[0], self.h_game_port or GAME_PORT)
+            pknown = self.h_game_port is not None
         else:
             if src[1] in GAME_PORTS:
                 self.h_game_port = src[1]
             udest = (dest[0], self.sw_game_port or GAME_PORT)
+            pknown = self.sw_game_port is not None
         order = ("mk8d", "splatoon3") if self.game == "mk8d" else ("splatoon3", "mk8d")
         r, used = None, None
         for g in order:
@@ -786,7 +788,8 @@ class Relay:
                 break
         if r is None:
             if self.game == "mk8d" and len(data) >= 36 and data[:4] == MAGIC and data[4] == 1:
-                self.send(sock, data, bdest, direction, label="plain")
+                if not pknown:
+                    self.send(sock, data, bdest, direction, label="plain")
                 self.send(sock, data, udest, direction, label="plain")
                 return
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
@@ -801,7 +804,8 @@ class Relay:
             else:
                 self.cap.save("hs-game", data, self.sw_ip, src[0], GAME_PORT, src[1])
         if used == "mk8d":
-            self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
+            if not pknown:
+                self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
             self.send(sock, out, udest, direction, label=label, nonce=nonce.hex(), changed=changed)
         else:
             self.send(sock, out, dest, direction, label=label, nonce=nonce.hex(), changed=changed)
@@ -903,7 +907,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v233", flush=True)
+    print("GRID0 proxy v234", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
