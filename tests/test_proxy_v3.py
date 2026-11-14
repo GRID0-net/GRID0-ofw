@@ -856,5 +856,368 @@ class TestCrossCopy(unittest.TestCase):
                 self.assertTrue(hasattr(m, "fetch_game_key"))
 
 
+IP_ADDR_FIXTURE = """1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    inet 127.0.0.1/8 scope host lo
+    inet6 ::1/128 scope host noprefixroute
+2: wlan0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    inet 192.168.1.50/24 brd 192.168.1.255 scope global wlan0
+    inet6 fe80::1ff:fe00:1/64 scope link noprefixroute
+3: ztun0: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 2800 qdisc fq_codel state UNKNOWN group default qlen 500
+    inet 10.147.17.50/24 brd 10.147.17.255 scope global ztun0
+4: veth0@eth0: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default
+    inet 172.20.0.2/16 brd 172.20.255.255 scope global veth0
+"""
+
+
+class DeadSocket:
+    def __init__(self, *a, **k):
+        pass
+
+    def connect(self, *a):
+        raise OSError("dead")
+
+    def fileno(self):
+        raise OSError("dead")
+
+    def getsockname(self):
+        raise OSError("dead")
+
+    def close(self):
+        pass
+
+
+class TestDiscoveryParsing(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        self.m._IP_ADDR_CACHE.clear()
+        self.m._IP_ADDR_CACHE["out"] = IP_ADDR_FIXTURE
+
+    def tearDown(self):
+        self.m._IP_ADDR_CACHE.clear()
+
+    def test_iface_addrs_parsing(self):
+        addrs = self.m._iface_addrs()
+        self.assertIn(("wlan0", "192.168.1.50"), addrs)
+        self.assertIn(("ztun0", "10.147.17.50"), addrs)
+        self.assertIn(("veth0", "172.20.0.2"), addrs)
+        self.assertTrue(all(":" not in ip for _, ip in addrs))
+
+    def test_detect_finds_zerotier_address(self):
+        import socket as sock_mod
+        orig = sock_mod.socket
+        sock_mod.socket = DeadSocket
+        try:
+            self.assertEqual(self.m.detect_zerotier_ip(), "10.147.17.50")
+        finally:
+            sock_mod.socket = orig
+
+    def test_detect_prefers_peer_subnet_over_zerotier_prefix(self):
+        import socket as sock_mod
+        orig = sock_mod.socket
+        sock_mod.socket = DeadSocket
+        try:
+            self.assertEqual(self.m.detect_zerotier_ip("192.168.1.99"), "192.168.1.50")
+        finally:
+            sock_mod.socket = orig
+
+    def test_detect_falls_back_to_default(self):
+        import socket as sock_mod
+        self.m._IP_ADDR_CACHE["out"] = "2: wlan0: <UP> mtu 1500\n    inet 192.168.1.50/24 scope global wlan0\n"
+        orig = sock_mod.socket
+        sock_mod.socket = DeadSocket
+        try:
+            self.assertEqual(self.m.detect_zerotier_ip(), "10.147.17.190")
+        finally:
+            sock_mod.socket = orig
+
+    def test_get_zerotier_iface(self):
+        self.assertEqual(self.m.get_zerotier_iface("10.147.17.50"), "ztun0")
+        self.assertIsNone(self.m.get_zerotier_iface("10.147.17.200"))
+
+    def test_get_wifi_ip_parses_first_inet(self):
+        import subprocess
+        fixture = ("2: wlan0: <BROADCAST,MULTICAST,UP> mtu 1500 qdisc noqueue state UP\n"
+                   "    inet 192.168.5.23/24 brd 192.168.5.255 scope global wlan0\n"
+                   "    inet6 fe80::abcd/64 scope link\n")
+        orig = subprocess.check_output
+        subprocess.check_output = lambda *a, **k: fixture
+        try:
+            self.assertEqual(self.m.get_wifi_ip(), "192.168.5.23")
+        finally:
+            subprocess.check_output = orig
+
+
+class TestMainEnv(unittest.TestCase):
+    def run_main(self, env, argv):
+        m = load_copy(PC_COPIES[0])
+        captured = {}
+
+        class FakeRelay:
+            def __init__(self, a):
+                captured["args"] = a
+
+            def run(self, out_path):
+                captured["events"] = out_path
+
+        orig_relay = m.Relay
+        orig_argv = sys.argv
+        old_env = dict(os.environ)
+        m.Relay = FakeRelay
+        sys.argv = argv
+        for k in ("PHONE_IP", "ZT_IP", "SWITCH_PREFIX", "HOST_PREFIX", "SWITCH_IP", "HOST_ZT",
+                  "DELAY_S2H_MS", "DELAY_H2S_MS", "CAPTURE", "EVENTS"):
+            os.environ.pop(k, None)
+        os.environ.update(env)
+        try:
+            m.main()
+        finally:
+            captured["no_bits"] = m.NO_BITS
+            m.Relay = orig_relay
+            sys.argv = orig_argv
+            os.environ.clear()
+            os.environ.update(old_env)
+            m.NO_BITS = False
+        return m, captured
+
+    def test_env_plumbing(self):
+        m, cap = self.run_main({
+            "PHONE_IP": "192.168.1.50", "ZT_IP": "10.147.17.50",
+            "SWITCH_PREFIX": "22", "HOST_PREFIX": "16",
+            "SWITCH_IP": "192.168.4.30", "HOST_ZT": "10.147.17.99",
+            "DELAY_S2H_MS": "25", "DELAY_H2S_MS": "0",
+            "EVENTS": "my_events.jsonl",
+        }, ["zttestproxyv228.py"])
+        a = cap["args"]
+        self.assertEqual(a.switch_ip, "192.168.1.50")
+        self.assertEqual(a.host_ip, "10.147.17.50")
+        self.assertEqual(a.switch_prefix, 22)
+        self.assertEqual(a.host_prefix, 16)
+        self.assertEqual(a.switch_peer, "192.168.4.30")
+        self.assertEqual(a.host_peer, "10.147.17.99")
+        self.assertEqual(a.delay_s2h, 25.0)
+        self.assertEqual(a.delay_h2s, 0.0)
+        self.assertIsNone(a.capture)
+        self.assertEqual(cap["events"], "my_events.jsonl")
+        self.assertFalse(cap["no_bits"])
+
+    def test_env_defaults_and_no_bit_flag(self):
+        m, cap = self.run_main({}, ["zttestproxyv228.py", "--no-bit-rewrite"])
+        a = cap["args"]
+        self.assertIsNone(a.switch_ip)
+        self.assertIsNone(a.host_ip)
+        self.assertEqual(a.switch_prefix, 24)
+        self.assertEqual(a.host_prefix, 24)
+        self.assertTrue(cap["no_bits"])
+        self.assertTrue(cap["events"].startswith("relay_events_"))
+
+
+class TestRelayMore(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        self.r = make_relay(self.m)
+
+    def test_delayed_send_queues_then_drains(self):
+        import heapq
+        r = self.r
+        r.delay["s2h"] = 5.0
+        r.send(r.d_h, b"data", (HOST, 35000), "s2h", kind="browse_req")
+        self.assertEqual(r.d_h.sent, [])
+        self.assertEqual(len(r.queue), 1)
+        due, _, sock, data, dest, direction, meta = heapq.heappop(r.queue)
+        r._tx(sock, data, dest, direction, meta)
+        self.assertEqual(r.d_h.sent, [(b"data", (HOST, 35000))])
+        self.assertTrue(any(e.get("ev") == "tx" for e in r.log))
+
+    def test_tx_failure_noted_not_raised(self):
+        r = self.r
+
+        class BadSocket:
+            def sendto(self, data, dest):
+                raise OSError(101, "network unreachable")
+
+        r._tx(BadSocket(), b"x", (HOST, 35000), "s2h", {})
+        errs = [e for e in r.log if e.get("ev") == "txerr"]
+        self.assertEqual(len(errs), 1)
+        self.assertEqual(errs[0]["err"], 101)
+
+    def test_only_switch_filter(self):
+        r = self.r
+        r.only_switch = "192.168.1.200"
+        req, chal, pt = make_browse_request(self.m, KEY_A, r.sw_bc)
+        r.on_disc(req, (SWITCH, 35000))
+        self.assertIsNone(r.switch)
+        self.assertEqual(r.d_h.sent, [])
+        r.on_disc(req, ("192.168.1.200", 35000))
+        self.assertEqual(r.switch[0], "192.168.1.200")
+
+    def test_console_change_rebuilds_tables(self):
+        r = self.r
+        r.host = (HOST, 49152)
+        req, chal, pt = make_browse_request(self.m, KEY_A, r.sw_bc)
+        r.on_disc(req, (SWITCH, 35000))
+        rep, rpt = make_browse_reply(self.m, KEY_A, chal, r.h_bc, host_ip=HOST)
+        r.on_disc(rep, (HOST, 35000))
+        self.assertEqual(r.switch[0], SWITCH)
+        req2, chal2, pt2 = make_browse_request(self.m, KEY_A, r.sw_bc, chal=b"\x42" * 16)
+        r.on_disc(req2, ("192.168.1.151", 35000))
+        self.assertEqual(r.switch[0], "192.168.1.151")
+        self.assertIn((self.m.ip4("192.168.1.151"), r.h_me), r.ip_pairs["s2h"])
+
+    def test_req_chals_capped_at_eight_and_deduped(self):
+        r = self.r
+        r.host = (HOST, 49152)
+        for i in range(10):
+            req, chal, pt = make_browse_request(self.m, KEY_A, r.sw_bc,
+                                                chal=bytes([i]) * 16, counter=bytes([i]) * 8)
+            r.on_disc(req, (SWITCH, 35000))
+        self.assertEqual(len(r.req_chals), 8)
+        self.assertEqual(r.req_chals[0], bytes([9]) * 16)
+        self.assertNotIn(bytes([0]) * 16, r.req_chals)
+        self.assertNotIn(bytes([1]) * 16, r.req_chals)
+        req, chal, pt = make_browse_request(self.m, KEY_A, r.sw_bc,
+                                            chal=bytes([5]) * 16, counter=b"\x09" * 8)
+        r.on_disc(req, (SWITCH, 35000))
+        self.assertEqual(len(r.req_chals), 8)
+        self.assertEqual(r.req_chals[0], bytes([5]) * 16)
+        self.assertEqual(r.req_chals.count(bytes([5]) * 16), 1)
+
+    def test_switch_reply_without_host_ignored(self):
+        r = self.r
+        r.switch = (SWITCH, 49152)
+        req, chal, pt = make_browse_request(self.m, KEY_A, r.h_bc)
+        r.host_req_chals = [chal]
+        rep, rpt = make_browse_reply(self.m, KEY_A, chal, r.sw_bc, host_ip=SWITCH)
+        r.on_disc(rep, (SWITCH, 35000))
+        self.assertEqual(r.d_h.sent, [])
+        self.assertIsNone(r.key)
+
+    def test_host_request_without_switch_broadcast_only(self):
+        r = self.r
+        req, chal, pt = make_browse_request(self.m, KEY_A, r.h_bc)
+        r.on_disc(req, (HOST, 35000))
+        self.assertEqual([d for _, d in r.d_sw.sent], [("192.168.1.255", 35000)])
+        self.assertEqual(r.host_req_chals, [chal])
+
+
+class TestMoreFunctions(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+        cls.key = bytes(range(48, 64))
+
+    def test_rewrite_applies_pairs_in_order(self):
+        self.assertEqual(self.m.rewrite(b"AAAA", [(b"AA", b"BB"), (b"BB", b"CC")]), b"CCCC")
+        self.assertEqual(self.m.rewrite(b"AAAA", [(b"ZZ", b"BB")]), b"AAAA")
+
+    def test_empty_body_round_trip(self):
+        m = self.m
+        pkt = m.seal_game(self.key, m.ip4(SWITCH), game_header(m), b"")
+        self.assertEqual(m.open_game(self.key, m.ip4(SWITCH), pkt), (b"", False))
+
+    def test_session_key_param_wrap(self):
+        m = self.m
+        rep = bytearray(200)
+        rep[105:137] = bytes([7] * 31 + [255])
+        param = bytearray(rep[105:137])
+        param[-1] = 0
+        expect = hmac_mod.new(KEY_A, bytes(param), hashlib.sha256).digest()[:16]
+        self.assertEqual(m.session_key(KEY_A, bytes(rep)), expect)
+
+    def test_reseal_request_wrong_broadcast_raises(self):
+        m = self.m
+        req, chal, pt = make_browse_request(m, KEY_A, m.ip4("192.168.1.255"))
+        with self.assertRaises(Exception):
+            m.reseal_request(KEY_A, req, m.ip4("10.147.17.255"), m.ip4("192.168.1.255"))
+
+    def test_trim_cut_after_last_full_record(self):
+        m = self.m
+        plain = (pia_record(13, b"\x00" * 50) + pia_record(13, b"\x00" * 198)
+                 + pia_record(1, b"extra"))
+        self.assertEqual(m.trim_join_response(plain),
+                         pia_record(13, b"\x00" * 50) + pia_record(13, b"\x00" * 198))
+
+    def test_trim_truncated_record_unchanged(self):
+        m = self.m
+        plain = bytes([2 | 4]) + (500).to_bytes(2, "big") + bytes([13]) + b"\x00" * 10
+        self.assertEqual(m.trim_join_response(plain), plain)
+        self.assertEqual(m.trim_join_response(b""), b"")
+        self.assertEqual(m.trim_join_response(bytes([0])), bytes([0]))
+
+    def test_rewrite_some_all_field_widths(self):
+        m = self.m
+        payload = b"DATA" + m.ip4(SWITCH)
+        mask = 1 | 2 | 4 | 8 | 16
+        header = bytes([mask]) + b"\x07" + len(payload).to_bytes(2, "big") + bytes([11]) + b"\x01" + b"\x02"
+        plain = header + payload
+        out = m.rewrite_some(plain, [(m.ip4(SWITCH), m.ip4(HOST))], {11})
+        self.assertEqual(out[:len(header)], header)
+        self.assertEqual(out[len(header):], b"DATA" + m.ip4(HOST))
+        out2 = m.rewrite_some(plain, [(m.ip4(SWITCH), m.ip4(HOST))], {7})
+        self.assertEqual(out2, plain)
+
+    def test_address_pairs_two_inputs(self):
+        m = self.m
+        pairs = m.address_pairs([(m.ip4(SWITCH), m.ip4(HOST)), (m.ip4(SW_PHONE), m.ip4(ZT_PHONE))])
+        self.assertIn((m.ip4(SWITCH), m.ip4(HOST)), pairs)
+        self.assertIn((m.ip4(SW_PHONE), m.ip4(ZT_PHONE)), pairs)
+
+    def test_bcast_prefix_edges(self):
+        m = self.m
+        self.assertEqual(m.bcast_of("192.168.1.50", 32), m.ip4("192.168.1.50"))
+        self.assertEqual(m.bcast_of("192.168.1.50", 0), m.ip4("255.255.255.255"))
+
+    def test_env_key_missing_file_falls_through_pc(self):
+        m = load_copy(PC_COPIES[0], beside_key=KEY_A)
+        old_env = dict(os.environ)
+        os.environ["GAME_KEY_FILE"] = os.path.join(m._test_tmp, "does_not_exist.txt")
+        os.environ["HOME"] = m._test_home
+        try:
+            self.assertEqual(m.load_game_key(), KEY_A)
+        finally:
+            os.environ.clear()
+            os.environ.update(old_env)
+
+    def test_fetch_uppercase_hex(self):
+        import urllib.request
+        orig = urllib.request.urlopen
+
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return b"| Splatoon 3 | `78DEEE82D86875782C40B15278F37815` |\n"
+
+        urllib.request.urlopen = lambda *a, **k: Resp()
+        try:
+            self.assertEqual(self.m.fetch_game_key(), WIKI_KEY)
+        finally:
+            urllib.request.urlopen = orig
+
+    def test_capture_counters(self):
+        m = self.m
+        tmp = tempfile.mkdtemp()
+        cap = m.Capture(os.path.join(tmp, "cap2"))
+        data = m.MAGIC + b"\x00" * 40
+        cap.save("sw-game", data, "1.2.3.4", "5.6.7.8", 49152, 49152)
+        cap.save("disc", data, "1.2.3.4", "5.6.7.8", 35000, 35000)
+        self.assertEqual(cap.n, 2)
+        self.assertEqual(cap.off, 2 * len(data))
+        cap.close()
+        with open(os.path.join(tmp, "cap2.txt")) as fh:
+            lines = fh.read().strip().split("\n")
+        self.assertEqual(lines[0].split("\t")[3], "1.2.3.4")
+        self.assertEqual(lines[1].split("\t")[-1], "1")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

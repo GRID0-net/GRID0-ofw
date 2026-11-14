@@ -43,6 +43,30 @@ private slots:
         QCOMPARE(start->text(), QStringLiteral("Start relay"));
         QVERIFY(group->isVisible());
     }
+    void dhcpModeShowsAutoSettings() {
+        Window window(true);
+        window.show();
+        window.resize(QSize(640, 720).expandedTo(window.sizeHint()));
+        QTest::qWait(50);
+        QGroupBox *switchGroup = nullptr, *autoGroup = nullptr;
+        for (auto *group : window.findChildren<QGroupBox *>()) {
+            if (group->title() == QStringLiteral("Enter these settings on your Switch")) switchGroup = group;
+            if (group->title() == QStringLiteral("Windows Hotspot Setup")) autoGroup = group;
+        }
+        QVERIFY(switchGroup && autoGroup);
+        auto *automatic = window.findChild<QRadioButton *>("autoMode");
+        QVERIFY(automatic);
+        QVERIFY(switchGroup->isVisible());
+        QVERIFY(!autoGroup->isVisible());
+        automatic->setChecked(true);
+        QTest::qWait(50);
+        QVERIFY(!switchGroup->isVisible());
+        QVERIFY(autoGroup->isVisible());
+        bool ztHidden = false;
+        for (auto *label : window.findChildren<QLabel *>())
+            if (label->text().startsWith(QStringLiteral("on GRID0 ZT:"))) ztHidden = !label->isVisible();
+        QVERIFY(ztHidden);
+    }
     void switchSettingsStayReadable() {
         Window window(true);
         window.show();

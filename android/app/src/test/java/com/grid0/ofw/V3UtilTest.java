@@ -85,6 +85,36 @@ public class V3UtilTest {
     }
 
     @Test
+    public void versionLeadingZerosCompareEqual() {
+        assertFalse(V3Util.isNewerVersion("3.00.1", "3.0.1"));
+        assertFalse(V3Util.isNewerVersion("3.0.01", "3.0.1"));
+        assertTrue(V3Util.isNewerVersion("3.00.2", "3.0.1"));
+    }
+
+    @Test
+    public void versionBigSegments() {
+        assertTrue(V3Util.isNewerVersion("3.0.1000000", "3.0.999999"));
+        assertFalse(V3Util.isNewerVersion("3.0.999999", "3.0.1000000"));
+    }
+
+    @Test
+    public void eventSourceBeforeDirStillParses() {
+        String text = "{\"src\": \"192.168.1.150\", \"dir\": \"s2h\", \"ev\": \"rx\"}\n";
+        assertEquals("192.168.1.150", V3Util.lastSwitchIpFromEvents(text));
+    }
+
+    @Test
+    public void twoEventsOnOneLineReturnsFirst() {
+        String text = event("s2h", "192.168.1.150") + event("s2h", "192.168.1.151");
+        assertEquals("192.168.1.150", V3Util.lastSwitchIpFromEvents(text));
+    }
+
+    @Test
+    public void dhcpNetmaskNonContiguousIsCounted() {
+        assertEquals(16, V3Util.prefixFromDhcpNetmask(16711935));
+    }
+
+    @Test
     public void dhcpNetmaskPrefixes() {
         assertEquals(24, V3Util.prefixFromDhcpNetmask(16777215));
         assertEquals(22, V3Util.prefixFromDhcpNetmask(16580607));
