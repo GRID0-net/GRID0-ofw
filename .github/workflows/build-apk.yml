@@ -2,7 +2,7 @@ name: Build APK
 
 on:
   push:
-    branches: ["final-ofw3"]
+    branches: ["main", "final-ofw3"]
   workflow_dispatch:
 
 jobs:
