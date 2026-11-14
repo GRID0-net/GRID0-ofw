@@ -132,6 +132,7 @@ def make_relay(m):
     r.only_switch = None
     r.switch = None
     r.host = None
+    r.peer = None
     r.req_chals = []
     r.host_req_chals = []
     r.host_side = None
@@ -783,7 +784,8 @@ class TestRelayHandlers(unittest.TestCase):
         r.switch = (SWITCH, 49152)
         req, chal, pt = make_browse_request(self.m, KEY_A, r.h_bc)
         r.on_disc(req, (HOST, 35000))
-        self.assertEqual(r.host, (HOST, 49152))
+        self.assertEqual(r.peer, (HOST, 49152))
+        self.assertIsNone(r.host)
         self.assertEqual(r.host_req_chals, [chal])
         dests = [d for _, d in r.d_sw.sent]
         self.assertIn(("192.168.1.255", 35000), dests)
@@ -795,6 +797,43 @@ class TestRelayHandlers(unittest.TestCase):
         data, dest = r.d_h.sent[-1]
         self.assertEqual(dest, (HOST, 35000))
         self.assertEqual(open_reply(self.m, KEY_A, data, chal, r.h_bc), rpt)
+
+    def test_searcher_request_does_not_steal_room_host(self):
+        r = self.r
+        self.pair_via_reply()
+        self.assertEqual(r.host, (HOST, 49152))
+        sreq, schal, spt = make_browse_request(self.m, KEY_A, r.h_bc,
+                                               chal=b"\x99" * 16, counter=b"\x88" * 8)
+        r.on_disc(sreq, ("10.147.17.113", 35000))
+        self.assertEqual(r.host, (HOST, 49152))
+        self.assertEqual(r.peer, ("10.147.17.113", 49152))
+        self.assertEqual(r.host_req_chals, [schal])
+        before = len(r.d_h.sent)
+        req2, chal2, pt2 = make_browse_request(self.m, KEY_A, r.sw_bc,
+                                               chal=b"\x42" * 16, counter=b"\x43" * 8)
+        r.on_disc(req2, (SWITCH, 35000))
+        dests = [d for _, d in r.d_h.sent[before:]]
+        self.assertEqual(sorted(dests), sorted([("10.147.17.255", 35000), (HOST, 35000)]))
+
+    def test_switch_reply_goes_to_searcher_and_keeps_room_host(self):
+        r = self.r
+        self.pair_via_reply()
+        sreq, schal, spt = make_browse_request(self.m, KEY_A, r.h_bc,
+                                               chal=b"\x99" * 16, counter=b"\x88" * 8)
+        r.on_disc(sreq, ("10.147.17.113", 35000))
+        rep, rpt = make_browse_reply(self.m, KEY_A, schal, r.sw_bc, host_ip=SWITCH)
+        r.on_disc(rep, (SWITCH, 35000))
+        data, dest = r.d_h.sent[-1]
+        self.assertEqual(dest, ("10.147.17.113", 35000))
+        self.assertEqual(r.host, (HOST, 49152))
+
+    def test_foreign_game_packet_does_not_steal_host(self):
+        r = self.r
+        self.pair_via_reply()
+        junk = self.m.MAGIC + b"\x00" * 96
+        r.on_game(junk, ("10.147.17.77", 49152), "h2s")
+        self.assertEqual(r.g_sw.sent, [])
+        self.assertEqual(r.host, (HOST, 49152))
 
     def test_game_dropped_before_pairing(self):
         r = self.r

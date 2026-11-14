@@ -377,6 +377,7 @@ class Relay:
         self.only_switch = a.switch_peer
         self.switch = None
         self.host = (a.host_peer, GAME_PORT) if a.host_peer else None
+        self.peer = None
         self.req_chals = []
         self.host_req_chals = []
         self.host_side = None
@@ -407,8 +408,14 @@ class Relay:
         kw["t"] = round(time.time() - self.t0, 6)
         self.log.append(kw)
 
+    def session_peer(self):
+        if self.host_side == "sw":
+            return self.peer or self.host
+        return self.host or self.peer
+
     def build_tables(self):
-        sw, h = ip4(self.switch[0]), ip4(self.host[0])
+        peer = self.session_peer()
+        sw, h = ip4(self.switch[0]), ip4(peer[0])
         self.tables = {
             "s2h": address_pairs([(self.sw_me, h), (sw, self.h_me)]),
             "h2s": address_pairs([(h, self.sw_me), (self.h_me, sw)]),
@@ -418,11 +425,11 @@ class Relay:
             "h2s": [(o, n) for o, n in [(h, self.sw_me), (self.h_me, sw)] if o != n],
         }
         if self.host_side == "sw":
-            print(f"paired: Switch {self.switch[0]} is hosting, peer {self.host[0]} joined", flush=True)
+            print(f"paired: Switch {self.switch[0]} is hosting, peer {peer[0]} joined", flush=True)
         elif self.host_side == "h":
-            print(f"paired: Switch {self.switch[0]} with host {self.host[0]}", flush=True)
+            print(f"paired: Switch {self.switch[0]} with host {peer[0]}", flush=True)
         else:
-            print(f"paired: Switch {self.switch[0]} with peer {self.host[0]}", flush=True)
+            print(f"paired: Switch {self.switch[0]} with peer {peer[0]}", flush=True)
 
     def send(self, sock, data, dest, direction, **meta):
         due = time.time() + self.delay.get(direction, 0)
@@ -493,7 +500,7 @@ class Relay:
         if self.switch and self.switch[0] != src[0]:
             print(f"console changed: {self.switch[0]} to {src[0]}", flush=True)
             self.switch = (src[0], GAME_PORT)
-            if self.host:
+            if self.session_peer():
                 self.build_tables()
         self.switch = (src[0], self.switch[1] if self.switch else GAME_PORT)
         self.req_chals = ([chal] + [c for c in self.req_chals if c != chal])[:8]
@@ -553,7 +560,7 @@ class Relay:
         except Exception as e:
             self.disc_note(f"note: a browse request from peer {src} could not be opened")
             return
-        self.host = (src[0], self.host[1] if self.host else GAME_PORT)
+        self.peer = (src[0], self.peer[1] if self.peer else GAME_PORT)
         self.host_req_chals = ([chal] + [c for c in self.host_req_chals if c != chal])[:8]
         self.note(ev="rx", dir="h2s", kind="browse_req", src=src[0], len=len(data))
         if self.cap:
@@ -563,7 +570,8 @@ class Relay:
             self.send(self.d_sw, out, (self.switch[0], DISCOVERY_PORT), "h2s", kind="browse_req_uni")
 
     def on_reply_from_switch(self, data, src):
-        if not self.host:
+        dest_peer = self.peer or self.host
+        if not dest_peer:
             return
         out = None
         for chal in self.host_req_chals:
@@ -587,8 +595,8 @@ class Relay:
             self.build_tables()
         self.note(ev="rx", dir="s2h", kind="browse_reply", src=src[0], len=len(data))
         if self.cap:
-            self.cap.save("disc", data, src[0], self.host[0], src[1], DISCOVERY_PORT)
-        self.send(self.d_h, out, (self.host[0], DISCOVERY_PORT), "s2h", kind="browse_reply")
+            self.cap.save("disc", data, src[0], dest_peer[0], src[1], DISCOVERY_PORT)
+        self.send(self.d_h, out, (dest_peer[0], DISCOVERY_PORT), "s2h", kind="browse_reply")
 
     def on_game(self, data, src, direction):
         if not self.key or not self.tables:
@@ -599,18 +607,22 @@ class Relay:
                 if self.only_switch and src[0] != self.only_switch:
                     return
                 self.switch = src
-                if self.host:
+                if self.session_peer():
                     self.build_tables()
             self.switch = src
             r = relay_game(self.key, ip4(src[0]), self.h_me, data, self.tables["s2h"], self.ip_pairs["s2h"])
-            sock, dest = self.g_h, self.host
+            sock, dest = self.g_h, self.session_peer()
         else:
-            self.host = src
             r = relay_game(self.key, ip4(src[0]), self.sw_me, data, self.tables["h2s"], self.ip_pairs["h2s"])
             sock, dest = self.g_sw, self.switch
         if r is None:
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
             return
+        if direction == "h2s":
+            if self.host_side == "sw":
+                self.peer = src
+            else:
+                self.host = src
         out, label, changed = r
         self.note(ev="rx", dir=direction, src=src[0], len=len(data), label=label, nonce=data[13:21].hex())
         if self.cap:

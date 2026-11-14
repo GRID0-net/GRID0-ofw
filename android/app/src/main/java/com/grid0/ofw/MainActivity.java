@@ -474,13 +474,13 @@ public class MainActivity extends Activity {
         int pillPadX = (int) (14 * getResources().getDisplayMetrics().density);
         int pillPadY = (int) (6 * getResources().getDisplayMetrics().density);
         switchDetectedView.setPadding(pillPadX, pillPadY, pillPadX, pillPadY);
-        LinearLayout.LayoutParams sdParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        sdParams.gravity = Gravity.CENTER_HORIZONTAL;
-        sdParams.topMargin = (int) (32 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams sdParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        sdParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        sdParams.topMargin = (int) (372 * getResources().getDisplayMetrics().density);
         switchDetectedView.setLayoutParams(sdParams);
         switchDetectedView.setVisibility(View.GONE);
-        homeContent.addView(switchDetectedView);
+        root.addView(switchDetectedView);
 
         View spacer = new View(this);
         LinearLayout.LayoutParams spacerParams = new LinearLayout.LayoutParams(
