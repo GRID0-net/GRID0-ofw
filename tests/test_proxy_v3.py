@@ -154,6 +154,9 @@ def make_relay(m):
     r.d_sw, r.d_h, r.g_sw, r.g_h = FakeSocket(), FakeSocket(), FakeSocket(), FakeSocket()
     r.d_sw2, r.d_h2 = FakeSocket(), FakeSocket()
     r.gb_sw, r.gb_h = FakeSocket(), FakeSocket()
+    r.gx = []
+    r.sw_game_port = None
+    r.h_game_port = None
     return r
 
 
@@ -1448,6 +1451,17 @@ class TestMK8DRelay(unittest.TestCase):
         self.assertEqual(r.g_h.sent[-2][1], ("10.147.17.255", 49152))
         self.assertEqual(r.g_h.sent[-1][0], plain)
         self.assertEqual(r.g_h.sent[-1][1], (HOST, 49152))
+        self.assertEqual(r.sw_game_port, 49153)
+        hpkt = m.seal_game_mk8d(key, m.ip4(HOST), bytes(hdr), m.ip4(HOST) + b"\x00" * 28)
+        r.on_game(hpkt, (HOST, 49154), "h2s")
+        self.assertEqual(r.h_game_port, 49154)
+        hdests = [d for _, d in r.g_sw.sent]
+        self.assertEqual(hdests, [("192.168.1.255", 49152), (SWITCH, 49153)])
+        hdr2 = bytearray(hdr)
+        hdr2[12:20] = b"\x78" * 8
+        pkt2 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr2), body)
+        r.on_game(pkt2, (SWITCH, 49153), "s2h")
+        self.assertEqual(r.g_h.sent[-1][1], (HOST, 49154))
 
 
 if __name__ == "__main__":
