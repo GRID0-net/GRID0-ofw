@@ -1360,6 +1360,16 @@ class TestMK8D(unittest.TestCase):
         self.assertEqual(open_reply(m, m.MK8D_KEY, out, b"\x21" * 16, m.ip4("192.168.1.255")), pt)
         self.assertEqual(out[436:440], m.ip4(SW_PHONE))
         self.assertEqual(out[1271:1303], rep[1271:1303])
+        rep2 = bytearray(rep)
+        rep2[454:458] = m.ip4(HOST)[2:4] + (49154).to_bytes(2, "big")
+        out2 = m.reseal_reply(m.MK8D_KEY, bytes(rep2), b"\x21" * 16, m.ip4("10.147.17.255"),
+                              m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4(SW_PHONE),
+                              m.mk8d_param_off(rep), frag=True)
+        self.assertEqual(out2[454:458], m.ip4(SW_PHONE)[2:4] + (49154).to_bytes(2, "big"))
+        out3 = m.reseal_reply(m.MK8D_KEY, bytes(rep2), b"\x21" * 16, m.ip4("10.147.17.255"),
+                              m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4(SW_PHONE),
+                              m.mk8d_param_off(rep))
+        self.assertEqual(out3[454:458], bytes(rep2[454:458]))
 
     def test_game_packet_round_trip(self):
         m = self.m
@@ -1462,6 +1472,14 @@ class TestMK8DRelay(unittest.TestCase):
         pkt2 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr2), body)
         r.on_game(pkt2, (SWITCH, 49153), "s2h")
         self.assertEqual(r.g_h.sent[-1][1], (HOST, 49154))
+        body3 = b"\x00" * 8 + m.ip4(SWITCH)[2:4] + (49153).to_bytes(2, "big") + b"\x00" * 20
+        hdr3 = bytearray(hdr)
+        hdr3[12:20] = b"\x79" * 8
+        pkt3 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr3), body3)
+        r.on_game(pkt3, (SWITCH, 49153), "s2h")
+        opened3 = m.open_game_mk8d(key, r.h_me, r.g_h.sent[-2][0])
+        self.assertIsNotNone(opened3)
+        self.assertEqual(opened3[8:12], r.h_me[2:4] + (49153).to_bytes(2, "big"))
 
 
 if __name__ == "__main__":

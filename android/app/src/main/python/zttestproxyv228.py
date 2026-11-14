@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v232
+# GRID0 proxy v233
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
 from Crypto.Cipher import AES
@@ -156,6 +156,13 @@ def rewrite(body, table):
     for o, n in table:
         body = body.replace(o, n)
     return body
+
+def id_fragments(pairs):
+    out = []
+    for o, n in pairs:
+        for p in GAME_PORTS:
+            out.append((o[2:4] + p.to_bytes(2, "big"), n[2:4] + p.to_bytes(2, "big")))
+    return [(o, n) for o, n in out if o != n]
 
 def open_game(key, src_ip, d):
     if len(d) < 29 or d[:4] != MAGIC:
@@ -335,7 +342,7 @@ def reseal_request(game_key, req, old_bc, new_bc, chal_off=27):
     nct, ntag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
     return req[:chal_off + 26] + ntag + nct, chal
 
-def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host, param_off=105):
+def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host, param_off=105, frag=False):
     if rep[0] != 1:
         raise ValueError("not a browse reply")
     off = 5 + int.from_bytes(rep[1:5], "big")
@@ -345,12 +352,15 @@ def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host, pa
     pt = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(ct, tag)
     nct, ntag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
     out = bytearray(rep)
-    for o, n in ((old_host, new_host), (old_host[::-1], new_host[::-1])):
+    pats = [(old_host, new_host), (old_host[::-1], new_host[::-1])]
+    if frag:
+        pats += id_fragments([(old_host, new_host)])
+    for o, n in pats:
         i = 0
         while (i := bytes(out).find(o, i)) >= 0:
             if not (param_off <= i < param_off + 32 or off <= i < off + 58):
-                out[i:i + 4] = n
-            i += 4
+                out[i:i + len(o)] = n
+            i += len(o)
     out[off + 26:off + 42] = ntag
     out[off + 42:off + 58] = nct
     return bytes(out)
@@ -496,6 +506,10 @@ class Relay:
         self.ip_pairs = {
             "s2h": [(o, n) for o, n in [(self.sw_me, h), (sw, self.h_me)] if o != n],
             "h2s": [(o, n) for o, n in [(h, self.sw_me), (self.h_me, sw)] if o != n],
+        }
+        self.tables_mk8d = {
+            "s2h": self.tables["s2h"] + id_fragments([(self.sw_me, h), (sw, self.h_me)]),
+            "h2s": self.tables["h2s"] + id_fragments([(h, self.sw_me), (self.h_me, sw)]),
         }
         if self.host_side == "sw":
             print(f"paired: Switch {self.switch[0]} is hosting, peer {self.host[0]} joined", flush=True)
@@ -651,7 +665,8 @@ class Relay:
                 try:
                     out = reseal_reply(self.key_for(g), data, chal, self.h_bc, self.sw_bc,
                                        ip4(src[0]), self.sw_me,
-                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g])
+                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
+                                       frag=(g == "mk8d"))
                     game = g
                     break
                 except Exception:
@@ -702,7 +717,8 @@ class Relay:
                 try:
                     out = reseal_reply(self.key_for(g), data, chal, self.sw_bc, self.h_bc,
                                        ip4(src[0]), self.h_me,
-                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g])
+                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
+                                       frag=(g == "mk8d"))
                     game = g
                     break
                 except Exception:
@@ -762,7 +778,8 @@ class Relay:
             k = self.key_mk8d if g == "mk8d" else self.key
             if not k:
                 continue
-            rr = relay_game_mk8d(k, ip4(src[0]), my_ip, data, table) if g == "mk8d" else \
+            tbl = getattr(self, "tables_mk8d", {}).get(direction, table) if g == "mk8d" else table
+            rr = relay_game_mk8d(k, ip4(src[0]), my_ip, data, tbl) if g == "mk8d" else \
                 relay_game(k, ip4(src[0]), my_ip, data, table, pairs)
             if rr is not None:
                 r, used = rr, g
@@ -886,7 +903,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v232", flush=True)
+    print("GRID0 proxy v233", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
