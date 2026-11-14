@@ -110,6 +110,31 @@ public class V3UtilTest {
     }
 
     @Test
+    public void filteredLearnerSkipsForeignSources() {
+        String text = event("s2h", "192.168.4.30") + "\n"
+                + event("s2h", "10.147.17.182") + "\n";
+        assertEquals("192.168.4.30", V3Util.lastSwitchIpFromEvents(text, "192.168.6.207", 22));
+    }
+
+    @Test
+    public void filteredLearnerOnlyForeignGivesNull() {
+        String text = event("s2h", "10.147.17.182") + "\n";
+        assertNull(V3Util.lastSwitchIpFromEvents(text, "192.168.6.207", 22));
+        assertNull(V3Util.lastSwitchIpFromEvents(text, "not found", 22));
+    }
+
+    @Test
+    public void ipInSubnetChecks() {
+        assertTrue(V3Util.ipInSubnet("192.168.4.30", "192.168.6.207", 22));
+        assertFalse(V3Util.ipInSubnet("10.147.17.182", "192.168.6.207", 22));
+        assertTrue(V3Util.ipInSubnet("192.168.2.150", "192.168.2.134", 24));
+        assertFalse(V3Util.ipInSubnet("192.168.4.30", "192.168.6.207", 24));
+        assertTrue(V3Util.ipInSubnet("192.168.2.150", "192.168.2.150", 32));
+        assertFalse(V3Util.ipInSubnet("bad", "192.168.2.134", 24));
+        assertFalse(V3Util.ipInSubnet("192.168.2.150", "192.168.2.134", 33));
+    }
+
+    @Test
     public void dhcpNetmaskNonContiguousIsCounted() {
         assertEquals(16, V3Util.prefixFromDhcpNetmask(16711935));
     }

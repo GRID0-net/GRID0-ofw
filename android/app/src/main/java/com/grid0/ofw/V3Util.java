@@ -26,8 +26,16 @@ public final class V3Util {
     }
 
     public static String lastSwitchIpFromEvents(String text) {
+        return lastSwitchIpFromEvents(text, null, -1);
+    }
+
+    // Like lastSwitchIpFromEvents, but only sources inside the phone's own
+    // subnet count, so a peer address seen on the switch side of the relay
+    // can never be learned as the Switch.
+    public static String lastSwitchIpFromEvents(String text, String phoneIp, int prefix) {
         String found = null;
         int idx = 0;
+        boolean filter = phoneIp != null && prefix >= 0;
 
         while (true) {
             int d = text.indexOf("\"dir\": \"s2h\"", idx);
@@ -46,7 +54,11 @@ public final class V3Util {
                 int to = line.indexOf("\"", from);
 
                 if (to > from) {
-                    found = line.substring(from, to);
+                    String candidate = line.substring(from, to);
+
+                    if (!filter || ipInSubnet(candidate, phoneIp, prefix)) {
+                        found = candidate;
+                    }
                 }
             }
 
@@ -54,6 +66,49 @@ public final class V3Util {
         }
 
         return found;
+    }
+
+    public static boolean ipInSubnet(String ip, String base, int prefix) {
+        long a = ipToLong(ip);
+        long b = ipToLong(base);
+
+        if (a < 0 || b < 0 || prefix < 0 || prefix > 32) {
+            return false;
+        }
+
+        long mask = prefix == 0 ? 0L : (0xFFFFFFFFL << (32 - prefix)) & 0xFFFFFFFFL;
+
+        return (a & mask) == (b & mask);
+    }
+
+    private static long ipToLong(String ip) {
+        if (ip == null) {
+            return -1;
+        }
+
+        String[] parts = ip.split("\\.");
+
+        if (parts.length != 4) {
+            return -1;
+        }
+
+        long v = 0;
+
+        for (String part : parts) {
+            try {
+                int n = Integer.parseInt(part);
+
+                if (n < 0 || n > 255) {
+                    return -1;
+                }
+
+                v = (v << 8) | n;
+            } catch (NumberFormatException e) {
+                return -1;
+            }
+        }
+
+        return v;
     }
 
     public static String versionFromReleaseJson(String json) {

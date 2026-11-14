@@ -975,7 +975,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private String readProxySwitchIp() {
+    private String readProxySwitchIp(String phoneIp, int prefix) {
         try {
             File f = new File(getFilesDir(), "proxy_events.jsonl");
 
@@ -992,26 +992,32 @@ public class MainActivity extends Activity {
             raf.close();
             String text = new String(buf, "UTF-8");
 
-            return V3Util.lastSwitchIpFromEvents(text);
+            return V3Util.lastSwitchIpFromEvents(text, phoneIp, prefix);
         } catch (Exception e) {
             return null;
         }
     }
 
     private void applyLearnedSwitchIp() {
-        String ip = readProxySwitchIp();
+        String phone = getPhoneWifiIp();
 
-        if (ip == null) {
-            ip = getPreferences(MODE_PRIVATE).getString("switch_ip_known", null);
-        }
-
-        if (ip == null || !ip.contains(".")) {
+        if (phone == null || !phone.contains(".")) {
             return;
         }
 
-        String phone = getPhoneWifiIp();
+        int prefix = switchPrefixFor(phone);
+        String ip = readProxySwitchIp(phone, prefix);
 
-        if (phone != null && phone.contains(".") && !V3Util.sameSubnetPrefix(ip, phone)) {
+        if (ip == null) {
+            ip = getPreferences(MODE_PRIVATE).getString("switch_ip_known", null);
+
+            if (ip != null && !V3Util.ipInSubnet(ip, phone, prefix)) {
+                getPreferences(MODE_PRIVATE).edit().remove("switch_ip_known").apply();
+                ip = null;
+            }
+        }
+
+        if (ip == null || !ip.contains(".")) {
             return;
         }
 
