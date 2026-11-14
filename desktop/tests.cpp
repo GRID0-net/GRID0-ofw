@@ -2,6 +2,8 @@
 #include "../src/capture-name.h"
 #include "controller.h"
 #include "proxycontroller.h"
+#include <QFileInfo>
+#include <QJsonDocument>
 #include <QTemporaryDir>
 #include <QFile>
 #include <QtTest>
@@ -111,6 +113,13 @@ private slots:
     }
     void versionIs300() {
         QVERIFY(QStringLiteral(LANPLAY_VERSION).endsWith(QStringLiteral("3.0.0")));
+    }
+    void desktopVersionFileMatchesBuild() {
+        QFile f(QFileInfo(QString::fromUtf8(__FILE__)).dir().filePath("version.json"));
+        QVERIFY2(f.open(QIODevice::ReadOnly), qPrintable(f.fileName()));
+        auto doc = QJsonDocument::fromJson(f.readAll());
+        QCOMPARE(doc["version"].toString(), QStringLiteral(LANPLAY_VERSION).section('-', -1));
+        QCOMPARE(doc["version"].toString(), QStringLiteral("3.0.0"));
     }
     void proxyControllerStartsIdle() {
         ProxyController controller;

@@ -477,32 +477,41 @@ void Window::updateHeaderTheme() {
 }
 void Window::checkForUpdates(bool quiet) {
     auto *manager = new QNetworkAccessManager(this);
-    QNetworkRequest req(QUrl("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest"));
+    QNetworkRequest req(QUrl("https://raw.githubusercontent.com/GRID0-net/GRID0-ofw/main/desktop/version.json"));
     req.setHeader(QNetworkRequest::UserAgentHeader, "GRID0-ofw");
     auto *reply = manager->get(req);
-    connect(reply, &QNetworkReply::finished, this, [this, reply, quiet]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, manager, quiet]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
             if (!quiet) QMessageBox::warning(this, "Update check",
                 QString("Could not check for updates: %1").arg(reply->errorString()));
             return;
         }
-        auto doc = QJsonDocument::fromJson(reply->readAll());
-        QString tag = doc["tag_name"].toString();
-        if (tag.isEmpty()) {
+        QString latestTag = QJsonDocument::fromJson(reply->readAll())["version"].toString();
+        if (latestTag.isEmpty()) {
             if (!quiet) QMessageBox::warning(this, "Update check", "Could not parse release info.");
             return;
         }
         QString current = QString::fromLatin1(LANPLAY_VERSION);
         QString currentTag = current.section('-', -1);
-        QString latestTag = tag.startsWith('v') ? tag.mid(1) : tag;
         if (currentTag == latestTag) {
             if (!quiet) QMessageBox::information(this, "Update check", QString("You are on the latest version (%1).").arg(current));
             return;
         }
         if (!versionIsNewer(latestTag, currentTag)) {
             if (!quiet) QMessageBox::information(this, "Update check",
-                QString("No newer release available (you have %1, latest release is %2).").arg(current, tag));
+                QString("No newer release available (you have %1, latest is %2).").arg(current, latestTag));
+            return;
+        }
+        QString tag = "v" + latestTag;
+        QNetworkRequest relReq(QUrl("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/tags/" + tag));
+        relReq.setHeader(QNetworkRequest::UserAgentHeader, "GRID0-ofw");
+        auto *relReply = manager->get(relReq);
+        connect(relReply, &QNetworkReply::finished, this, [this, relReply, quiet, tag, current]() {
+        relReply->deleteLater();
+        auto doc = QJsonDocument::fromJson(relReply->readAll());
+        if (relReply->error() != QNetworkReply::NoError || !doc.isObject()) {
+            QDesktopServices::openUrl(QUrl("https://github.com/GRID0-net/GRID0-ofw/releases"));
             return;
         }
         auto btn = QMessageBox::question(this, "Update available",
@@ -591,6 +600,7 @@ void Window::checkForUpdates(bool quiet) {
             QDesktopServices::openUrl(QUrl::fromLocalFile(tmp));
 #endif
             qApp->quit();
+        });
         });
     });
 }
