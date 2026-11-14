@@ -58,7 +58,6 @@ import java.io.FileReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import org.json.JSONObject;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -1783,9 +1782,11 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try {
                 HttpURLConnection conn = (HttpURLConnection) new java.net.URL(
-                        "https://raw.githubusercontent.com/GRID0-net/GRID0-ofw/main/android/version.json").openConnection();
+                        "https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest").openConnection();
                 conn.setConnectTimeout(10000);
                 conn.setReadTimeout(10000);
+                conn.setRequestProperty("Accept", "application/vnd.github+json");
+                conn.setRequestProperty("User-Agent", "GRID0-ofw");
 
                 BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
                 StringBuilder sb = new StringBuilder();
@@ -1798,9 +1799,9 @@ public class MainActivity extends Activity {
                 reader.close();
                 conn.disconnect();
 
-                JSONObject json = new JSONObject(sb.toString());
-                String remote = json.getString("version");
-                String url = json.optString("url", "");
+                String body = sb.toString();
+                String remote = V3Util.versionFromReleaseJson(body);
+                String url = V3Util.apkUrlFromReleaseJson(body);
                 String local = getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
 
                 if (local != null && isNewerVersion(remote, local)) {
@@ -1810,7 +1811,7 @@ public class MainActivity extends Activity {
                         builder.setMessage("GRID0 ofw " + remote + " is available. You have " + local + ".");
                         builder.setNegativeButton("Later", null);
 
-                        if (!url.isEmpty()) {
+                        if (url != null && !url.isEmpty()) {
                             builder.setPositiveButton("Update", (dialog, which) -> {
                                 Intent web = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                                 web.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

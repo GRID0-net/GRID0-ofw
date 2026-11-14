@@ -56,6 +56,66 @@ public final class V3Util {
         return found;
     }
 
+    public static String versionFromReleaseJson(String json) {
+        if (json == null) {
+            return null;
+        }
+
+        String tag = stringField(json, "tag_name");
+
+        if (tag == null) {
+            return null;
+        }
+
+        return tag.startsWith("v") ? tag.substring(1) : tag;
+    }
+
+    public static String apkUrlFromReleaseJson(String json) {
+        if (json == null) {
+            return null;
+        }
+
+        String marker = "\"browser_download_url\": \"";
+        int idx = 0;
+
+        while (true) {
+            int s = json.indexOf(marker, idx);
+
+            if (s < 0) {
+                return null;
+            }
+
+            int from = s + marker.length();
+            int to = json.indexOf("\"", from);
+
+            if (to < 0) {
+                return null;
+            }
+
+            String url = json.substring(from, to);
+
+            if (url.endsWith(".apk")) {
+                return url;
+            }
+
+            idx = to;
+        }
+    }
+
+    private static String stringField(String json, String name) {
+        String marker = "\"" + name + "\": \"";
+        int s = json.indexOf(marker);
+
+        if (s < 0) {
+            return null;
+        }
+
+        int from = s + marker.length();
+        int to = json.indexOf("\"", from);
+
+        return to > from ? json.substring(from, to) : null;
+    }
+
     // DhcpInfo.netmask is little-endian. Returns the prefix length, or -1 when unusable.
     public static int prefixFromDhcpNetmask(int dhcpNetmask) {
         int bits = Integer.bitCount(Integer.reverseBytes(dhcpNetmask));

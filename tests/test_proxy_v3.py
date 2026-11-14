@@ -1219,5 +1219,21 @@ class TestMoreFunctions(unittest.TestCase):
         self.assertEqual(lines[1].split("\t")[-1], "1")
 
 
+class TestUpdateSources(unittest.TestCase):
+    def read(self, rel):
+        with open(os.path.join(ROOT, rel)) as fh:
+            return fh.read()
+
+    def test_pc_checks_releases_latest(self):
+        src = self.read("desktop/window.cpp")
+        self.assertIn("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest", src)
+        self.assertNotIn("desktop/version.json", src)
+
+    def test_android_checks_releases_latest(self):
+        src = self.read("android/app/src/main/java/com/grid0/ofw/MainActivity.java")
+        self.assertIn("https://api.github.com/repos/GRID0-net/GRID0-ofw/releases/latest", src)
+        self.assertNotIn("version.json", src)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -114,6 +114,40 @@ public class V3UtilTest {
         assertEquals(16, V3Util.prefixFromDhcpNetmask(16711935));
     }
 
+    private static final String RELEASE_JSON = "{"
+            + "\"tag_name\": \"v3.0.0\","
+            + "\"name\": \"GRID0 ofw v3.0.0\","
+            + "\"assets\": ["
+            + "{\"name\": \"GRID0-ofw-Windows-x64.zip\", \"browser_download_url\": \"https://github.com/GRID0-net/GRID0-ofw/releases/download/v3.0.0/GRID0-ofw-Windows-x64.zip\"},"
+            + "{\"name\": \"GRID0.ofw.v3.0.0.apk\", \"browser_download_url\": \"https://github.com/GRID0-net/GRID0-ofw/releases/download/v3.0.0/GRID0.ofw.v3.0.0.apk\"}"
+            + "]}";
+
+    @Test
+    public void releaseVersionStripsLeadingV() {
+        assertEquals("3.0.0", V3Util.versionFromReleaseJson(RELEASE_JSON));
+        assertEquals("3.0.0", V3Util.versionFromReleaseJson("{\"tag_name\": \"3.0.0\"}"));
+    }
+
+    @Test
+    public void releaseVersionMissingGivesNull() {
+        assertNull(V3Util.versionFromReleaseJson("{\"name\": \"no tag here\"}"));
+        assertNull(V3Util.versionFromReleaseJson(""));
+        assertNull(V3Util.versionFromReleaseJson(null));
+    }
+
+    @Test
+    public void releaseApkUrlPicksTheApkAsset() {
+        assertEquals("https://github.com/GRID0-net/GRID0-ofw/releases/download/v3.0.0/GRID0.ofw.v3.0.0.apk",
+                V3Util.apkUrlFromReleaseJson(RELEASE_JSON));
+    }
+
+    @Test
+    public void releaseApkUrlNoneWhenNoApk() {
+        assertNull(V3Util.apkUrlFromReleaseJson("{\"tag_name\": \"v3.0.0\", \"assets\": []}"));
+        assertNull(V3Util.apkUrlFromReleaseJson(null));
+        assertNull(V3Util.apkUrlFromReleaseJson("not json at all"));
+    }
+
     @Test
     public void dhcpNetmaskPrefixes() {
         assertEquals(24, V3Util.prefixFromDhcpNetmask(16777215));
