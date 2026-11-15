@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QDesktopServices>
 #include <QJsonDocument>
+#include <QMap>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QNetworkRequest>
@@ -110,6 +111,7 @@ Window::Window(bool preview) : previewMode(preview) {
     actions->addWidget(manualMode); actions->addWidget(autoMode); actions->addWidget(proxyMode);
     summaryLayout->addLayout(actions);
     ztUsers = text("on GRID0 ZT: -"); ztUsers->setVisible(false); summaryLayout->addWidget(ztUsers);
+    roomsStatus = text(""); roomsStatus->setVisible(false); summaryLayout->addWidget(roomsStatus);
     playLayout->addWidget(summary);
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
@@ -322,13 +324,15 @@ Window::Window(bool preview) : previewMode(preview) {
     manualMode->setChecked(!preferences.dhcp); autoMode->setChecked(preferences.dhcp);
     ztUsersTimer = new QTimer(this); ztUsersTimer->setInterval(15000);
     connect(ztUsersTimer, &QTimer::timeout, this, [this] { if (proxyMode->isChecked()) refreshZtUsers(); });
+    roomsTimer = new QTimer(this); roomsTimer->setInterval(2000);
+    connect(roomsTimer, &QTimer::timeout, this, [this] { if (proxyMode->isChecked()) refreshRooms(); });
     for (auto *mode : {manualMode, autoMode, proxyMode}) connect(mode, &QRadioButton::toggled, this, [this] {
         if (loading) return;
         preferences.dhcp = autoMode->isChecked();
         preferences.autoSelectLocalAdapter(adapters);
         const int li = local->findData(preferences.localInterface);
         if (li >= 0) local->setCurrentIndex(li);
-        if (proxyMode->isChecked()) { refreshZtUsers(); ztUsersTimer->start(); } else ztUsersTimer->stop();
+        if (proxyMode->isChecked()) { refreshZtUsers(); refreshRooms(); ztUsersTimer->start(); roomsTimer->start(); } else { ztUsersTimer->stop(); roomsTimer->stop(); }
         save();
     });
     dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
@@ -661,6 +665,31 @@ void Window::refreshZtUsers() {
     refreshInfo();
 }
 
+void Window::refreshRooms() {
+    if (!roomsStatus) return;
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/proxy_events.jsonl";
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) { roomsStatus->setVisible(false); return; }
+    QByteArray data = file.readAll();
+    file.close();
+    if (data.size() > 200000) data = data.mid(data.size() - 200000);
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    QMap<QString, QString> byHost;
+    for (const QByteArray &line : data.split('\n')) {
+        if (!line.contains("\"ev\": \"room\"")) continue;
+        const QJsonObject obj = QJsonDocument::fromJson(line).object();
+        const QString host = obj.value("host").toString();
+        const QString name = obj.value("name").toString();
+        const qint64 ts = obj.value("ts").toVariant().toLongLong();
+        if (!host.isEmpty() && !name.isEmpty() && ts > 0 && now - ts <= 90) byHost.insert(host, name);
+    }
+    if (byHost.isEmpty()) { roomsStatus->setVisible(false); return; }
+    QString label = "Splatoon 3 rooms open: " + QString::number(byHost.size());
+    for (const QString &name : byHost.values()) label += "\n" + name;
+    roomsStatus->setText(label);
+    roomsStatus->setVisible(true);
+}
+
 void Window::refreshInfo() {
     if (!infoZtIp) return;
     const auto ztIps = getZeroTierNetworkIPs();
@@ -698,6 +727,7 @@ void Window::updateState() {
     autoSettingsGroup->setVisible(preferences.dhcp && !proxyOn);
     settingsHint->setVisible(!preferences.dhcp && !proxyOn);
     if (ztUsers) ztUsers->setVisible(proxyOn);
+    if (roomsStatus && !proxyOn) roomsStatus->setVisible(false);
     QString hotspotIp;
     for (const auto &ad : adapters) if (ad.hotspot && ad.up) { hotspotIp = ad.ip; break; }
     const bool hotspotOn = !hotspotIp.isEmpty();
