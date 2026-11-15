@@ -114,6 +114,7 @@ public class MainActivity extends Activity {
     private LinearLayout socialRow;
     private Button discordBtn;
     private Button supportBtn;
+    private Button captureBtn;
     private LinearLayout toggleRow;
     private static boolean updateChecked = false;
     private String pendingUpdateUrl = null;
@@ -720,6 +721,30 @@ public class MainActivity extends Activity {
             }
         });
         socialRow.addView(supportBtn);
+
+        captureBtn = new Button(this);
+        captureBtn.setText("Share capture");
+        captureBtn.setAllCaps(false);
+        captureBtn.setTextSize(14);
+        captureBtn.setTextColor(Color.BLACK);
+        captureBtn.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        GradientDrawable captureBg = new GradientDrawable();
+        captureBg.setColor(0xFFFFFFFF);
+        captureBg.setCornerRadius((int) (10 * getResources().getDisplayMetrics().density));
+        captureBtn.setBackground(captureBg);
+        captureBtn.setStateListAnimator(null);
+        LinearLayout.LayoutParams captureParams = new LinearLayout.LayoutParams(
+                (int) (272 * getResources().getDisplayMetrics().density),
+                (int) (48 * getResources().getDisplayMetrics().density));
+        captureParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        captureBtn.setLayoutParams(captureParams);
+        captureBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                shareCapture();
+            }
+        });
+        socialRow.addView(captureBtn);
         moreContent.addView(socialRow);
 
         toggleRow = new LinearLayout(this);
@@ -982,6 +1007,43 @@ public class MainActivity extends Activity {
             if (tabMore != null) {
                 styleTab(tabMore, true);
             }
+        }
+    }
+
+    private void shareCapture() {
+        try {
+            File zip = new File(getCacheDir(), "capture.zip");
+            java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(new java.io.FileOutputStream(zip));
+            String[] names = {"proxy_capture.bin", "proxy_capture.txt", "proxy_events.jsonl"};
+            boolean any = false;
+            for (String n : names) {
+                File f = new File(getFilesDir(), n);
+                if (!f.exists()) {
+                    continue;
+                }
+                zos.putNextEntry(new java.util.zip.ZipEntry(n));
+                java.io.FileInputStream in = new java.io.FileInputStream(f);
+                byte[] buf = new byte[8192];
+                int r;
+                while ((r = in.read(buf)) > 0) {
+                    zos.write(buf, 0, r);
+                }
+                in.close();
+                zos.closeEntry();
+                any = true;
+            }
+            zos.close();
+            if (!any) {
+                android.widget.Toast.makeText(this, "No capture yet. Start the proxy first.", android.widget.Toast.LENGTH_LONG).show();
+                return;
+            }
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType("application/zip");
+            send.putExtra(Intent.EXTRA_STREAM, Uri.parse("content://com.grid0.ofw.capture/capture.zip"));
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(send, "Share capture"));
+        } catch (Exception e) {
+            android.widget.Toast.makeText(this, "Could not share the capture.", android.widget.Toast.LENGTH_LONG).show();
         }
     }
 

@@ -58,6 +58,12 @@
             android:foregroundServiceType="dataSync" />
 
         <provider
+            android:name=".CaptureProvider"
+            android:authorities="com.grid0.ofw.capture"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
+        <provider
             android:name=".UpdateProvider"
             android:authorities="com.grid0.ofw.update"
             android:exported="false"
