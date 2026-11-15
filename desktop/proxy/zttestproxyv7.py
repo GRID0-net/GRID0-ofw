@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v6.1
+# GRID0 proxy v7
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
 from Crypto.Cipher import AES
@@ -9,7 +9,6 @@ DISCOVERY_PORT, GAME_PORT = 35000, 49152
 GAME_PORTS = (49152, 49153, 49154, 49155)
 MK8D_PORT = 30000
 DISCOVERY_PORTS = (DISCOVERY_PORT, MK8D_PORT)
-MK8D_KEY = b"ABCDEFGHIJKLMNOP"
 GAME_NAMES = {"splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe"}
 CHAL_OFF = {"splatoon3": 27, "mk8d": 575}
 PARAM_OFF = {"splatoon3": 105, "mk8d": 1270}
@@ -23,26 +22,91 @@ def detect_game(data):
     return None
 ZSTD_MAGIC = bytes.fromhex("28b52ffd")
 
+def fetch_game_key(game="Splatoon 3"):
+    import re, urllib.request
+    try:
+        with urllib.request.urlopen("https://raw.githubusercontent.com/kinnay/NintendoClientsWiki/master/Pia-Game-Keys.md", timeout=10) as resp:
+            text = resp.read().decode("utf-8", "replace")
+    except Exception:
+        return None
+    for line in text.splitlines():
+        if game in line:
+            m = re.search(r"`([^`]+)`", line)
+            if not m:
+                continue
+            tok = m.group(1).strip()
+            if len(tok) == 32:
+                try:
+                    key = bytes.fromhex(tok)
+                except ValueError:
+                    continue
+                print(f"fetched the {game} game key from NintendoClientsWiki", flush=True)
+                return key
+            if len(tok) == 16:
+                print(f"fetched the {game} game key from NintendoClientsWiki", flush=True)
+                return tok.encode()
+    return None
+
 def load_game_key():
-    p = os.environ.get("GAME_KEY_FILE")
-    if p:
-        with open(p) as fh:
-            return bytes.fromhex(fh.read().strip())
     try:
         import proxy_crypto_prototype as _m
         return bytes(getattr(_m, "GAME_KEY", None) or _m.GAME_KEY_SPLATOON3)
     except Exception:
         pass
-    for p in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
-              os.path.expanduser("~/game_key.txt")):
+    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
+             os.path.expanduser("~/game_key.txt")]
+    env_path = os.environ.get("GAME_KEY_FILE")
+    if env_path:
+        paths.insert(0, env_path)
+    for p in paths:
         try:
             with open(p) as fh:
                 return bytes.fromhex(fh.read().strip())
         except Exception:
             continue
-    raise SystemExit("game key not found: no proxy_crypto_prototype module and no game_key.txt")
+    key = fetch_game_key()
+    if key:
+        for p in paths:
+            try:
+                with open(p, "w") as fh:
+                    fh.write(key.hex())
+                break
+            except Exception:
+                continue
+        return key
+    raise SystemExit("game key not found: no game_key.txt and the fetch from NintendoClientsWiki failed")
 
-GAME_KEY = None
+GAME_KEY = load_game_key()
+
+def load_game_key_mk8d():
+    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key_mk8d.txt"),
+             os.path.expanduser("~/game_key_mk8d.txt")]
+    env_path = os.environ.get("GAME_KEY_MK8D_FILE")
+    if env_path:
+        paths.insert(0, env_path)
+    for p in paths:
+        try:
+            with open(p) as fh:
+                raw = fh.read().strip()
+            if len(raw) == 32:
+                return bytes.fromhex(raw)
+            if len(raw) == 16:
+                return raw.encode()
+        except Exception:
+            continue
+    key = fetch_game_key("Mario Kart 8")
+    if key:
+        for p in paths:
+            try:
+                with open(p, "w") as fh:
+                    fh.write(key.hex())
+                break
+            except Exception:
+                continue
+        return key
+    return None
+
+GAME_KEY_MK8D = load_game_key_mk8d()
 
 def get_wifi_ip():
     import subprocess
@@ -229,36 +293,6 @@ def trim_join_response(plain):
         pos = end
     return plain[:cut] if seen and cut is not None and cut < len(plain) else plain
 
-_LOG_STREAM = None
-_LOG_ORIG = None
-_DETAILED = False
-
-class _Tee:
-    def __init__(self, a, b):
-        self.a, self.b = a, b
-    def write(self, s):
-        self.a.write(s)
-        try:
-            self.b.write(s)
-        except Exception:
-            pass
-        return len(s)
-    def flush(self):
-        try:
-            self.a.flush()
-        except Exception:
-            pass
-        try:
-            self.b.flush()
-        except Exception:
-            pass
-
-_STOP_REQUESTED = False
-
-def request_stop():
-    global _STOP_REQUESTED
-    _STOP_REQUESTED = True
-
 TRIM_JOIN = False
 NO_BITS = False
 REWRITE_PROTOS = None
@@ -421,8 +455,8 @@ class Capture:
 
 class Relay:
     def __init__(self, a):
-        self.game_key = GAME_KEY or load_game_key()
-        self.game_key_mk8d = MK8D_KEY
+        self.game_key = GAME_KEY
+        self.game_key_mk8d = GAME_KEY_MK8D
         self.sw_ip = a.switch_ip or get_wifi_ip()
         self.h_ip = a.host_ip or detect_zerotier_ip(a.host_peer)
         self.sw_prefix = a.switch_prefix
@@ -484,20 +518,6 @@ class Relay:
     def note(self, **kw):
         kw["t"] = round(time.time() - self.t0, 6)
         self.log.append(kw)
-        if _DETAILED and _LOG_STREAM is not None:
-            parts = [str(kw.get("ev", "event"))]
-            for k, v in kw.items():
-                if k in ("t", "ev"):
-                    continue
-                if k == "counts" and isinstance(v, dict):
-                    parts += [f"{a}={b}" for a, b in v.items()]
-                else:
-                    parts.append(f"{k}={v}")
-            try:
-                _LOG_STREAM.write(" ".join(parts) + "\n")
-                _LOG_STREAM.flush()
-            except Exception:
-                pass
 
     def session_peer(self):
         if self.host_side == "sw":
@@ -887,13 +907,10 @@ class Relay:
         for s, leg in self.gx:
             socks[s] = lambda d, src, leg=leg: self.on_game_sock(d, src, leg)
         stop = [False]
-        try:
-            signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
-            signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
-        except Exception:
-            pass
+        signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
+        signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
         last_stat = time.time()
-        while not stop[0] and not _STOP_REQUESTED:
+        while not stop[0]:
             timeout = 0.5
             if self.queue:
                 timeout = max(0.0, min(timeout, self.queue[0][0] - time.time()))
@@ -933,24 +950,6 @@ class Args:
     pass
 
 def main():
-    global _STOP_REQUESTED, _LOG_STREAM, _LOG_ORIG, _DETAILED
-    _STOP_REQUESTED = False
-    _DETAILED = os.environ.get("DETAILED_LOG") == "1"
-    log_path = os.environ.get("PROXY_LOG")
-    if log_path:
-        try:
-            if _LOG_ORIG is None:
-                _LOG_ORIG = (sys.stdout, sys.stderr)
-            if _LOG_STREAM is not None:
-                try:
-                    _LOG_STREAM.close()
-                except Exception:
-                    pass
-            _LOG_STREAM = open(log_path, "w", buffering=1)
-            sys.stdout = _Tee(_LOG_ORIG[0], _LOG_STREAM)
-            sys.stderr = _Tee(_LOG_ORIG[1], _LOG_STREAM)
-        except Exception:
-            _LOG_STREAM = None
     a = Args()
     a.switch_ip = os.environ.get("PHONE_IP") or None
     a.host_ip = os.environ.get("ZT_IP") or None
@@ -966,7 +965,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v6.1", flush=True)
+    print("GRID0 proxy v7", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

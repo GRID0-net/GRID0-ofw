@@ -80,7 +80,7 @@ public class ProxyService extends Service {
                     Python.start(new AndroidPlatform(ProxyService.this));
                 }
 
-                Python.getInstance().getModule("zttestproxyv61").callAttr("main");
+                Python.getInstance().getModule("zttestproxyv7").callAttr("main");
             } catch (Exception e) {
                 lastError = e.getMessage() != null ? e.getMessage() : "proxy error";
             }
@@ -99,7 +99,7 @@ public class ProxyService extends Service {
     public void onDestroy() {
         try {
             if (Python.isStarted()) {
-                Python.getInstance().getModule("zttestproxyv61").callAttr("request_stop");
+                Python.getInstance().getModule("zttestproxyv7").callAttr("request_stop");
             }
         } catch (Exception e) {
         }
