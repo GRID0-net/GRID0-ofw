@@ -823,7 +823,7 @@ public class MainActivity extends Activity {
 
         copyLogButton = new ImageButton(this);
         copyLogButton.setImageResource(R.drawable.ic_copy);
-        copyLogButton.setBackgroundColor(0);
+        copyLogButton.setBackgroundResource(R.drawable.ic_circle_bg);
         int copyPad = (int) (6 * getResources().getDisplayMetrics().density);
         copyLogButton.setPadding(copyPad, copyPad, copyPad, copyPad);
         FrameLayout.LayoutParams copyParams = new FrameLayout.LayoutParams(
@@ -849,7 +849,7 @@ public class MainActivity extends Activity {
 
         shareLogButton = new ImageButton(this);
         shareLogButton.setImageResource(R.drawable.ic_share);
-        shareLogButton.setBackgroundColor(0);
+        shareLogButton.setBackgroundResource(R.drawable.ic_circle_bg);
         shareLogButton.setPadding(copyPad, copyPad, copyPad, copyPad);
         FrameLayout.LayoutParams shareParams = new FrameLayout.LayoutParams(
                 (int) (36 * getResources().getDisplayMetrics().density),
@@ -975,8 +975,8 @@ public class MainActivity extends Activity {
             return;
         }
         boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
-        boolean show = !tutorial && isGrid0Connected();
-        ztButton.setVisibility(show ? View.VISIBLE : View.GONE);
+        ztButton.setVisibility(tutorial ? View.GONE : View.VISIBLE);
+        ztButton.setConnected(isGrid0Connected());
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {

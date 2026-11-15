@@ -5,6 +5,8 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.view.View;
@@ -18,7 +20,9 @@ public class ZtButtonView extends View {
     private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint logoPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final Bitmap logo;
+    private final Bitmap logoGrey;
     private final RectF logoRect = new RectF();
+    private boolean connected = false;
     private ValueAnimator animator;
     private float phase = 0f;
     private long startMs = 0L;
@@ -30,6 +34,20 @@ public class ZtButtonView extends View {
         dotPaint.setStyle(Paint.Style.FILL);
         dotPaint.setColor(ORANGE);
         logo = BitmapFactory.decodeResource(getResources(), R.drawable.zt_logo);
+        logoGrey = Bitmap.createBitmap(logo.getWidth(), logo.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas greyCanvas = new Canvas(logoGrey);
+        Paint greyPaint = new Paint();
+        ColorMatrix matrix = new ColorMatrix();
+        matrix.setSaturation(0f);
+        greyPaint.setColorFilter(new ColorMatrixColorFilter(matrix));
+        greyCanvas.drawBitmap(logo, 0, 0, greyPaint);
+    }
+
+    public void setConnected(boolean c) {
+        if (connected != c) {
+            connected = c;
+            invalidate();
+        }
     }
 
     @Override
@@ -89,7 +107,7 @@ public class ZtButtonView extends View {
 
         float logoHalf = 23f * density;
         logoRect.set(cx - logoHalf, cy - logoHalf, cx + logoHalf, cy + logoHalf);
-        canvas.drawBitmap(logo, null, logoRect, logoPaint);
+        canvas.drawBitmap(connected ? logo : logoGrey, null, logoRect, logoPaint);
 
         float rOut = 43f * density;
         float rIn = 25.5f * density;
