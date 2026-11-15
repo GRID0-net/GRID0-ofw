@@ -142,6 +142,8 @@ def make_relay(m):
     r.host_req_chals = []
     r.mk8d_req_chals = []
     r.mk8d_host_req_chals = []
+    r.pin_s2h = b"\x99" * 16
+    r.pin_h2s = b"\x88" * 16
     r.host_side = None
     r.last_sw_req = None
     r.last_sw_game = "splatoon3"
@@ -1561,6 +1563,29 @@ class TestMK8D(unittest.TestCase):
         m = load_copy(ANDROID_COPY)
         self.assertEqual(m.MK8D_KEY, MK8D_KEY)
 
+    def test_pinned_reseal_and_rekey_round_trip(self):
+        m = self.m
+        req, chal = make_mk8d_browse_request(m, m.ip4("192.168.1.255"))
+        pin = b"\x99" * 16
+        out, seen = m.reseal_request_pinned(MK8D_KEY, req, m.ip4("192.168.1.255"),
+                                            m.ip4("10.147.17.255"), m.CHAL_OFF["mk8d"], pin)
+        self.assertEqual(seen, chal)
+        self.assertEqual(out[585:601], pin)
+        rep, pt = make_mk8d_browse_reply(m, pin, m.ip4("10.147.17.255"), host_ip=HOST)
+        with self.assertRaises(Exception):
+            m.reseal_reply(MK8D_KEY, rep, chal, m.ip4("10.147.17.255"), m.ip4("192.168.1.255"),
+                           m.ip4(HOST), m.ip4("192.168.1.50"), m.mk8d_param_off(rep), frag=True)
+        fixed = m.reseal_reply_rekey(MK8D_KEY, rep, pin, chal, m.ip4("10.147.17.255"),
+                                     m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4("192.168.1.50"),
+                                     m.mk8d_param_off(rep), frag=True)
+        self.assertEqual(open_reply(m, MK8D_KEY, fixed, chal, m.ip4("192.168.1.255")), pt)
+        same = m.reseal_reply_rekey(MK8D_KEY, rep, pin, pin, m.ip4("10.147.17.255"),
+                                    m.ip4("192.168.1.255"), m.ip4(HOST), m.ip4("192.168.1.50"),
+                                    m.mk8d_param_off(rep), frag=True)
+        plain = m.reseal_reply(MK8D_KEY, rep, pin, m.ip4("10.147.17.255"), m.ip4("192.168.1.255"),
+                               m.ip4(HOST), m.ip4("192.168.1.50"), m.mk8d_param_off(rep), frag=True)
+        self.assertEqual(same, plain)
+
 
 class TestMK8DRelay(unittest.TestCase):
     @classmethod
@@ -1589,8 +1614,14 @@ class TestMK8DRelay(unittest.TestCase):
         dests = [d for _, d in r.d_h2.sent]
         self.assertIn(("10.147.17.255", 30000), dests)
         first = r.d_h2.sent[0][0]
-        back, _ = m.reseal_request(MK8D_KEY, first, r.h_bc, r.sw_bc, m.CHAL_OFF["mk8d"])
-        self.assertEqual(back, req)
+        self.assertEqual(first[585:601], r.pin_s2h)
+        back, seen_chal = m.reseal_request(MK8D_KEY, first, r.h_bc, r.sw_bc, m.CHAL_OFF["mk8d"])
+        self.assertEqual(seen_chal, r.pin_s2h)
+        self.assertNotEqual(back, req)
+        from Crypto.Cipher import AES
+        k = AES.new(MK8D_KEY, AES.MODE_ECB).encrypt(r.pin_s2h)
+        pt = AES.new(k, AES.MODE_GCM, nonce=r.h_bc + first[577:585]).decrypt_and_verify(first[617:873], first[601:617])
+        self.assertEqual(pt, bytes(range(256)))
 
     def test_reply_sets_mk8d_session_key_only(self):
         m, r = self.m, self.r
@@ -1648,6 +1679,31 @@ class TestMK8DRelay(unittest.TestCase):
         opened3 = m.open_game_mk8d(key, r.h_me, r.g_h.sent[-1][0])
         self.assertIsNotNone(opened3)
         self.assertEqual(opened3[8:12], r.h_me[2:4] + (49153).to_bytes(2, "big"))
+
+    def test_reply_paired_with_pin_opens(self):
+        m, r = self.m, self.r
+        req, chal = make_mk8d_browse_request(m, r.sw_bc)
+        r.on_disc(req, (SWITCH, 30000))
+        rep, pt = make_mk8d_browse_reply(m, r.pin_s2h, r.h_bc, host_ip=HOST)
+        with self.assertRaises(Exception):
+            m.reseal_reply(MK8D_KEY, rep, chal, r.h_bc, r.sw_bc, m.ip4(HOST), r.sw_me,
+                           m.mk8d_param_off(rep), frag=True)
+        r.on_disc(rep, (HOST, 30000))
+        self.assertEqual(r.key_mk8d, m.session_key(MK8D_KEY, rep, m.mk8d_param_off(rep)))
+        data, dest = r.d_sw2.sent[-1]
+        self.assertEqual(dest, (SWITCH, 30000))
+        self.assertEqual(open_reply(m, MK8D_KEY, data, chal, r.sw_bc), pt)
+
+    def test_switch_reply_paired_with_pin_opens(self):
+        m, r = self.m, self.r
+        req, chal = make_mk8d_browse_request(m, r.h_bc)
+        r.on_disc(req, (HOST, 30000))
+        self.assertEqual(r.mk8d_host_req_chals, [chal])
+        rep, pt = make_mk8d_browse_reply(m, r.pin_h2s, r.sw_bc, host_ip=SWITCH)
+        r.on_disc(rep, (SWITCH, 30000))
+        data, dest = r.d_h2.sent[-1]
+        self.assertEqual(dest, (HOST, 30000))
+        self.assertEqual(open_reply(m, MK8D_KEY, data, chal, r.h_bc), pt)
 
 
 if __name__ == "__main__":

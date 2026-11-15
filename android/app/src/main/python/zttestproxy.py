@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v10
+# GRID0 proxy v11
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -391,6 +391,22 @@ def reseal_request(game_key, req, old_bc, new_bc, chal_off=27):
     nct, ntag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
     return req[:chal_off + 26] + ntag + nct, chal
 
+
+def reseal_request_pinned(game_key, req, old_bc, new_bc, chal_off, pin):
+    if len(req) != chal_off + 298 or req[0] != 0:
+        raise ValueError("not a browse request")
+    cr = req[chal_off:]
+    counter, chal, tag, ct = cr[2:10], cr[10:26], cr[26:42], cr[42:]
+    k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
+    pt = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(ct, tag)
+    k2 = AES.new(game_key, AES.MODE_ECB).encrypt(pin)
+    nct, ntag = AES.new(k2, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
+    out = bytearray(req)
+    out[chal_off + 10:chal_off + 26] = pin
+    out[chal_off + 26:chal_off + 42] = ntag
+    out[chal_off + 42:] = nct
+    return bytes(out), chal
+
 def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host, param_off=105, frag=False):
     if rep[0] != 1:
         raise ValueError("not a browse reply")
@@ -400,6 +416,31 @@ def reseal_reply(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host, pa
     k = hmac.new(game_key, rchal + req_chal, hashlib.sha256).digest()[:16]
     pt = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(ct, tag)
     nct, ntag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
+    out = bytearray(rep)
+    pats = [(old_host, new_host), (old_host[::-1], new_host[::-1])]
+    if frag:
+        pats += id_fragments([(old_host, new_host)])
+    for o, n in pats:
+        i = 0
+        while (i := bytes(out).find(o, i)) >= 0:
+            if not (param_off <= i < param_off + 32 or off <= i < off + 58):
+                out[i:i + len(o)] = n
+            i += len(o)
+    out[off + 26:off + 42] = ntag
+    out[off + 42:off + 58] = nct
+    return bytes(out)
+
+
+def reseal_reply_rekey(game_key, rep, chal_in, chal_out, old_bc, new_bc, old_host, new_host, param_off=105, frag=False):
+    if rep[0] != 1:
+        raise ValueError("not a browse reply")
+    off = 5 + int.from_bytes(rep[1:5], "big")
+    cr = rep[off:off + 58]
+    counter, rchal, tag, ct = cr[2:10], cr[10:26], cr[26:42], cr[42:58]
+    k_in = hmac.new(game_key, rchal + chal_in, hashlib.sha256).digest()[:16]
+    pt = AES.new(k_in, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(ct, tag)
+    k_out = hmac.new(game_key, rchal + chal_out, hashlib.sha256).digest()[:16]
+    nct, ntag = AES.new(k_out, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
     out = bytearray(rep)
     pats = [(old_host, new_host), (old_host[::-1], new_host[::-1])]
     if frag:
@@ -492,6 +533,8 @@ class Relay:
         self.host_req_chals = []
         self.mk8d_req_chals = []
         self.mk8d_host_req_chals = []
+        self.pin_s2h = os.urandom(16)
+        self.pin_h2s = os.urandom(16)
         self.host_side = None
         self.last_sw_req = None
         self.last_sweep = 0.0
@@ -679,7 +722,10 @@ class Relay:
         if game is None:
             return
         try:
-            out, chal = reseal_request(self.key_for(game), data, self.sw_bc, self.h_bc, CHAL_OFF[game])
+            if game == "mk8d":
+                out, chal = reseal_request_pinned(self.key_for(game), data, self.sw_bc, self.h_bc, CHAL_OFF[game], self.pin_s2h)
+            else:
+                out, chal = reseal_request(self.key_for(game), data, self.sw_bc, self.h_bc, CHAL_OFF[game])
         except Exception as e:
             if self.cap:
                 self.cap.save("disc", data, src[0], socket.inet_ntoa(self.sw_bc), src[1], self.port_for(game))
@@ -729,19 +775,28 @@ class Relay:
         if len(data) < 64 or data[0] != 1 or not self.switch:
             return
         out, game = None, None
-        for g in ("splatoon3", "mk8d"):
-            for chal in self.chals_for("s2h", g):
-                try:
-                    out = reseal_reply(self.key_for(g), data, chal, self.h_bc, self.sw_bc,
-                                       ip4(src[0]), self.sw_me,
-                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
-                                       frag=(g == "mk8d"))
-                    game = g
+        if self.mk8d_req_chals:
+            try:
+                out = reseal_reply_rekey(self.key_for("mk8d"), data, self.pin_s2h, self.mk8d_req_chals[0],
+                                         self.h_bc, self.sw_bc, ip4(src[0]), self.sw_me,
+                                         mk8d_param_off(data), frag=True)
+                game = "mk8d"
+            except Exception:
+                out = None
+        if out is None:
+            for g in ("splatoon3", "mk8d"):
+                for chal in self.chals_for("s2h", g):
+                    try:
+                        out = reseal_reply(self.key_for(g), data, chal, self.h_bc, self.sw_bc,
+                                           ip4(src[0]), self.sw_me,
+                                           mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
+                                           frag=(g == "mk8d"))
+                        game = g
+                        break
+                    except Exception:
+                        continue
+                if out is not None:
                     break
-                except Exception:
-                    continue
-            if out is not None:
-                break
         if out is None:
             if self.cap:
                 self.cap.save("disc", data, src[0], self.switch[0], src[1], src[1])
@@ -767,7 +822,10 @@ class Relay:
 
     def on_request_from_host(self, data, src, game):
         try:
-            out, chal = reseal_request(self.key_for(game), data, self.h_bc, self.sw_bc, CHAL_OFF[game])
+            if game == "mk8d":
+                out, chal = reseal_request_pinned(self.key_for(game), data, self.h_bc, self.sw_bc, CHAL_OFF[game], self.pin_h2s)
+            else:
+                out, chal = reseal_request(self.key_for(game), data, self.h_bc, self.sw_bc, CHAL_OFF[game])
         except Exception as e:
             if self.cap:
                 self.cap.save("disc", data, src[0], socket.inet_ntoa(self.h_bc), src[1], self.port_for(game))
@@ -790,19 +848,28 @@ class Relay:
         if not dest_peer:
             return
         out, game = None, None
-        for g in ("splatoon3", "mk8d"):
-            for chal in self.chals_for("h2s", g):
-                try:
-                    out = reseal_reply(self.key_for(g), data, chal, self.sw_bc, self.h_bc,
-                                       ip4(src[0]), self.h_me,
-                                       mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
-                                       frag=(g == "mk8d"))
-                    game = g
+        if self.mk8d_host_req_chals:
+            try:
+                out = reseal_reply_rekey(self.key_for("mk8d"), data, self.pin_h2s, self.mk8d_host_req_chals[0],
+                                         self.sw_bc, self.h_bc, ip4(src[0]), self.h_me,
+                                         mk8d_param_off(data), frag=True)
+                game = "mk8d"
+            except Exception:
+                out = None
+        if out is None:
+            for g in ("splatoon3", "mk8d"):
+                for chal in self.chals_for("h2s", g):
+                    try:
+                        out = reseal_reply(self.key_for(g), data, chal, self.sw_bc, self.h_bc,
+                                           ip4(src[0]), self.h_me,
+                                           mk8d_param_off(data) if g == "mk8d" else PARAM_OFF[g],
+                                           frag=(g == "mk8d"))
+                        game = g
+                        break
+                    except Exception:
+                        continue
+                if out is not None:
                     break
-                except Exception:
-                    continue
-            if out is not None:
-                break
         if out is None:
             if self.cap:
                 self.cap.save("disc", data, src[0], dest_peer[0], src[1], src[1])
@@ -1024,7 +1091,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v10", flush=True)
+    print("GRID0 proxy v11", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
