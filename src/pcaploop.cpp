@@ -35,7 +35,9 @@ struct uv_pcap_interf_s {
     uint8_t netmask[4];
     bool has_ipv4;
     uint64_t delivered;
+    uint64_t send_attempts;
     uint64_t send_failures;
+    bool send_error_logged;
     uint64_t read_failures;
     uint64_t full_batches;
 
@@ -374,10 +376,11 @@ void uv_pcap_close(uv_pcap_t *handle)
     for (int i = 0; i < inner->count; i++) {
         auto *h = &inner->interfaces[i];
         struct pcap_stat stats = {};
-        LLOG(LLOG_INFO, "Capture health MAC %02x:%02x:%02x:%02x:%02x:%02x: delivered=%llu read-errors=%llu injection-errors=%llu full-batches=%llu",
+        LLOG(LLOG_INFO, "Capture health MAC %02x:%02x:%02x:%02x:%02x:%02x: delivered=%llu read-errors=%llu injection-errors=%llu full-batches=%llu send-attempts=%llu",
             h->mac[0], h->mac[1], h->mac[2], h->mac[3], h->mac[4], h->mac[5],
             (unsigned long long)h->delivered, (unsigned long long)h->read_failures,
-            (unsigned long long)h->send_failures, (unsigned long long)h->full_batches);
+            (unsigned long long)h->send_failures, (unsigned long long)h->full_batches,
+            (unsigned long long)h->send_attempts);
         if (pcap_stats(h->dev, &stats) == 0)
             LLOG(LLOG_INFO, "Capture driver counters: received=%u buffer-drops=%u interface-drops=%u (platform-dependent; zero can mean unavailable, not proof of delivery)",
                 stats.ps_recv, stats.ps_drop, stats.ps_ifdrop);
@@ -394,8 +397,18 @@ static int uv_pcap_interf_sendpacket(uv_pcap_interf_t *handle, const u_char *dat
     u_char *d = (u_char *)data;
     CPY_MAC(old, d + 6);
     CPY_MAC(d + 6, handle->mac);
+    ++handle->send_attempts;
     int ret = pcap_sendpacket(handle->dev, data, size);
-    if (ret != 0) ++handle->send_failures;
+    if (ret != 0) {
+        ++handle->send_failures;
+        if (!handle->send_error_logged) {
+            handle->send_error_logged = true;
+            LLOG(LLOG_ERROR, "pcap_sendpacket failed on %02x:%02x:%02x:%02x:%02x:%02x: %s",
+                handle->mac[0], handle->mac[1], handle->mac[2],
+                handle->mac[3], handle->mac[4], handle->mac[5],
+                pcap_geterr(handle->dev));
+        }
+    }
     CPY_MAC(d + 6, old);
 
     return ret;
