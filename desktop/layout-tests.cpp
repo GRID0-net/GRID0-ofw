@@ -20,9 +20,9 @@ private slots:
         auto *automatic = window.findChild<QRadioButton *>("autoMode");
         auto *proxy = window.findChild<QRadioButton *>("proxyMode");
         QVERIFY(manual && automatic && proxy);
-        QCOMPARE(manual->text(), QStringLiteral("Manual (the most difficult)"));
-        QCOMPARE(automatic->text(), QStringLiteral("Automatic - DHCP (medium difficulty)"));
-        QCOMPARE(proxy->text(), QStringLiteral("Automatic - Proxy (easiest)"));
+        QCOMPARE(manual->text(), QStringLiteral("Manual"));
+        QCOMPARE(automatic->text(), QStringLiteral("Automatic"));
+        QCOMPARE(proxy->text(), QStringLiteral("Proxy"));
         QPushButton *start = nullptr;
         for (auto *button : window.findChildren<QPushButton *>())
             if (button->text() == QStringLiteral("Start relay") || button->text() == QStringLiteral("Start proxy")) start = button;

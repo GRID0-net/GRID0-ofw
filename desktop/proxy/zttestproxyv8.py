@@ -1,7 +1,25 @@
 #!/usr/bin/env python3
-# GRID0 proxy v7
+# GRID0 proxy v8
 # Relays Switch LAN play over ZeroTier through this device.
-import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, sys, time
+import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
+
+def _ensure_deps():
+    missing = []
+    try:
+        import Crypto
+    except ImportError:
+        missing.append("pycryptodome")
+    try:
+        import zstandard
+    except ImportError:
+        missing.append("zstandard")
+    if not missing:
+        return
+    print("installing the packages the proxy needs: " + ", ".join(missing), flush=True)
+    if subprocess.run([sys.executable, "-m", "pip", "install"] + missing).returncode != 0:
+        subprocess.run([sys.executable, "-m", "pip", "install", "--user"] + missing)
+
+_ensure_deps()
 from Crypto.Cipher import AES
 import zstandard as zstd
 
@@ -965,7 +983,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v7", flush=True)
+    print("GRID0 proxy v8", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
