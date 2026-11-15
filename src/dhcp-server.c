@@ -255,8 +255,12 @@ static int dhcp_send_reply(struct lan_play *lp, const uint8_t dst_mac[6],
     WRITE_NET16(udp, UDP_OFF_CHECKSUM, 0);
     WRITE_NET16(udp, UDP_OFF_CHECKSUM, udp_checksum(ip, IPV4_HEADER_LEN, ip_len));
 
-    static const uint8_t bcast_mac[6] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-    return lan_play_dhcp_send(lp, bcast_mac, ip, (uint16_t)ip_len);
+    /* Unicast to the client's MAC, not Ethernet broadcast: some hotspot
+     * adapters never put injected broadcast frames on the air to their
+     * clients, so broadcast replies vanish while unicast delivery works.
+     * The IP destination stays 255.255.255.255, so the client's stack
+     * still treats the reply as a broadcast DHCP packet. */
+    return lan_play_dhcp_send(lp, dst_mac, ip, (uint16_t)ip_len);
 }
 
 static bool dhcp_parse(const uint8_t *frame, size_t len, struct dhcp_request *req)
