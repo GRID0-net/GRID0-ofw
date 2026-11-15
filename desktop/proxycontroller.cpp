@@ -6,7 +6,7 @@
 #include <QStandardPaths>
 
 static QString findProxyScript() {
-    const QString name = "zttestproxyv8.py";
+    const QString name = "zttestproxyv9.py";
     QDir dir(QCoreApplication::applicationDirPath());
     for (int i = 0; i < 5; i++) {
         for (const QString &rel : {name, "proxy/" + name, "desktop/proxy/" + name}) {
@@ -50,7 +50,7 @@ void ProxyController::start(const Preferences &p, const QList<Adapter> &adapters
     const QString ztIp = p.overlay(adapters).ip;
     if (localIp.isEmpty() || ztIp.isEmpty()) { emit message("Choose your local and ZeroTier adapters in Settings."); return; }
     const QString script = findProxyScript();
-    if (script.isEmpty()) { emit message("The proxy script zttestproxyv8.py was not found next to the app."); return; }
+    if (script.isEmpty()) { emit message("The proxy script zttestproxyv9.py was not found next to the app."); return; }
     const QString keyFile = QFileInfo(script).dir().filePath("game_key.txt");
     if (!QFileInfo::exists(keyFile)) emit message("No game_key.txt found. The proxy will fetch the Splatoon 3 key from NintendoClientsWiki.");
     QString python = QStandardPaths::findExecutable("python3");

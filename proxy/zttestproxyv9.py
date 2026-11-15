@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
-# GRID0 proxy v8
+# GRID0 proxy v9
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
+
+def _zstd_available():
+    try:
+        import zstandard
+        return True
+    except ImportError:
+        pass
+    try:
+        from compression import zstd
+        return True
+    except ImportError:
+        return False
 
 def _ensure_deps():
     missing = []
@@ -9,9 +21,7 @@ def _ensure_deps():
         import Crypto
     except ImportError:
         missing.append("pycryptodome")
-    try:
-        import zstandard
-    except ImportError:
+    if not _zstd_available():
         missing.append("zstandard")
     if not missing:
         return
@@ -21,7 +31,31 @@ def _ensure_deps():
 
 _ensure_deps()
 from Crypto.Cipher import AES
-import zstandard as zstd
+try:
+    import zstandard as _zstd_pkg
+except ImportError:
+    _zstd_pkg = None
+if _zstd_pkg is not None:
+    _CCTX = _zstd_pkg.ZstdCompressor(level=3, write_content_size=True, write_checksum=False)
+    def _zstd_compress(data):
+        return _CCTX.compress(data)
+    def _zstd_decompress(raw):
+        return _zstd_pkg.ZstdDecompressor().decompress(raw, max_output_size=1 << 20)
+else:
+    from compression import zstd as _zstd_std
+    def _zstd_compress(data):
+        return _zstd_std.compress(data, level=3)
+    def _zstd_decompress(raw):
+        dctx = _zstd_std.ZstdDecompressor()
+        out = dctx.decompress(raw, max_length=(1 << 20) + 1)
+        while not dctx.eof and len(out) <= (1 << 20):
+            chunk = dctx.decompress(b"", max_length=(1 << 20) + 1 - len(out))
+            if not chunk:
+                break
+            out += chunk
+        if not dctx.eof:
+            raise ValueError("zstd payload truncated or over the size cap")
+        return out
 
 DISCOVERY_PORT, GAME_PORT = 35000, 49152
 GAME_PORTS = (49152, 49153, 49154, 49155)
@@ -288,8 +322,6 @@ def relay_game_mk8d(key, src_ip, my_ip, d, table):
     new = rewrite(plain, table)
     return seal_game_mk8d(key, my_ip, d, new), plain[:4].hex(), new != plain
 
-_CCTX = zstd.ZstdCompressor(level=3, write_content_size=True, write_checksum=False)
-
 _FIELDS = ((1, 1), (2, 2), (4, 1), (8, 1), (16, 1))
 
 def trim_join_response(plain):
@@ -362,14 +394,14 @@ def relay_game(key, src_ip, my_ip, d, table, ip_pairs=None):
     if o is None:
         return None
     raw, compressed = o
-    plain = zstd.ZstdDecompressor().decompress(raw, max_output_size=1 << 20) if compressed else raw
+    plain = _zstd_decompress(raw) if compressed else raw
     new = rewrite(plain, table) if REWRITE_PROTOS is None else rewrite_some(plain, table, REWRITE_PROTOS)
     if ip_pairs and not NO_BITS:
         new = rewrite_bits(new, ip_pairs)
     if TRIM_JOIN:
         new = trim_join_response(new)
     changed = new != plain
-    body = (_CCTX.compress(new) if compressed else new) if changed else raw
+    body = (_zstd_compress(new) if compressed else new) if changed else raw
     return seal_game(key, my_ip, d, body), plain[:4].hex(), changed
 
 def session_key(game_key, reply, off=105):

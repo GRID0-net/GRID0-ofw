@@ -10,9 +10,9 @@ import unittest
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PC_COPIES = [os.path.join(ROOT, "desktop", "proxy", "zttestproxyv8.py"),
-             os.path.join(ROOT, "proxy", "zttestproxyv8.py")]
-ANDROID_COPY = os.path.join(ROOT, "android", "app", "src", "main", "python", "zttestproxyv8.py")
+PC_COPIES = [os.path.join(ROOT, "desktop", "proxy", "zttestproxyv9.py"),
+             os.path.join(ROOT, "proxy", "zttestproxyv9.py")]
+ANDROID_COPY = os.path.join(ROOT, "android", "app", "src", "main", "python", "zttestproxyv9.py")
 
 KEY_A = bytes.fromhex("00112233445566778899aabbccddeeff")
 KEY_B = bytes.fromhex("ffeeddccbbaa99887766554433221100")
@@ -38,7 +38,7 @@ def load_copy(src_path, beside_key=KEY_A, env_key=None, home_key=None):
     home = os.path.join(tmp, "home")
     os.makedirs(mod_dir)
     os.makedirs(home)
-    dst = os.path.join(mod_dir, "zttestproxyv8.py")
+    dst = os.path.join(mod_dir, "zttestproxyv9.py")
     shutil.copy(src_path, dst)
     if beside_key is not None:
         with open(os.path.join(mod_dir, "game_key.txt"), "w") as fh:
@@ -475,7 +475,7 @@ class TestGameCrypto(unittest.TestCase):
 
     def test_open_detects_zstd_body(self):
         m = self.m
-        body = m._CCTX.compress(b"room record payload" * 4)
+        body = m._zstd_compress(b"room record payload" * 4)
         pkt = m.seal_game(self.key, m.ip4(SWITCH), game_header(m), body)
         out = m.open_game(self.key, m.ip4(SWITCH), pkt)
         self.assertTrue(out[1])
@@ -593,13 +593,12 @@ class TestRelayGameFn(unittest.TestCase):
     def test_relay_compressed_round_trip(self):
         m = self.m
         plain = b"\x07\x00\x00\x00" + m.ip4(SWITCH) + b"room" * 20
-        comp = m._CCTX.compress(plain)
+        comp = m._zstd_compress(plain)
         pkt = m.seal_game(self.key, m.ip4(SWITCH), game_header(m), comp)
         table = m.address_pairs([(m.ip4(SWITCH), m.ip4(ZT_PHONE))])
         out, label, changed = m.relay_game(self.key, m.ip4(SWITCH), m.ip4(ZT_PHONE), pkt, table)
         opened = m.open_game(self.key, m.ip4(ZT_PHONE), out)
-        import zstandard as zstd
-        self.assertEqual(zstd.ZstdDecompressor().decompress(opened[0], max_output_size=1 << 20),
+        self.assertEqual(m._zstd_decompress(opened[0]),
                          plain.replace(m.ip4(SWITCH), m.ip4(ZT_PHONE)))
 
     def test_relay_garbage_returns_none(self):
@@ -1072,7 +1071,7 @@ class TestMainEnv(unittest.TestCase):
             "SWITCH_IP": "192.168.4.30", "HOST_ZT": "10.147.17.99",
             "DELAY_S2H_MS": "25", "DELAY_H2S_MS": "0",
             "EVENTS": "my_events.jsonl",
-        }, ["zttestproxyv8.py"])
+        }, ["zttestproxyv9.py"])
         a = cap["args"]
         self.assertEqual(a.switch_ip, "192.168.1.50")
         self.assertEqual(a.host_ip, "10.147.17.50")
@@ -1087,7 +1086,7 @@ class TestMainEnv(unittest.TestCase):
         self.assertFalse(cap["no_bits"])
 
     def test_env_defaults_and_no_bit_flag(self):
-        m, cap = self.run_main({}, ["zttestproxyv8.py", "--no-bit-rewrite"])
+        m, cap = self.run_main({}, ["zttestproxyv9.py", "--no-bit-rewrite"])
         a = cap["args"]
         self.assertIsNone(a.switch_ip)
         self.assertIsNone(a.host_ip)

@@ -1,7 +1,19 @@
 #!/usr/bin/env python3
-# GRID0 proxy v8
+# GRID0 proxy v9
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
+
+def _zstd_available():
+    try:
+        import zstandard
+        return True
+    except ImportError:
+        pass
+    try:
+        from compression import zstd
+        return True
+    except ImportError:
+        return False
 
 def _ensure_deps():
     missing = []
@@ -9,9 +21,7 @@ def _ensure_deps():
         import Crypto
     except ImportError:
         missing.append("pycryptodome")
-    try:
-        import zstandard
-    except ImportError:
+    if not _zstd_available():
         missing.append("zstandard")
     if not missing:
         return
@@ -21,12 +31,37 @@ def _ensure_deps():
 
 _ensure_deps()
 from Crypto.Cipher import AES
-import zstandard as zstd
+try:
+    import zstandard as _zstd_pkg
+except ImportError:
+    _zstd_pkg = None
+if _zstd_pkg is not None:
+    _CCTX = _zstd_pkg.ZstdCompressor(level=3, write_content_size=True, write_checksum=False)
+    def _zstd_compress(data):
+        return _CCTX.compress(data)
+    def _zstd_decompress(raw):
+        return _zstd_pkg.ZstdDecompressor().decompress(raw, max_output_size=1 << 20)
+else:
+    from compression import zstd as _zstd_std
+    def _zstd_compress(data):
+        return _zstd_std.compress(data, level=3)
+    def _zstd_decompress(raw):
+        dctx = _zstd_std.ZstdDecompressor()
+        out = dctx.decompress(raw, max_length=(1 << 20) + 1)
+        while not dctx.eof and len(out) <= (1 << 20):
+            chunk = dctx.decompress(b"", max_length=(1 << 20) + 1 - len(out))
+            if not chunk:
+                break
+            out += chunk
+        if not dctx.eof:
+            raise ValueError("zstd payload truncated or over the size cap")
+        return out
 
 DISCOVERY_PORT, GAME_PORT = 35000, 49152
 GAME_PORTS = (49152, 49153, 49154, 49155)
 MK8D_PORT = 30000
 DISCOVERY_PORTS = (DISCOVERY_PORT, MK8D_PORT)
+MK8D_KEY = b"ABCDEFGHIJKLMNOP"
 GAME_NAMES = {"splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe"}
 CHAL_OFF = {"splatoon3": 27, "mk8d": 575}
 PARAM_OFF = {"splatoon3": 105, "mk8d": 1270}
@@ -40,91 +75,26 @@ def detect_game(data):
     return None
 ZSTD_MAGIC = bytes.fromhex("28b52ffd")
 
-def fetch_game_key(game="Splatoon 3"):
-    import re, urllib.request
-    try:
-        with urllib.request.urlopen("https://raw.githubusercontent.com/kinnay/NintendoClientsWiki/master/Pia-Game-Keys.md", timeout=10) as resp:
-            text = resp.read().decode("utf-8", "replace")
-    except Exception:
-        return None
-    for line in text.splitlines():
-        if game in line:
-            m = re.search(r"`([^`]+)`", line)
-            if not m:
-                continue
-            tok = m.group(1).strip()
-            if len(tok) == 32:
-                try:
-                    key = bytes.fromhex(tok)
-                except ValueError:
-                    continue
-                print(f"fetched the {game} game key from NintendoClientsWiki", flush=True)
-                return key
-            if len(tok) == 16:
-                print(f"fetched the {game} game key from NintendoClientsWiki", flush=True)
-                return tok.encode()
-    return None
-
 def load_game_key():
+    p = os.environ.get("GAME_KEY_FILE")
+    if p:
+        with open(p) as fh:
+            return bytes.fromhex(fh.read().strip())
     try:
         import proxy_crypto_prototype as _m
         return bytes(getattr(_m, "GAME_KEY", None) or _m.GAME_KEY_SPLATOON3)
     except Exception:
         pass
-    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
-             os.path.expanduser("~/game_key.txt")]
-    env_path = os.environ.get("GAME_KEY_FILE")
-    if env_path:
-        paths.insert(0, env_path)
-    for p in paths:
+    for p in (os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key.txt"),
+              os.path.expanduser("~/game_key.txt")):
         try:
             with open(p) as fh:
                 return bytes.fromhex(fh.read().strip())
         except Exception:
             continue
-    key = fetch_game_key()
-    if key:
-        for p in paths:
-            try:
-                with open(p, "w") as fh:
-                    fh.write(key.hex())
-                break
-            except Exception:
-                continue
-        return key
-    raise SystemExit("game key not found: no game_key.txt and the fetch from NintendoClientsWiki failed")
+    raise SystemExit("game key not found: no proxy_crypto_prototype module and no game_key.txt")
 
-GAME_KEY = load_game_key()
-
-def load_game_key_mk8d():
-    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key_mk8d.txt"),
-             os.path.expanduser("~/game_key_mk8d.txt")]
-    env_path = os.environ.get("GAME_KEY_MK8D_FILE")
-    if env_path:
-        paths.insert(0, env_path)
-    for p in paths:
-        try:
-            with open(p) as fh:
-                raw = fh.read().strip()
-            if len(raw) == 32:
-                return bytes.fromhex(raw)
-            if len(raw) == 16:
-                return raw.encode()
-        except Exception:
-            continue
-    key = fetch_game_key("Mario Kart 8")
-    if key:
-        for p in paths:
-            try:
-                with open(p, "w") as fh:
-                    fh.write(key.hex())
-                break
-            except Exception:
-                continue
-        return key
-    return None
-
-GAME_KEY_MK8D = load_game_key_mk8d()
+GAME_KEY = None
 
 def get_wifi_ip():
     import subprocess
@@ -288,8 +258,6 @@ def relay_game_mk8d(key, src_ip, my_ip, d, table):
     new = rewrite(plain, table)
     return seal_game_mk8d(key, my_ip, d, new), plain[:4].hex(), new != plain
 
-_CCTX = zstd.ZstdCompressor(level=3, write_content_size=True, write_checksum=False)
-
 _FIELDS = ((1, 1), (2, 2), (4, 1), (8, 1), (16, 1))
 
 def trim_join_response(plain):
@@ -310,6 +278,36 @@ def trim_join_response(plain):
             cut = end
         pos = end
     return plain[:cut] if seen and cut is not None and cut < len(plain) else plain
+
+_LOG_STREAM = None
+_LOG_ORIG = None
+_DETAILED = False
+
+class _Tee:
+    def __init__(self, a, b):
+        self.a, self.b = a, b
+    def write(self, s):
+        self.a.write(s)
+        try:
+            self.b.write(s)
+        except Exception:
+            pass
+        return len(s)
+    def flush(self):
+        try:
+            self.a.flush()
+        except Exception:
+            pass
+        try:
+            self.b.flush()
+        except Exception:
+            pass
+
+_STOP_REQUESTED = False
+
+def request_stop():
+    global _STOP_REQUESTED
+    _STOP_REQUESTED = True
 
 TRIM_JOIN = False
 NO_BITS = False
@@ -362,14 +360,14 @@ def relay_game(key, src_ip, my_ip, d, table, ip_pairs=None):
     if o is None:
         return None
     raw, compressed = o
-    plain = zstd.ZstdDecompressor().decompress(raw, max_output_size=1 << 20) if compressed else raw
+    plain = _zstd_decompress(raw) if compressed else raw
     new = rewrite(plain, table) if REWRITE_PROTOS is None else rewrite_some(plain, table, REWRITE_PROTOS)
     if ip_pairs and not NO_BITS:
         new = rewrite_bits(new, ip_pairs)
     if TRIM_JOIN:
         new = trim_join_response(new)
     changed = new != plain
-    body = (_CCTX.compress(new) if compressed else new) if changed else raw
+    body = (_zstd_compress(new) if compressed else new) if changed else raw
     return seal_game(key, my_ip, d, body), plain[:4].hex(), changed
 
 def session_key(game_key, reply, off=105):
@@ -473,8 +471,8 @@ class Capture:
 
 class Relay:
     def __init__(self, a):
-        self.game_key = GAME_KEY
-        self.game_key_mk8d = GAME_KEY_MK8D
+        self.game_key = GAME_KEY or load_game_key()
+        self.game_key_mk8d = MK8D_KEY
         self.sw_ip = a.switch_ip or get_wifi_ip()
         self.h_ip = a.host_ip or detect_zerotier_ip(a.host_peer)
         self.sw_prefix = a.switch_prefix
@@ -536,6 +534,20 @@ class Relay:
     def note(self, **kw):
         kw["t"] = round(time.time() - self.t0, 6)
         self.log.append(kw)
+        if _DETAILED and _LOG_STREAM is not None:
+            parts = [str(kw.get("ev", "event"))]
+            for k, v in kw.items():
+                if k in ("t", "ev"):
+                    continue
+                if k == "counts" and isinstance(v, dict):
+                    parts += [f"{a}={b}" for a, b in v.items()]
+                else:
+                    parts.append(f"{k}={v}")
+            try:
+                _LOG_STREAM.write(" ".join(parts) + "\n")
+                _LOG_STREAM.flush()
+            except Exception:
+                pass
 
     def session_peer(self):
         if self.host_side == "sw":
@@ -925,10 +937,13 @@ class Relay:
         for s, leg in self.gx:
             socks[s] = lambda d, src, leg=leg: self.on_game_sock(d, src, leg)
         stop = [False]
-        signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
-        signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
+        try:
+            signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
+            signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
+        except Exception:
+            pass
         last_stat = time.time()
-        while not stop[0]:
+        while not stop[0] and not _STOP_REQUESTED:
             timeout = 0.5
             if self.queue:
                 timeout = max(0.0, min(timeout, self.queue[0][0] - time.time()))
@@ -968,6 +983,24 @@ class Args:
     pass
 
 def main():
+    global _STOP_REQUESTED, _LOG_STREAM, _LOG_ORIG, _DETAILED
+    _STOP_REQUESTED = False
+    _DETAILED = os.environ.get("DETAILED_LOG") == "1"
+    log_path = os.environ.get("PROXY_LOG")
+    if log_path:
+        try:
+            if _LOG_ORIG is None:
+                _LOG_ORIG = (sys.stdout, sys.stderr)
+            if _LOG_STREAM is not None:
+                try:
+                    _LOG_STREAM.close()
+                except Exception:
+                    pass
+            _LOG_STREAM = open(log_path, "w", buffering=1)
+            sys.stdout = _Tee(_LOG_ORIG[0], _LOG_STREAM)
+            sys.stderr = _Tee(_LOG_ORIG[1], _LOG_STREAM)
+        except Exception:
+            _LOG_STREAM = None
     a = Args()
     a.switch_ip = os.environ.get("PHONE_IP") or None
     a.host_ip = os.environ.get("ZT_IP") or None
