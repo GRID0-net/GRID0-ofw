@@ -1761,6 +1761,39 @@ class TestMK8DRelay(unittest.TestCase):
         self.assertEqual(open_reply(m, MK8D_KEY, data, chal, r.h_bc), pt)
 
 
+class TestSplatoonHostName(unittest.TestCase):
+    def _reply(self, name_bytes):
+        rep = bytearray(620)
+        rep[0] = 1
+        rep[39] = len(name_bytes)
+        rep[40] = 1
+        rep[41:41 + len(name_bytes)] = name_bytes
+        enc = name_bytes.decode("utf-8").encode("utf-16-le")
+        rep[141:141 + len(enc)] = enc
+        return bytes(rep)
+
+    def test_names_from_both_copies(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            self.assertEqual(mod.splatoon_host_name(self._reply("RyuPlayer".encode())), "RyuPlayer")
+            self.assertEqual(mod.splatoon_host_name(self._reply("ISПШ".encode("utf-8"))), "ISПШ")
+
+    def test_utf16_fallback(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            rep = bytearray(620)
+            rep[0] = 1
+            enc = "Musi".encode("utf-16-le")
+            rep[141:141 + len(enc)] = enc
+            self.assertEqual(mod.splatoon_host_name(bytes(rep)), "Musi")
+
+    def test_garbage_rejected(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            self.assertIsNone(mod.splatoon_host_name(bytes(620)))
+            self.assertIsNone(mod.splatoon_host_name(b"\x01\x02"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

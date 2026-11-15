@@ -68,6 +68,71 @@ public final class V3Util {
         return found;
     }
 
+    // Names of the Splatoon 3 rooms the proxy has seen in the last 90
+    // seconds, one per host, most recently seen last. Room events are JSON
+    // lines with ev, host, name and a wall clock ts in seconds.
+    public static java.util.List<String> roomsFromEvents(String text, long nowSeconds) {
+        java.util.LinkedHashMap<String, String> byHost = new java.util.LinkedHashMap<>();
+        int idx = 0;
+
+        while (true) {
+            int d = text.indexOf("\"ev\": \"room\"", idx);
+
+            if (d < 0) {
+                break;
+            }
+
+            int lineStart = text.lastIndexOf("\n", d) + 1;
+            int lineEnd = text.indexOf("\n", d);
+            String line = text.substring(lineStart, lineEnd < 0 ? text.length() : lineEnd);
+            String host = stringField(line, "host");
+            String name = stringField(line, "name");
+            long ts = longField(line, "ts");
+
+            if (host != null && name != null && ts > 0 && nowSeconds - ts <= 90) {
+                byHost.remove(host);
+                byHost.put(host, name);
+            }
+
+            idx = d + 10;
+        }
+
+        return new java.util.ArrayList<>(byHost.values());
+    }
+
+    private static long longField(String json, String name) {
+        String marker = "\"" + name + "\":";
+        int s = json.indexOf(marker);
+
+        if (s < 0) {
+            return -1;
+        }
+
+        int i = s + marker.length();
+
+        while (i < json.length() && Character.isWhitespace(json.charAt(i))) {
+            i++;
+        }
+
+        boolean neg = false;
+
+        if (i < json.length() && json.charAt(i) == '-') {
+            neg = true;
+            i++;
+        }
+
+        long v = 0;
+        boolean any = false;
+
+        while (i < json.length() && Character.isDigit(json.charAt(i))) {
+            v = v * 10 + (json.charAt(i) - '0');
+            any = true;
+            i++;
+        }
+
+        return any ? (neg ? -v : v) : -1;
+    }
+
     public static boolean ipInSubnet(String ip, String base, int prefix) {
         long a = ipToLong(ip);
         long b = ipToLong(base);

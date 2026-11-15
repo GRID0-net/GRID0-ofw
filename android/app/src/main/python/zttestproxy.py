@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v15
+# GRID0 proxy v16
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -374,6 +374,27 @@ def session_key(game_key, reply, off=105):
     param = bytearray(reply[off:off + 32])
     param[-1] = (param[-1] + 1) & 0xFF
     return hmac.new(game_key, bytes(param), hashlib.sha256).digest()[:16]
+
+def splatoon_host_name(rep):
+    try:
+        if len(rep) > 41:
+            n = rep[39]
+            if 1 <= n <= 32 and rep[40] == 1 and 41 + n <= len(rep):
+                name = rep[41:41 + n].decode("utf-8")
+                if name and all(c.isprintable() for c in name):
+                    return name
+        chars = []
+        for i in range(141, min(len(rep) - 1, 141 + 40), 2):
+            code = rep[i] | (rep[i + 1] << 8)
+            if code == 0:
+                break
+            chars.append(chr(code))
+        name = "".join(chars)
+        if name and all(c.isprintable() for c in name):
+            return name
+    except Exception:
+        pass
+    return None
 
 def mk8d_param_off(rep):
     size = int.from_bytes(rep[1:5], "big")
@@ -828,6 +849,10 @@ class Relay:
         elif self.tables is None:
             self.build_tables()
         self.rooms[(game, src[0])] = time.time()
+        if game == "splatoon3":
+            rname = splatoon_host_name(data)
+            if rname:
+                self.note(ev="room", game=game, host=src[0], name=rname, ts=int(time.time()))
         entry = self.sessions.setdefault(src[0], {"keys": {}, "tables": None})
         entry["keys"][game] = self.key_mk8d if game == "mk8d" else self.key
         entry["tables"] = self.tables_for(src[0])
@@ -1125,7 +1150,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v15", flush=True)
+    print("GRID0 proxy v16", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

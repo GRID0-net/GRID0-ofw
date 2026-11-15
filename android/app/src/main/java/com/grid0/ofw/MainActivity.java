@@ -97,6 +97,7 @@ public class MainActivity extends Activity {
     private ValueAnimator borderAnimator;
     private TextView statusText;
     private TextView switchDetectedView;
+    private TextView roomsView;
     private TextView step1Label;
     private Button step1Button;
     private ImageView step1Check;
@@ -501,6 +502,19 @@ public class MainActivity extends Activity {
                 (int) (20 * getResources().getDisplayMetrics().density));
         spacer.setLayoutParams(spacerParams);
         homeContent.addView(spacer);
+
+        roomsView = new TextView(this);
+        roomsView.setTextSize(14);
+        roomsView.setTextColor(Color.WHITE);
+        roomsView.setGravity(Gravity.CENTER);
+        roomsView.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
+        LinearLayout.LayoutParams roomsParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        roomsParams.gravity = Gravity.CENTER;
+        roomsParams.bottomMargin = (int) (8 * getResources().getDisplayMetrics().density);
+        roomsView.setLayoutParams(roomsParams);
+        roomsView.setVisibility(View.GONE);
+        homeContent.addView(roomsView);
 
         if (!zeroTierInstalled) {
             TextView msg = new TextView(this);
@@ -1827,6 +1841,7 @@ public class MainActivity extends Activity {
             }
 
             refreshProxyLog();
+            refreshRooms();
             applyLearnedSwitchIp();
             setMoreValue("switch_ip", switchIpResult);
             logRefreshHandler.postDelayed(this, 2000);
@@ -1840,6 +1855,53 @@ public class MainActivity extends Activity {
 
     private void stopLogRefresh() {
         logRefreshHandler.removeCallbacks(logRefreshRunnable);
+    }
+
+    private void refreshRooms() {
+        if (roomsView == null) {
+            return;
+        }
+
+        if (!proxyRunning) {
+            roomsView.setVisibility(View.GONE);
+            return;
+        }
+
+        try {
+            File f = new File(getFilesDir(), "proxy_events.jsonl");
+
+            if (!f.exists()) {
+                roomsView.setVisibility(View.GONE);
+                return;
+            }
+
+            java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r");
+            long len = raf.length();
+            long start = Math.max(0, len - 200000);
+            raf.seek(start);
+            byte[] buf = new byte[(int) (len - start)];
+            raf.readFully(buf);
+            raf.close();
+            String text = new String(buf, "UTF-8");
+            java.util.List<String> rooms = V3Util.roomsFromEvents(text, System.currentTimeMillis() / 1000);
+
+            if (rooms.isEmpty()) {
+                roomsView.setVisibility(View.GONE);
+                return;
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("Splatoon 3 rooms open: ").append(rooms.size());
+
+            for (String n : rooms) {
+                sb.append("\n").append(n);
+            }
+
+            roomsView.setText(sb.toString());
+            roomsView.setVisibility(View.VISIBLE);
+        } catch (Exception e) {
+            roomsView.setVisibility(View.GONE);
+        }
     }
 
     private void refreshProxyLog() {
@@ -2281,6 +2343,10 @@ public class MainActivity extends Activity {
 
         if (consoleBox != null) {
             consoleBox.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
+        }
+
+        if (roomsView != null && !proxyRunning) {
+            roomsView.setVisibility(View.GONE);
         }
 
         if (socialRow != null && discordBtn != null && supportBtn != null) {
