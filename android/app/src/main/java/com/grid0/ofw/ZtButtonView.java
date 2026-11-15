@@ -108,6 +108,7 @@ public class ZtButtonView extends View {
         float logoHalf = 23f * density;
         logoRect.set(cx - logoHalf, cy - logoHalf, cx + logoHalf, cy + logoHalf);
         canvas.drawBitmap(connected ? logo : logoGrey, null, logoRect, logoPaint);
+        if (!connected) return;
 
         float rOut = 43f * density;
         float rIn = 25.5f * density;
