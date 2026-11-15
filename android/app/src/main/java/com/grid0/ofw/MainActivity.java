@@ -110,11 +110,12 @@ public class MainActivity extends Activity {
     private TextView logView;
     private Switch detailedSwitch;
     private ImageButton copyLogButton;
+    private ImageButton shareLogButton;
+    private ZtButtonView ztButton;
     private FrameLayout consoleBox;
     private LinearLayout socialRow;
     private Button discordBtn;
     private Button supportBtn;
-    private Button captureBtn;
     private LinearLayout toggleRow;
     private static boolean updateChecked = false;
     private String pendingUpdateUrl = null;
@@ -137,6 +138,7 @@ public class MainActivity extends Activity {
         @Override
         public void run() {
             updateSwitchDetected();
+            updateZtButton();
             switchCheckHandler.postDelayed(this, 15000);
         }
     };
@@ -722,29 +724,6 @@ public class MainActivity extends Activity {
         });
         socialRow.addView(supportBtn);
 
-        captureBtn = new Button(this);
-        captureBtn.setText("Share capture");
-        captureBtn.setAllCaps(false);
-        captureBtn.setTextSize(14);
-        captureBtn.setTextColor(Color.BLACK);
-        captureBtn.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
-        GradientDrawable captureBg = new GradientDrawable();
-        captureBg.setColor(0xFFFFFFFF);
-        captureBg.setCornerRadius((int) (10 * getResources().getDisplayMetrics().density));
-        captureBtn.setBackground(captureBg);
-        captureBtn.setStateListAnimator(null);
-        LinearLayout.LayoutParams captureParams = new LinearLayout.LayoutParams(
-                (int) (272 * getResources().getDisplayMetrics().density),
-                (int) (48 * getResources().getDisplayMetrics().density));
-        captureParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
-        captureBtn.setLayoutParams(captureParams);
-        captureBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                shareCapture();
-            }
-        });
-        socialRow.addView(captureBtn);
         moreContent.addView(socialRow);
 
         toggleRow = new LinearLayout(this);
@@ -867,6 +846,25 @@ public class MainActivity extends Activity {
             }
         });
         consoleBox.addView(copyLogButton);
+
+        shareLogButton = new ImageButton(this);
+        shareLogButton.setImageResource(R.drawable.ic_share);
+        shareLogButton.setBackgroundColor(0);
+        shareLogButton.setPadding(copyPad, copyPad, copyPad, copyPad);
+        FrameLayout.LayoutParams shareParams = new FrameLayout.LayoutParams(
+                (int) (36 * getResources().getDisplayMetrics().density),
+                (int) (36 * getResources().getDisplayMetrics().density));
+        shareParams.gravity = Gravity.TOP | Gravity.END;
+        shareParams.topMargin = copyPad;
+        shareParams.rightMargin = copyPad + (int) (42 * getResources().getDisplayMetrics().density);
+        shareLogButton.setLayoutParams(shareParams);
+        shareLogButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                shareCapture();
+            }
+        });
+        consoleBox.addView(shareLogButton);
         moreContent.addView(consoleBox);
 
         setContentView(root);
@@ -877,6 +875,26 @@ public class MainActivity extends Activity {
         pixelRippleView.setLayoutParams(rippleOverlayParams);
         pixelRippleView.setVisibility(View.VISIBLE);
         root.addView(pixelRippleView, 0);
+
+        ztButton = new ZtButtonView(this);
+        float ztDensity = getResources().getDisplayMetrics().density;
+        FrameLayout.LayoutParams ztParams = new FrameLayout.LayoutParams(
+                (int) (64 * ztDensity), (int) (64 * ztDensity));
+        ztParams.gravity = Gravity.BOTTOM | Gravity.END;
+        ztParams.bottomMargin = (int) (20 * ztDensity);
+        ztParams.rightMargin = (int) (20 * ztDensity);
+        ztButton.setLayoutParams(ztParams);
+        ztButton.setVisibility(View.GONE);
+        ztButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent launch = getPackageManager().getLaunchIntentForPackage(ZEROTIER_PACKAGE);
+                if (launch != null) {
+                    startActivity(launch);
+                }
+            }
+        });
+        root.addView(ztButton);
 
         logoFrame.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -949,6 +967,16 @@ public class MainActivity extends Activity {
             logoFrame.setLayoutParams(fp);
         }
         updateSwitchDetected();
+        updateZtButton();
+    }
+
+    private void updateZtButton() {
+        if (ztButton == null) {
+            return;
+        }
+        boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
+        boolean show = !tutorial && isGrid0Connected();
+        ztButton.setVisibility(show ? View.VISIBLE : View.GONE);
     }
 
     private void addMoreRow(TableLayout table, String label, String key) {
@@ -2247,6 +2275,7 @@ public class MainActivity extends Activity {
 
     private void updateProxyUI() {
         updateSteps();
+        updateZtButton();
 
         if (consoleBox != null) {
             consoleBox.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
