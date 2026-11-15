@@ -1023,7 +1023,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v8", flush=True)
+    print("GRID0 proxy v10", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

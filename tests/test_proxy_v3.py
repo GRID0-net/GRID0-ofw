@@ -10,9 +10,8 @@ import unittest
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PC_COPIES = [os.path.join(ROOT, "desktop", "proxy", "zttestproxyv10.py"),
-             os.path.join(ROOT, "proxy", "zttestproxyv10.py")]
-ANDROID_COPY = os.path.join(ROOT, "android", "app", "src", "main", "python", "zttestproxyv10.py")
+PC_COPIES = [os.path.join(ROOT, "proxy", "zttestproxy.py")]
+ANDROID_COPY = os.path.join(ROOT, "android", "app", "src", "main", "python", "zttestproxy.py")
 
 KEY_A = bytes.fromhex("00112233445566778899aabbccddeeff")
 KEY_B = bytes.fromhex("ffeeddccbbaa99887766554433221100")
@@ -38,7 +37,7 @@ def load_copy(src_path, beside_key=KEY_A, env_key=None, home_key=None):
     home = os.path.join(tmp, "home")
     os.makedirs(mod_dir)
     os.makedirs(home)
-    dst = os.path.join(mod_dir, "zttestproxyv10.py")
+    dst = os.path.join(mod_dir, "zttestproxy.py")
     shutil.copy(src_path, dst)
     if beside_key is not None:
         with open(os.path.join(mod_dir, "game_key.txt"), "w") as fh:
@@ -911,9 +910,9 @@ class TestRelayHandlers(unittest.TestCase):
 
 
 class TestCrossCopy(unittest.TestCase):
-    def test_pc_copies_identical(self):
-        with open(PC_COPIES[0], "rb") as a, open(PC_COPIES[1], "rb") as b:
-            self.assertEqual(a.read(), b.read())
+    def test_single_pc_copy(self):
+        self.assertTrue(os.path.exists(PC_COPIES[0]))
+        self.assertFalse(os.path.exists(os.path.join(ROOT, "desktop", "proxy", "zttestproxy.py")))
 
     def test_all_copies_expose_core_api(self):
         names = ["load_game_key", "bcast_of", "ip4", "address_pairs", "rewrite", "rewrite_bits",
@@ -1071,7 +1070,7 @@ class TestMainEnv(unittest.TestCase):
             "SWITCH_IP": "192.168.4.30", "HOST_ZT": "10.147.17.99",
             "DELAY_S2H_MS": "25", "DELAY_H2S_MS": "0",
             "EVENTS": "my_events.jsonl",
-        }, ["zttestproxyv10.py"])
+        }, ["zttestproxy.py"])
         a = cap["args"]
         self.assertEqual(a.switch_ip, "192.168.1.50")
         self.assertEqual(a.host_ip, "10.147.17.50")
@@ -1086,7 +1085,7 @@ class TestMainEnv(unittest.TestCase):
         self.assertFalse(cap["no_bits"])
 
     def test_env_defaults_and_no_bit_flag(self):
-        m, cap = self.run_main({}, ["zttestproxyv10.py", "--no-bit-rewrite"])
+        m, cap = self.run_main({}, ["zttestproxy.py", "--no-bit-rewrite"])
         a = cap["args"]
         self.assertIsNone(a.switch_ip)
         self.assertIsNone(a.host_ip)

@@ -1696,7 +1696,7 @@ public class MainActivity extends Activity {
         } else {
             try {
                 if (Python.isStarted()) {
-                    Python.getInstance().getModule("zttestproxyv10").callAttr("request_stop");
+                    Python.getInstance().getModule("zttestproxy").callAttr("request_stop");
                 }
             } catch (Exception e) {
             }
