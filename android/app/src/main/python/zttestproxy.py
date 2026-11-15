@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v14
+# GRID0 proxy v15
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -540,6 +540,7 @@ class Relay:
         self.last_sweep = 0.0
         self.key = None
         self.key_mk8d = None
+        self.mk8d_state = False
         self.game = None
         self.last_sw_game = "splatoon3"
         self.tables = None
@@ -629,6 +630,15 @@ class Relay:
         else:
             print(f"paired: Switch {self.switch[0]} with peer {peer[0]}", flush=True)
 
+    def send_extra_ports(self, sock, data, dest_ip, skip_port):
+        for p in GAME_PORTS:
+            if p == skip_port:
+                continue
+            try:
+                sock.sendto(data, (dest_ip, p))
+            except OSError:
+                pass
+
     def send(self, sock, data, dest, direction, **meta):
         due = time.time() + self.delay.get(direction, 0)
         if due <= time.time():
@@ -703,6 +713,7 @@ class Relay:
         if game == "mk8d":
             if k != self.key_mk8d:
                 self.key_mk8d = k
+                self.mk8d_state = False
                 print("session started", flush=True)
         elif k != self.key:
             self.key = k
@@ -976,6 +987,8 @@ class Relay:
                 if not pknown:
                     self.send(sock, data, bdest, direction, label="plain")
                 self.send(sock, data, udest, direction, label="plain")
+                if not self.mk8d_state:
+                    self.send_extra_ports(sock, data, udest[0], udest[1])
                 return
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
             return
@@ -997,6 +1010,10 @@ class Relay:
             if not pknown:
                 self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
             self.send(sock, out, udest, direction, label=label, nonce=nonce.hex(), changed=changed)
+            if not self.mk8d_state:
+                self.send_extra_ports(sock, out, udest[0], udest[1])
+            if label == "01004600":
+                self.mk8d_state = True
         else:
             self.send(sock, out, dest, direction, label=label, nonce=nonce.hex(), changed=changed)
 
@@ -1108,7 +1125,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v14", flush=True)
+    print("GRID0 proxy v15", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

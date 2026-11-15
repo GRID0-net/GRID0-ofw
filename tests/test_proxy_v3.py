@@ -150,6 +150,7 @@ def make_relay(m):
     r.last_sweep = 0.0
     r.key = None
     r.key_mk8d = None
+    r.mk8d_state = False
     r.game = None
     r.tables = None
     r.ip_pairs = None
@@ -911,6 +912,57 @@ class TestRelayHandlers(unittest.TestCase):
         self.assertEqual(len(r.g_h.sent), 1)
 
 
+class TestMk8dPortDelivery(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        self.r = make_relay(self.m)
+        r = self.r
+        r.game = "mk8d"
+        r.host_side = "h"
+        r.host = (HOST, 49152)
+        r.switch = (SWITCH, 49152)
+        r.key_mk8d = bytes(range(48, 64))
+        r.build_tables()
+        self.counter = 0
+
+    def pkt(self, src_ip, body):
+        m = self.m
+        self.counter += 1
+        hdr = bytearray(36)
+        hdr[0:4] = m.MAGIC
+        hdr[4] = 2
+        hdr[12:20] = bytes([self.counter]) * 8
+        return m.seal_game_mk8d(self.r.key_mk8d, m.ip4(src_ip), bytes(hdr), body)
+
+    def test_setup_packets_go_to_all_ports(self):
+        m, r = self.m, self.r
+        body = b"\x01\x00\x08\x00" + b"\x00" * 28
+        r.on_game(self.pkt(SWITCH, body), (SWITCH, 49153), "s2h")
+        dests = {d for _, d in r.g_h.sent}
+        for p in m.GAME_PORTS:
+            self.assertIn((HOST, p), dests)
+        r.on_game(self.pkt(HOST, body), (HOST, 49154), "h2s")
+        dests = {d for _, d in r.g_sw.sent}
+        for p in m.GAME_PORTS:
+            self.assertIn((SWITCH, p), dests)
+
+    def test_state_phase_returns_to_single_port(self):
+        m, r = self.m, self.r
+        body = b"\x01\x00\x08\x00" + b"\x00" * 28
+        r.on_game(self.pkt(HOST, body), (HOST, 49154), "h2s")
+        state = b"\x01\x00\x46\x00" + b"\x00" * 100
+        r.on_game(self.pkt(SWITCH, state), (SWITCH, 49153), "s2h")
+        self.assertTrue(r.mk8d_state)
+        before = len(r.g_h.sent)
+        r.on_game(self.pkt(SWITCH, body), (SWITCH, 49153), "s2h")
+        new = r.g_h.sent[before:]
+        self.assertEqual(len(new), 1)
+        self.assertEqual(new[0][1], (HOST, 49154))
+
+
 class TestCrossCopy(unittest.TestCase):
     def test_single_pc_copy(self):
         self.assertTrue(os.path.exists(PC_COPIES[0]))
@@ -1644,33 +1696,36 @@ class TestMK8DRelay(unittest.TestCase):
         body = m.ip4(SWITCH) + b"\x00" * 28
         pkt = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr), body)
         r.on_game(pkt, (SWITCH, 49153), "s2h")
-        self.assertEqual(len(r.g_h.sent), 2)
+        self.assertEqual(len(r.g_h.sent), 5)
         dests = [d for _, d in r.g_h.sent]
-        self.assertEqual(dests, [("10.147.17.255", 49152), (HOST, 49152)])
+        self.assertEqual(dests, [("10.147.17.255", 49152), (HOST, 49152),
+                                 (HOST, 49153), (HOST, 49154), (HOST, 49155)])
         out = r.g_h.sent[0][0]
         opened = m.open_game_mk8d(key, r.h_me, out)
         self.assertIsNotNone(opened)
         self.assertEqual(opened[:4], r.h_me)
         r.on_game(pkt, (SWITCH, 49153), "s2h")
-        self.assertEqual(len(r.g_h.sent), 2)
+        self.assertEqual(len(r.g_h.sent), 5)
         plain = m.MAGIC + b"\x01" + b"\x00" * 40
         r.on_game(plain, (SWITCH, 49153), "s2h")
-        self.assertEqual(len(r.g_h.sent), 4)
-        self.assertEqual(r.g_h.sent[-2][0], plain)
-        self.assertEqual(r.g_h.sent[-2][1], ("10.147.17.255", 49152))
-        self.assertEqual(r.g_h.sent[-1][0], plain)
-        self.assertEqual(r.g_h.sent[-1][1], (HOST, 49152))
+        self.assertEqual(len(r.g_h.sent), 10)
+        tail = r.g_h.sent[-5:]
+        self.assertTrue(all(d == plain for d, _ in tail))
+        self.assertEqual([dest for _, dest in tail],
+                         [("10.147.17.255", 49152), (HOST, 49152), (HOST, 49153),
+                          (HOST, 49154), (HOST, 49155)])
         self.assertEqual(r.sw_game_port, 49153)
         hpkt = m.seal_game_mk8d(key, m.ip4(HOST), bytes(hdr), m.ip4(HOST) + b"\x00" * 28)
         r.on_game(hpkt, (HOST, 49154), "h2s")
         self.assertEqual(r.h_game_port, 49154)
         hdests = [d for _, d in r.g_sw.sent]
-        self.assertEqual(hdests, [(SWITCH, 49153)])
+        self.assertEqual(hdests, [(SWITCH, 49153), (SWITCH, 49152),
+                                  (SWITCH, 49154), (SWITCH, 49155)])
         hdr2 = bytearray(hdr)
         hdr2[12:20] = b"\x78" * 8
         pkt2 = m.seal_game_mk8d(key, m.ip4(SWITCH), bytes(hdr2), body)
         r.on_game(pkt2, (SWITCH, 49153), "s2h")
-        self.assertEqual(r.g_h.sent[-1][1], (HOST, 49154))
+        self.assertIn((HOST, 49154), [d for _, d in r.g_h.sent[-4:]])
         body3 = b"\x00" * 8 + m.ip4(SWITCH)[2:4] + (49153).to_bytes(2, "big") + b"\x00" * 20
         hdr3 = bytearray(hdr)
         hdr3[12:20] = b"\x79" * 8
