@@ -277,6 +277,29 @@ Window::Window(bool preview) : previewMode(preview) {
     auto *reportButtons = new QHBoxLayout; auto *exportButton = new QPushButton("Export report…"); auto *openFolder = new QPushButton("Open reports folder");
     reportButtons->addWidget(exportButton); reportButtons->addWidget(openFolder); reportButtons->addStretch(); av->addLayout(reportButtons);
     settingsTabs->addTab(advanced, "Advanced");
+
+    auto *infoPage = new QWidget; auto *infoLayout = new QVBoxLayout(infoPage); infoLayout->setContentsMargins(18, 24, 18, 16); infoLayout->setSpacing(18);
+    infoLayout->addWidget(text("The same network info the Android app shows on its MORE screen."));
+    auto *infoForm = new QFormLayout; infoForm->setVerticalSpacing(16);
+    auto infoRow = [infoForm](const QString &label) {
+        auto *value = new QLabel("-");
+        value->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        infoForm->addRow(label, value);
+        return value;
+    };
+    infoZtInstalled = infoRow("ZeroTier Installed");
+    infoZtIp = infoRow("ZeroTier IP");
+    infoPcIp = infoRow("PC IP");
+    infoSwitchIp = infoRow("Switch IP");
+    infoIsolation = infoRow("Client Isolation");
+    infoWifiStatus = infoRow("Wi-Fi Status");
+    infoZtStatus = infoRow("ZeroTier Status");
+    infoGrid0Status = infoRow("GRID0 Status");
+    infoNetworkId = infoRow("Network ID");
+    infoLayout->addLayout(infoForm);
+    auto *infoRefresh = new QPushButton("Refresh"); infoLayout->addWidget(infoRefresh, 0, Qt::AlignLeft);
+    connect(infoRefresh, &QPushButton::clicked, this, [this] { refreshAdapters(); refreshInfo(); });
+    infoLayout->addStretch(); settingsTabs->addTab(infoPage, "Info");
     gateway->setText(preferences.gateway); executable->setText(preferences.relayPath == bundled ? QString() : preferences.relayPath);
     diagnostics->setChecked(preferences.diagnostics); capture->setChecked(preferences.capture); discovery->setChecked(preferences.discover);
     connect(theme, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int i) { preferences.theme = i; updateHeaderTheme(); save(); });
@@ -635,6 +658,28 @@ void Window::save() {
 void Window::refreshZtUsers() {
     const int n = zeroTierPeerCount();
     ztUsers->setText(n >= 0 ? "on GRID0 ZT: " + QString::number(n) : "on GRID0 ZT: -");
+    refreshInfo();
+}
+
+void Window::refreshInfo() {
+    if (!infoZtIp) return;
+    const auto ztIps = getZeroTierNetworkIPs();
+    Adapter localAdapter, overlayAdapter;
+    bool anyOverlayUp = false;
+    for (const auto &a : adapters) {
+        if (a.name == preferences.localInterface) localAdapter = a;
+        if (a.name == preferences.overlayInterface) overlayAdapter = a;
+        if (a.overlay && a.up) anyOverlayUp = true;
+    }
+    infoZtInstalled->setText(dependencies.status().zeroTier ? "Yes" : "No");
+    infoZtIp->setText(!ztIps.isEmpty() ? ztIps.first() : (overlayAdapter.ip.isEmpty() ? "Not connected" : overlayAdapter.ip));
+    infoPcIp->setText(localAdapter.ip.isEmpty() ? "Not connected" : localAdapter.ip);
+    infoSwitchIp->setText("Not detected");
+    infoIsolation->setText("Not available on PC");
+    infoWifiStatus->setText(localAdapter.up ? "Connected" : "Not connected");
+    infoZtStatus->setText(anyOverlayUp ? "Connected" : "Not connected");
+    infoGrid0Status->setText(!ztIps.isEmpty() ? "Connected" : "Not connected");
+    infoNetworkId->setText("8bd5124fd68185ec");
 }
 void Window::updateState() {
     auto a = preferences.overlay(adapters);
@@ -687,6 +732,7 @@ void Window::updateState() {
     stop->setText(proxy.busy() ? "Stop proxy" : (relay.state() == RelayController::Authorizing ? "Cancel" : "Stop relay"));
     configuration->setEnabled(!busy);
     for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode, proxyMode, dnsUsFirst, dnsFrFirst}) w->setEnabled(!busy);
+    refreshInfo();
 }
 void Window::checkDependencies() {
     if (!requirements || !setupRequirements) return;

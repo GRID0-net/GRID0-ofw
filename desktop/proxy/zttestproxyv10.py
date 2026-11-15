@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v9
+# GRID0 proxy v10
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -701,6 +701,8 @@ class Relay:
         try:
             out, chal = reseal_request(self.key_for(game), data, self.sw_bc, self.h_bc, CHAL_OFF[game])
         except Exception as e:
+            if self.cap:
+                self.cap.save("disc", data, src[0], socket.inet_ntoa(self.sw_bc), src[1], self.port_for(game))
             self.disc_note(f"note: a browse request from {src} could not be opened")
             return
         self.note_game(game)
@@ -761,6 +763,8 @@ class Relay:
             if out is not None:
                 break
         if out is None:
+            if self.cap:
+                self.cap.save("disc", data, src[0], self.switch[0], src[1], src[1])
             self.disc_note(f"note: a browse reply from {src} matched no recent request")
             return
         self.note_game(game)
@@ -785,6 +789,8 @@ class Relay:
         try:
             out, chal = reseal_request(self.key_for(game), data, self.h_bc, self.sw_bc, CHAL_OFF[game])
         except Exception as e:
+            if self.cap:
+                self.cap.save("disc", data, src[0], socket.inet_ntoa(self.h_bc), src[1], self.port_for(game))
             self.disc_note(f"note: a browse request from peer {src} could not be opened")
             return
         self.note_game(game)
@@ -818,6 +824,8 @@ class Relay:
             if out is not None:
                 break
         if out is None:
+            if self.cap:
+                self.cap.save("disc", data, src[0], dest_peer[0], src[1], src[1])
             self.disc_note(f"note: a Switch reply from {src} matched no recent peer request")
             return
         self.note_game(game)

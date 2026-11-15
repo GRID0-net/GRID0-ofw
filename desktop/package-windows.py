@@ -68,7 +68,7 @@ def main():
     shutil.copytree(root / 'desktop/licenses', app / 'licenses')
     shutil.copy2(root / 'desktop/THIRD-PARTY.md', app / 'THIRD-PARTY.md')
     proxy_dir = app / 'proxy'; proxy_dir.mkdir()
-    shutil.copy2(root / 'desktop/proxy/zttestproxyv9.py', proxy_dir / 'zttestproxyv9.py')
+    shutil.copy2(root / 'desktop/proxy/zttestproxyv10.py', proxy_dir / 'zttestproxyv10.py')
     source = app / 'source'; source.mkdir()
     shutil.copy2(args.qt_source, source / args.qt_source.name)
     # Explicit source allowlist excludes session logs, PCAPs, build caches, and

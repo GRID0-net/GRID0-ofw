@@ -31,6 +31,7 @@ private:
     void setupDependencies();
     void updateHeaderTheme();
     void refreshZtUsers();
+    void refreshInfo();
     Preferences preferences;
     QList<Adapter> adapters;
     RelayController relay;
@@ -58,6 +59,9 @@ private:
     QLabel *hotspotHint = nullptr;
     QPushButton *hotspotSetup = nullptr;
     QLabel *requirements = nullptr;
+    QLabel *infoZtInstalled = nullptr, *infoZtIp = nullptr, *infoPcIp = nullptr, *infoSwitchIp = nullptr,
+           *infoIsolation = nullptr, *infoWifiStatus = nullptr, *infoZtStatus = nullptr,
+           *infoGrid0Status = nullptr, *infoNetworkId = nullptr;
     QPushButton *start, *stop, *refresh, *setupRequirements = nullptr;
     QPlainTextEdit *log;
     QWidget *configuration;
