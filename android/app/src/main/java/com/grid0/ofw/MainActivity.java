@@ -879,7 +879,7 @@ public class MainActivity extends Activity {
         ztButton = new ZtButtonView(this);
         float ztDensity = getResources().getDisplayMetrics().density;
         FrameLayout.LayoutParams ztParams = new FrameLayout.LayoutParams(
-                (int) (64 * ztDensity), (int) (64 * ztDensity));
+                (int) (88 * ztDensity), (int) (88 * ztDensity));
         ztParams.gravity = Gravity.BOTTOM | Gravity.END;
         ztParams.bottomMargin = (int) (20 * ztDensity);
         ztParams.rightMargin = (int) (20 * ztDensity);

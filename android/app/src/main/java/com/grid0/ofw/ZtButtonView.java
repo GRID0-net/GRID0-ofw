@@ -2,34 +2,34 @@ package com.grid0.ofw;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.Typeface;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
 
 public class ZtButtonView extends View {
-    private static final int ORANGE = 0xFFFFB515;
+    private static final int ORANGE = 0xFFFFB25B;
+    private static final int RING_COUNT = 6;
+    private static final float CYCLE_MS = 4200f;
 
-    private final Paint ringPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint discPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF oval = new RectF();
+    private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint logoPaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Bitmap logo;
+    private final RectF logoRect = new RectF();
     private ValueAnimator animator;
-    private float angle = 0f;
+    private float phase = 0f;
+    private long startMs = 0L;
 
     public ZtButtonView(Context context) {
         super(context);
         setClickable(true);
         setContentDescription("Open ZeroTier");
-        ringPaint.setStyle(Paint.Style.STROKE);
-        ringPaint.setColor(ORANGE);
-        ringPaint.setStrokeCap(Paint.Cap.ROUND);
-        discPaint.setStyle(Paint.Style.FILL);
-        textPaint.setColor(ORANGE);
-        textPaint.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-        textPaint.setTextAlign(Paint.Align.CENTER);
+        dotPaint.setStyle(Paint.Style.FILL);
+        dotPaint.setColor(ORANGE);
+        logo = BitmapFactory.decodeResource(getResources(), R.drawable.zt_logo);
     }
 
     @Override
@@ -58,14 +58,15 @@ public class ZtButtonView extends View {
         if (animator != null) {
             return;
         }
-        animator = ValueAnimator.ofFloat(0f, 360f);
-        animator.setDuration(7000);
+        startMs = System.currentTimeMillis();
+        animator = ValueAnimator.ofFloat(0f, 1f);
+        animator.setDuration((long) CYCLE_MS);
         animator.setRepeatCount(ValueAnimator.INFINITE);
         animator.setInterpolator(new LinearInterpolator());
         animator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
-                angle = (Float) animation.getAnimatedValue();
+                phase = (Float) animation.getAnimatedValue();
                 invalidate();
             }
         });
@@ -82,29 +83,41 @@ public class ZtButtonView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        float w = getWidth();
-        float h = getHeight();
-        float cx = w / 2f;
-        float cy = h / 2f;
-        float maxR = Math.min(w, h) / 2f;
+        float density = getResources().getDisplayMetrics().density;
+        float cx = getWidth() / 2f;
+        float cy = getHeight() / 2f;
 
-        discPaint.setColor(0xFF1B1B1B);
-        canvas.drawCircle(cx, cy, maxR * 0.62f, discPaint);
-        ringPaint.setStrokeWidth(maxR * 0.045f);
-        canvas.drawCircle(cx, cy, maxR * 0.62f, ringPaint);
+        float logoHalf = 23f * density;
+        logoRect.set(cx - logoHalf, cy - logoHalf, cx + logoHalf, cy + logoHalf);
+        canvas.drawBitmap(logo, null, logoRect, logoPaint);
 
-        textPaint.setTextSize(maxR * 0.52f);
-        float ty = cy - (textPaint.descent() + textPaint.ascent()) / 2f;
-        canvas.drawText("ZT", cx, ty, textPaint);
+        float rOut = 43f * density;
+        float rIn = 25.5f * density;
+        float spin = (System.currentTimeMillis() - startMs) / 1000f * 10f;
+        for (int i = 0; i < RING_COUNT; i++) {
+            float p = (phase + i / (float) RING_COUNT) % 1f;
+            float r = rOut + (rIn - rOut) * p;
+            float sqDp = 3.4f - 2.9f * p;
+            float alpha = 0.95f * Math.min(p / 0.1f, 1f) * Math.min((1f - p) / 0.25f, 1f);
+            if (alpha <= 0f) {
+                continue;
+            }
+            dotPaint.setAlpha((int) (alpha * 255));
+            drawDotRing(canvas, cx, cy, r, sqDp * density, spin + i * 20f, p);
+        }
+    }
 
-        float[] radii = {0.76f, 0.87f, 0.98f};
-        float[] sweeps = {250f, 200f, 290f};
-        float[] speeds = {1f, -0.7f, 0.5f};
-        for (int i = 0; i < 3; i++) {
-            float r = maxR * radii[i];
-            oval.set(cx - r, cy - r, cx + r, cy + r);
-            ringPaint.setStrokeWidth(maxR * 0.05f);
-            canvas.drawArc(oval, angle * speeds[i] + i * 120f, sweeps[i], false, ringPaint);
+    private void drawDotRing(Canvas canvas, float cx, float cy, float r, float sq, float spinDeg, float wavePhase) {
+        float density = getResources().getDisplayMetrics().density;
+        int n = Math.max(18, (int) Math.round((2 * Math.PI * (r / density)) / 6f));
+        double spin = Math.toRadians(spinDeg);
+        for (int j = 0; j < n; j++) {
+            double a = (j / (double) n) * 2 * Math.PI - Math.PI / 2 + spin;
+            float wobble = 1f + 0.03f * (float) Math.sin(2 * Math.PI * (j / (float) n * 4f + wavePhase));
+            float rr = r * wobble;
+            float x = cx + rr * (float) Math.cos(a);
+            float y = cy + rr * (float) Math.sin(a);
+            canvas.drawCircle(x, y, sq / 2f, dotPaint);
         }
     }
 }
