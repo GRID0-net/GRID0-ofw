@@ -15,7 +15,7 @@ private slots:
         window.show();
         window.resize(QSize(640, 720).expandedTo(window.sizeHint()));
         QTest::qWait(50);
-        QVERIFY(window.windowTitle().contains(QStringLiteral("3.0.0")));
+        QVERIFY(window.windowTitle().contains(QStringLiteral(LANPLAY_VERSION).section('-', -1)));
         auto *manual = window.findChild<QRadioButton *>("manualMode");
         auto *automatic = window.findChild<QRadioButton *>("autoMode");
         auto *proxy = window.findChild<QRadioButton *>("proxyMode");
