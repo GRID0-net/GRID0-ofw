@@ -1014,7 +1014,7 @@ public class MainActivity extends Activity {
         try {
             File zip = new File(getCacheDir(), "capture.zip");
             java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(new java.io.FileOutputStream(zip));
-            String[] names = {"proxy_capture.bin", "proxy_capture.txt", "proxy_events.jsonl"};
+            String[] names = {"proxy_capture.bin", "proxy_capture.txt", "proxy_events.jsonl", "proxy_log.txt"};
             boolean any = false;
             for (String n : names) {
                 File f = new File(getFilesDir(), n);

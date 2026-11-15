@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v12
+# GRID0 proxy v14
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -611,6 +611,12 @@ class Relay:
     def note(self, **kw):
         kw["t"] = round(time.time() - self.t0, 6)
         self.log.append(kw)
+        evf = getattr(self, "_evf", None)
+        if evf is not None:
+            try:
+                evf.write(json.dumps(kw) + "\n")
+            except Exception:
+                pass
 
     def session_peer(self):
         if self.host_side == "sw":
@@ -1021,6 +1027,10 @@ class Relay:
         self.on_game(data, src, "s2h" if leg == "sw" else "h2s")
 
     def run(self, out_path):
+        try:
+            self._evf = open(out_path, "w", buffering=1)
+        except Exception:
+            self._evf = None
         self.note(ev="start", sw=self.sw_ip, h=self.h_ip,
                   host=(self.host[0] if self.host else None))
         socks = {self.d_sw: self.on_disc, self.d_h: self.on_disc,
@@ -1064,9 +1074,16 @@ class Relay:
                 sw_role = "host" if self.host_side == "sw" else "switch"
                 h_role = "host" if self.host_side == "h" else "peer"
                 print(f"forwarded: {sw_role} to {h_role} {n['s2h']}, {h_role} to {sw_role} {n['h2s']}", flush=True)
-        with open(out_path, "w") as fh:
-            for e in self.log:
-                fh.write(json.dumps(e) + "\n")
+        if getattr(self, "_evf", None) is not None:
+            try:
+                self._evf.close()
+            except Exception:
+                pass
+            self._evf = None
+        else:
+            with open(out_path, "w") as fh:
+                for e in self.log:
+                    fh.write(json.dumps(e) + "\n")
         if self.cap:
             self.cap.close()
         print(f"done: {len(self.log)} events saved to {out_path}", flush=True)
@@ -1090,7 +1107,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v12", flush=True)
+    print("GRID0 proxy v14", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
