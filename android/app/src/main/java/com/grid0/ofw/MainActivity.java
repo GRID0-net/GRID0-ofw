@@ -975,7 +975,8 @@ public class MainActivity extends Activity {
             return;
         }
         boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
-        ztButton.setVisibility(tutorial ? View.GONE : View.VISIBLE);
+        boolean show = !tutorial && currentTab == 0;
+        ztButton.setVisibility(show ? View.VISIBLE : View.GONE);
         ztButton.setConnected(isGrid0Connected());
     }
 
@@ -1036,6 +1037,7 @@ public class MainActivity extends Activity {
                 styleTab(tabMore, true);
             }
         }
+        updateZtButton();
     }
 
     private void shareCapture() {
