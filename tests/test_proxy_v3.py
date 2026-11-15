@@ -148,6 +148,9 @@ def make_relay(m):
     r.last_sw_req = None
     r.last_sw_game = "splatoon3"
     r.last_sweep = 0.0
+    r.scan_chals = []
+    r.scan_counter = 0
+    r.last_scan = 0.0
     r.key = None
     r.key_mk8d = None
     r.mk8d_state = False
@@ -1792,6 +1795,28 @@ class TestSplatoonHostName(unittest.TestCase):
             mod = load_copy(path)
             self.assertIsNone(mod.splatoon_host_name(bytes(620)))
             self.assertIsNone(mod.splatoon_host_name(b"\x01\x02"))
+
+
+class TestScanRequest(unittest.TestCase):
+    def test_scan_request_opens_like_a_host(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            bc = mod.bcast_of("10.147.17.190", 24)
+            req, chal = mod.make_scan_request(KEY_A, bc, 1)
+            self.assertEqual(len(req), 325)
+            self.assertEqual(req[0], 0)
+            self.assertEqual(req[:27], mod.SCAN_HEADER)
+            out, back = mod.reseal_request(KEY_A, req, bc, bc)
+            self.assertEqual(back, chal)
+            self.assertEqual(len(out), 325)
+
+    def test_scan_challenges_differ(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            bc = mod.bcast_of("10.147.17.190", 24)
+            _, chal1 = mod.make_scan_request(KEY_A, bc, 1)
+            _, chal2 = mod.make_scan_request(KEY_A, bc, 2)
+            self.assertNotEqual(chal1, chal2)
 
 
 if __name__ == "__main__":

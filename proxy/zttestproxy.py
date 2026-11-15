@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v16
+# GRID0 proxy v17
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -430,6 +430,14 @@ def splatoon_host_name(rep):
         pass
     return None
 
+SCAN_HEADER = bytes.fromhex("00000000160000000000000000000a000400060100c2500fc20000")
+
+def make_scan_request(game_key, bc, counter):
+    chal = os.urandom(16)
+    k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter.to_bytes(8, "big")).encrypt_and_digest(os.urandom(256))
+    return SCAN_HEADER + b"\x03\x01" + counter.to_bytes(8, "big") + chal + tag + ct, chal
+
 def mk8d_param_off(rep):
     size = int.from_bytes(rep[1:5], "big")
     if 32 <= size <= len(rep) - 5:
@@ -593,6 +601,9 @@ class Relay:
         self.host_side = None
         self.last_sw_req = None
         self.last_sweep = 0.0
+        self.scan_chals = []
+        self.scan_counter = 0
+        self.last_scan = 0.0
         self.key = None
         self.key_mk8d = None
         self.mk8d_state = False
@@ -821,6 +832,15 @@ class Relay:
                 if ip != self.h_ip and ip != socket.inet_ntoa(self.h_bc):
                     self.send(sock, out, (ip, port), "s2h", kind="browse_req_uni", probe=1)
 
+    def scan_poll(self):
+        self.scan_counter += 1
+        req, chal = make_scan_request(self.key_for("splatoon3"), self.h_bc, self.scan_counter)
+        self.scan_chals.append(chal)
+        del self.scan_chals[:-4]
+        self.send(self.sock_for("h", "splatoon3"), req,
+                  (socket.inet_ntoa(self.h_bc), self.port_for("splatoon3")),
+                  "s2h", kind="browse_req_scan", probe=1)
+
     def on_disc_host(self, data, src):
         game = detect_game(data)
         if game is not None:
@@ -830,6 +850,18 @@ class Relay:
             if self.last_sw_req:
                 g = self.last_sw_game
                 self.send(self.sock_for("h", g), self.last_sw_req, (src[0], self.port_for(g)), "s2h", kind="browse_req_uni")
+        if len(data) >= 64 and data[0] == 1 and self.scan_chals:
+            for chal in self.scan_chals:
+                try:
+                    reseal_reply(self.key_for("splatoon3"), data, chal, self.h_bc, self.h_bc,
+                                 ip4(src[0]), ip4(src[0]))
+                except Exception:
+                    continue
+                self.rooms[("splatoon3", src[0])] = time.time()
+                rname = splatoon_host_name(data)
+                if rname:
+                    self.note(ev="room", game="splatoon3", host=src[0], name=rname, ts=int(time.time()))
+                return
         if len(data) < 64 or data[0] != 1 or not self.switch:
             return
         out, game = None, None
@@ -1110,6 +1142,12 @@ class Relay:
             while self.queue and self.queue[0][0] <= now:
                 _, _, sock, data, dest, direction, meta = heapq.heappop(self.queue)
                 self._tx(sock, data, dest, direction, meta)
+            if now - self.last_scan >= 15:
+                self.last_scan = now
+                try:
+                    self.scan_poll()
+                except Exception:
+                    pass
             if now - last_stat > 5:
                 last_stat = now
                 n = {k: sum(1 for e in self.log if e.get("ev") == "tx" and e.get("dir") == k and not e.get("probe")) for k in ("s2h", "h2s")}
@@ -1149,7 +1187,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v16", flush=True)
+    print("GRID0 proxy v17", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
