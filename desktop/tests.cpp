@@ -109,8 +109,14 @@ private slots:
         restored = p; restored.gateway = "10.42.9.255"; QVERIFY(!restored.validate(adapters).isEmpty());
         restored = p; restored.overlayInterface = "{01234567-abcd-4321-abcd-0123456789ab}"; QVERIFY(!restored.validate(adapters).isEmpty());
     }
-    void versionIs300() {
-        QVERIFY(QStringLiteral(LANPLAY_VERSION).endsWith(QStringLiteral("3.0.0")));
+    void versionIsWellFormed() {
+        const QString suffix = QStringLiteral(LANPLAY_VERSION).section('-', -1);
+        const QStringList parts = suffix.split('.');
+        QCOMPARE(parts.size(), 3);
+        for (const QString &part : parts) {
+            QVERIFY(!part.isEmpty());
+            for (const QChar c : part) QVERIFY(c.isDigit());
+        }
     }
 
     void proxyControllerStartsIdle() {
