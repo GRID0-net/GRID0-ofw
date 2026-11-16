@@ -267,7 +267,7 @@ final class Relay {
     var queueSeq = 0
     var eventsHandle: FileHandle? = nil
 
-    init(cfg: ProxyConfig) {
+    init?(cfg: ProxyConfig) {
         self.cfg = cfg
         gameKey = cfg.gameKey
         swIp = cfg.switchIp
@@ -290,19 +290,37 @@ final class Relay {
         }
         cfg.log("ready")
         let log = cfg.log
-        dSw = UDPSock(ip: "0.0.0.0", port: DISCOVERY_PORT, broadcast: true, log: log)!
-        dH = UDPSock(ip: hIp, port: DISCOVERY_PORT, broadcast: true, log: log)!
-        dSw2 = UDPSock(ip: "0.0.0.0", port: MK8D_PORT, broadcast: true, log: log)!
-        dH2 = UDPSock(ip: hIp, port: MK8D_PORT, broadcast: true, log: log)!
-        gSw = UDPSock(ip: swIp, port: GAME_PORT, broadcast: true, log: log)!
-        gH = UDPSock(ip: hIp, port: GAME_PORT, broadcast: true, log: log)!
-        gbSw = UDPSock(ip: ipString(swBc), port: GAME_PORT, broadcast: true, log: log)!
-        gbH = UDPSock(ip: ipString(hBc), port: GAME_PORT, broadcast: true, log: log)!
+        var opened: [UDPSock] = []
+        func open(_ ip: String, _ port: Int) -> UDPSock? {
+            guard let s = UDPSock(ip: ip, port: port, broadcast: true, log: log) else {
+                cfg.log("error: cannot open \(ip):\(port)")
+                return nil
+            }
+            opened.append(s)
+            return s
+        }
+        guard let a = open("0.0.0.0", DISCOVERY_PORT),
+              let b = open(hIp, DISCOVERY_PORT),
+              let c = open("0.0.0.0", MK8D_PORT),
+              let d = open(hIp, MK8D_PORT),
+              let e = open(swIp, GAME_PORT),
+              let f = open(hIp, GAME_PORT),
+              let g = open(ipString(swBc), GAME_PORT),
+              let h = open(ipString(hBc), GAME_PORT) else {
+            opened.forEach { $0.close() }
+            return nil
+        }
+        dSw = a; dH = b; dSw2 = c; dH2 = d; gSw = e; gH = f; gbSw = g; gbH = h
         for p in GAME_PORTS.dropFirst() {
-            gx.append((UDPSock(ip: swIp, port: p, broadcast: true, log: log)!, "sw"))
-            gx.append((UDPSock(ip: ipString(swBc), port: p, broadcast: true, log: log)!, "sw"))
-            gx.append((UDPSock(ip: hIp, port: p, broadcast: true, log: log)!, "h"))
-            gx.append((UDPSock(ip: ipString(hBc), port: p, broadcast: true, log: log)!, "h"))
+            guard let x1 = open(swIp, p), let x2 = open(ipString(swBc), p),
+                  let x3 = open(hIp, p), let x4 = open(ipString(hBc), p) else {
+                opened.forEach { $0.close() }
+                return nil
+            }
+            gx.append((x1, "sw"))
+            gx.append((x2, "sw"))
+            gx.append((x3, "h"))
+            gx.append((x4, "h"))
         }
         if let base = cfg.captureBase {
             cap = Capture(base: base)

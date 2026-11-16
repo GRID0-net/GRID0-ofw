@@ -155,13 +155,19 @@ final class AppModel: ObservableObject {
     }
 
     func startProxy() {
-        guard let phone = phoneIp, let zt = ztIp else { return }
-        guard let key = loadGameKey() else {
-            appendLogLine("game key not found: no game_key.txt bundled or in files")
+        guard let phone = phoneIp, let zt = ztIp else {
+            showToast("Connect to Wi-Fi and ZeroTier first")
             return
         }
+        try? logHandle?.close()
         FileManager.default.createFile(atPath: logPath, contents: nil)
         logHandle = FileHandle(forWritingAtPath: logPath)
+        guard let key = loadGameKey() else {
+            appendLogLine("game key not found: no game_key.txt bundled or in files")
+            showToast("Game key missing in this build")
+            refreshFromFiles()
+            return
+        }
         let logPathCopy = logPath
         let cfg = ProxyConfig(
             switchIp: phone,
@@ -176,7 +182,12 @@ final class AppModel: ObservableObject {
                 self?.appendLogLine(line)
                 _ = logPathCopy
             })
-        let relay = Relay(cfg: cfg)
+        guard let relay = Relay(cfg: cfg) else {
+            appendLogLine("could not open the proxy sockets (is Local Network access allowed?)")
+            showToast("Could not start the proxy")
+            refreshFromFiles()
+            return
+        }
         self.relay = relay
         let thread = Thread {
             relay.run()
@@ -246,7 +257,18 @@ final class AppModel: ObservableObject {
     }
 
     private func parseEvents() {
-        guard let text = try? String(contentsOfFile: eventsPath, encoding: .utf8) else { return }
+        guard let fh = FileHandle(forReadingAtPath: eventsPath) else { return }
+        defer { try? fh.close() }
+        // Only the tail matters (rooms expire after 90s); the file grows forever.
+        let size = (try? fh.seekToEnd()) ?? 0
+        let window: UInt64 = 512 * 1024
+        let start = size > window ? size - window : 0
+        try? fh.seek(toOffset: start)
+        guard let raw = try? fh.readToEnd(),
+              var text = String(data: raw, encoding: .utf8) else { return }
+        if start > 0, let nl = text.firstIndex(of: "\n") {
+            text = String(text[text.index(after: nl)...])
+        }
         var latest: [String: RoomEntry] = [:]
         var lastSwitch: String? = nil
         let cutoff = Date().timeIntervalSince1970 - 90
