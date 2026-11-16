@@ -151,6 +151,7 @@ def make_relay(m):
     r.scan_chals = []
     r.scan_counter = 0
     r.last_scan = 0.0
+    r.stash_req = None
     r.key = None
     r.key_mk8d = None
     r.mk8d_state = False
@@ -1817,6 +1818,64 @@ class TestScanRequest(unittest.TestCase):
             _, chal1 = mod.make_scan_request(KEY_A, bc, 1)
             _, chal2 = mod.make_scan_request(KEY_A, bc, 2)
             self.assertNotEqual(chal1, chal2)
+
+    def test_scan_poll_sweeps_when_no_rooms_known(self):
+        import socket as _socket
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            r = make_relay(mod)
+            r.scan_poll()
+            dests = {dest for (_, dest) in r.d_h.sent}
+            self.assertIn((_socket.inet_ntoa(r.h_bc), 35000), dests)
+            self.assertIn((HOST, 35000), dests)
+            self.assertNotIn((ZT_PHONE, 35000), dests)
+            self.assertGreater(len(dests), 200)
+
+    def test_rekey_preserves_body_and_opens(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            bc = mod.bcast_of("10.147.17.190", 24)
+            pt = bytes(range(256))
+            req, chal, _ = make_browse_request(mod, KEY_A, bc, pt=pt)
+            out, chal2 = mod.rekey_request(KEY_A, req, bc, 7)
+            self.assertNotEqual(chal2, chal)
+            back, back_chal = mod.reseal_request(KEY_A, out, bc, bc)
+            self.assertEqual(back_chal, chal2)
+            from Crypto.Cipher import AES
+            cr = back[27:]
+            k = AES.new(KEY_A, AES.MODE_ECB).encrypt(back_chal)
+            body = AES.new(k, AES.MODE_GCM, nonce=bc + cr[2:10]).decrypt_and_verify(cr[42:], cr[26:42])
+            self.assertEqual(body, pt)
+
+    def test_scan_poll_uses_stash_body(self):
+        import socket as _socket
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            r = make_relay(mod)
+            pt = b"\x5a" * 256
+            stash, _, _ = make_browse_request(mod, KEY_A, r.h_bc, pt=pt)
+            r.stash_req = stash
+            r.scan_poll()
+            sent = [data for (data, dest) in r.d_h.sent if dest == (_socket.inet_ntoa(r.h_bc), 35000)]
+            self.assertEqual(len(sent), 1)
+            out, chal = mod.reseal_request(KEY_A, sent[0], r.h_bc, r.h_bc)
+            from Crypto.Cipher import AES
+            cr = out[27:]
+            k = AES.new(KEY_A, AES.MODE_ECB).encrypt(chal)
+            body = AES.new(k, AES.MODE_GCM, nonce=r.h_bc + cr[2:10]).decrypt_and_verify(cr[42:], cr[26:42])
+            self.assertEqual(body, pt)
+            self.assertIn(chal, r.scan_chals)
+
+    def test_scan_poll_unicasts_known_rooms_only(self):
+        import socket as _socket
+        import time as _time
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            r = make_relay(mod)
+            r.rooms = {("splatoon3", HOST): _time.time()}
+            r.scan_poll()
+            dests = {dest for (_, dest) in r.d_h.sent}
+            self.assertEqual(dests, {(_socket.inet_ntoa(r.h_bc), 35000), (HOST, 35000)})
 
 
 if __name__ == "__main__":

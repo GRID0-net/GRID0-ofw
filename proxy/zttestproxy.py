@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v17
+# GRID0 proxy v18
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -438,6 +438,17 @@ def make_scan_request(game_key, bc, counter):
     ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter.to_bytes(8, "big")).encrypt_and_digest(os.urandom(256))
     return SCAN_HEADER + b"\x03\x01" + counter.to_bytes(8, "big") + chal + tag + ct, chal
 
+def rekey_request(game_key, req, bc, counter):
+    if len(req) != 325 or req[0] != 0:
+        raise ValueError("not a browse request")
+    cr = req[27:]
+    k_old = AES.new(game_key, AES.MODE_ECB).encrypt(cr[10:26])
+    pt = AES.new(k_old, AES.MODE_GCM, nonce=bc + cr[2:10]).decrypt_and_verify(cr[42:], cr[26:42])
+    chal = os.urandom(16)
+    k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter.to_bytes(8, "big")).encrypt_and_digest(pt)
+    return req[:29] + counter.to_bytes(8, "big") + chal + tag + ct, chal
+
 def mk8d_param_off(rep):
     size = int.from_bytes(rep[1:5], "big")
     if 32 <= size <= len(rep) - 5:
@@ -604,6 +615,7 @@ class Relay:
         self.scan_chals = []
         self.scan_counter = 0
         self.last_scan = 0.0
+        self.stash_req = None
         self.key = None
         self.key_mk8d = None
         self.mk8d_state = False
@@ -814,6 +826,9 @@ class Relay:
         if self.cap:
             self.cap.save("disc", data, src[0], socket.inet_ntoa(self.sw_bc), src[1], port)
         self.last_sw_req = out
+        if game == "splatoon3":
+            self.stash_req = out
+            self.save_stash()
         self.last_sw_game = game
         self.send(sock, out, (socket.inet_ntoa(self.h_bc), port), "s2h", kind="browse_req")
         now = time.time()
@@ -832,14 +847,63 @@ class Relay:
                 if ip != self.h_ip and ip != socket.inet_ntoa(self.h_bc):
                     self.send(sock, out, (ip, port), "s2h", kind="browse_req_uni", probe=1)
 
+    def stash_path(self):
+        ev = os.environ.get("EVENTS")
+        if ev:
+            return os.path.join(os.path.dirname(ev), "last_browse_request.bin")
+        return None
+
+    def save_stash(self):
+        path = self.stash_path()
+        if not path or not self.stash_req:
+            return
+        try:
+            with open(path, "wb") as fh:
+                fh.write(self.stash_req)
+        except Exception:
+            pass
+
+    def load_stash(self):
+        path = self.stash_path()
+        if not path:
+            return
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            if len(data) == 325 and data[0] == 0:
+                self.stash_req = data
+        except Exception:
+            pass
+
     def scan_poll(self):
         self.scan_counter += 1
-        req, chal = make_scan_request(self.key_for("splatoon3"), self.h_bc, self.scan_counter)
+        req = None
+        if self.stash_req:
+            try:
+                req, chal = rekey_request(self.key_for("splatoon3"), self.stash_req, self.h_bc, self.scan_counter)
+            except Exception:
+                req = None
+        if req is None:
+            req, chal = make_scan_request(self.key_for("splatoon3"), self.h_bc, self.scan_counter)
         self.scan_chals.append(chal)
         del self.scan_chals[:-4]
-        self.send(self.sock_for("h", "splatoon3"), req,
-                  (socket.inet_ntoa(self.h_bc), self.port_for("splatoon3")),
-                  "s2h", kind="browse_req_scan", probe=1)
+        sock = self.sock_for("h", "splatoon3")
+        port = self.port_for("splatoon3")
+        self.send(sock, req, (socket.inet_ntoa(self.h_bc), port), "s2h", kind="browse_req_scan", probe=1)
+        now = time.time()
+        self.rooms = {k: t for k, t in self.rooms.items() if now - t < 60}
+        targets = {ip for (g, ip) in self.rooms if g == "splatoon3"}
+        if self.host:
+            targets.add(self.host[0])
+        for ip in sorted(targets):
+            self.send(sock, req, (ip, port), "s2h", kind="browse_req_scan_uni", probe=1)
+        if not targets:
+            count = min(self.h_net.num_addresses, 256)
+            base = int(self.h_net.network_address)
+            for i in range(count):
+                ip = str(ipaddress.IPv4Address(base + i))
+                if ip != self.h_ip and ip != socket.inet_ntoa(self.h_bc):
+                    self.send(sock, req, (ip, port), "s2h", kind="browse_req_scan_uni", probe=1)
 
     def on_disc_host(self, data, src):
         game = detect_game(data)
@@ -851,17 +915,24 @@ class Relay:
                 g = self.last_sw_game
                 self.send(self.sock_for("h", g), self.last_sw_req, (src[0], self.port_for(g)), "s2h", kind="browse_req_uni")
         if len(data) >= 64 and data[0] == 1 and self.scan_chals:
+            opened = False
             for chal in self.scan_chals:
                 try:
                     reseal_reply(self.key_for("splatoon3"), data, chal, self.h_bc, self.h_bc,
                                  ip4(src[0]), ip4(src[0]))
+                    opened = True
+                    break
                 except Exception:
                     continue
+            if opened:
                 self.rooms[("splatoon3", src[0])] = time.time()
                 rname = splatoon_host_name(data)
                 if rname:
                     self.note(ev="room", game="splatoon3", host=src[0], name=rname, ts=int(time.time()))
                 return
+            self.disc_note(f"note: a reply from {src} did not open with a scan challenge")
+            if self.cap:
+                self.cap.save("disc", data, src[0], self.h_ip, src[1], src[1])
         if len(data) < 64 or data[0] != 1 or not self.switch:
             return
         out, game = None, None
@@ -1101,6 +1172,7 @@ class Relay:
         self.on_game(data, src, "s2h" if leg == "sw" else "h2s")
 
     def run(self, out_path):
+        self.load_stash()
         try:
             self._evf = open(out_path, "w", buffering=1)
         except Exception:
@@ -1187,7 +1259,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v17", flush=True)
+    print("GRID0 proxy v18", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
