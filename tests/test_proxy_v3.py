@@ -152,6 +152,7 @@ def make_relay(m):
     r.scan_counter = 0
     r.last_scan = 0.0
     r.stash_req = None
+    r.room_noted = {}
     r.key = None
     r.key_mk8d = None
     r.mk8d_state = False
@@ -1684,6 +1685,24 @@ class TestMK8DRelay(unittest.TestCase):
         rooms = [n for n in self.r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
         self.assertEqual(len(rooms), 1)
         self.assertEqual(rooms[0]["host"], HOST)
+
+    def test_game_traffic_keeps_mk8d_room_fresh(self):
+        m, r = self.m, self.r
+        self.pair_mk8d()
+        r.log.clear()
+        hdr = bytearray(36)
+        hdr[0:4] = m.MAGIC
+        hdr[4] = 2
+        hdr[12:20] = b"\x77" * 8
+        body = m.ip4(SWITCH) + b"\x00" * 28
+        pkt = m.seal_game_mk8d(r.key_mk8d, m.ip4(SWITCH), bytes(hdr), body)
+        r.on_game(pkt, (SWITCH, 49153), "s2h")
+        rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
+        self.assertEqual(len(rooms), 1)
+        self.assertEqual(rooms[0]["host"], HOST)
+        r.on_game(pkt, (SWITCH, 49153), "s2h")
+        rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
+        self.assertEqual(len(rooms), 1)
 
     def test_reply_sets_mk8d_session_key_only(self):
         m, r = self.m, self.r

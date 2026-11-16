@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v19
+# GRID0 proxy v20
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -616,6 +616,7 @@ class Relay:
         self.scan_counter = 0
         self.last_scan = 0.0
         self.stash_req = None
+        self.room_noted = {}
         self.key = None
         self.key_mk8d = None
         self.mk8d_state = False
@@ -1056,10 +1057,22 @@ class Relay:
             self.cap.save("disc", data, src[0], dest_peer[0], src[1], port)
         self.send(self.sock_for("h", game), out, (dest_peer[0], port), "s2h", kind="browse_reply")
 
+    def touch_room(self, host):
+        now = time.time()
+        if now - self.room_noted.get(host, 0.0) < 30:
+            return
+        self.room_noted[host] = now
+        self.rooms[("mk8d", host)] = now
+        self.note(ev="room", game="mk8d", host=host, ts=int(now))
+
     def on_game(self, data, src, direction):
         if not self.tables or (not self.key and not self.key_mk8d):
             self.note(ev="drop_nokey", dir=direction, src=src[0], len=len(data))
             return
+        if self.game == "mk8d":
+            peer = self.host[0] if direction == "s2h" and self.host else (src[0] if direction == "h2s" else None)
+            if peer:
+                self.touch_room(peer)
         if self.game == "mk8d" and self.dup(data, src):
             return
         if direction == "s2h":
@@ -1261,7 +1274,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v19", flush=True)
+    print("GRID0 proxy v20", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
