@@ -1,0 +1,247 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = { };
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		33D300000000000000000011 /* GRID0App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000001 /* GRID0App.swift */; };
+		33D300000000000000000012 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000002 /* AppModel.swift */; };
+		33D300000000000000000013 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000003 /* ContentView.swift */; };
+		33D300000000000000000014 /* Crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000004 /* Crypto.swift */; };
+		33D300000000000000000015 /* Zstd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000005 /* Zstd.swift */; };
+		33D300000000000000000016 /* ProxyCore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000006 /* ProxyCore.swift */; };
+		33D300000000000000000017 /* Relay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000007 /* Relay.swift */; };
+		33D300000000000000000018 /* RelayHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000008 /* RelayHandlers.swift */; };
+		33D300000000000000000019 /* RelayGame.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33D300000000000000000009 /* RelayGame.swift */; };
+		33D30000000000000000001A /* zstd.c in Sources */ = {isa = PBXBuildFile; fileRef = 33D30000000000000000000A /* zstd.c */; };
+		33D30000000000000000001B /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 33D30000000000000000000C /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		33D300000000000000000001 /* GRID0App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GRID0App.swift; sourceTree = "<group>"; };
+		33D300000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		33D300000000000000000003 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		33D300000000000000000004 /* Crypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Crypto.swift; sourceTree = "<group>"; };
+		33D300000000000000000005 /* Zstd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Zstd.swift; sourceTree = "<group>"; };
+		33D300000000000000000006 /* ProxyCore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxyCore.swift; sourceTree = "<group>"; };
+		33D300000000000000000007 /* Relay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Relay.swift; sourceTree = "<group>"; };
+		33D300000000000000000008 /* RelayHandlers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayHandlers.swift; sourceTree = "<group>"; };
+		33D300000000000000000009 /* RelayGame.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RelayGame.swift; sourceTree = "<group>"; };
+		33D30000000000000000000A /* zstd.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = zstd.c; sourceTree = "<group>"; };
+		33D30000000000000000000B /* zstd.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = zstd.h; sourceTree = "<group>"; };
+		33D30000000000000000000C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		33D30000000000000000000D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		33D30000000000000000000E /* GRID0.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GRID0.entitlements; sourceTree = "<group>"; };
+		33D30000000000000000000F /* GRID0-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GRID0-Bridging-Header.h; sourceTree = "<group>"; };
+		33D300000000000000000010 /* GRID0.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GRID0.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		33D300000000000000000026 /* Frameworks */ = { isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ( ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		33D30000000000000000001C /* root */ = {
+			isa = PBXGroup;
+			children = (
+				33D30000000000000000001D,
+				33D300000000000000000021,
+			);
+			name = root;
+			sourceTree = "<group>";
+		};
+		33D30000000000000000001D /* GRID0 */ = {
+			isa = PBXGroup;
+			children = (
+				33D30000000000000000001E,
+				33D30000000000000000001F,
+				33D300000000000000000020,
+				33D30000000000000000000C,
+				33D30000000000000000000D,
+				33D30000000000000000000E,
+				33D30000000000000000000F,
+			);
+			path = GRID0;
+			sourceTree = "<group>";
+		};
+		33D30000000000000000001E /* App */ = {
+			isa = PBXGroup;
+			children = (
+				33D300000000000000000001,
+				33D300000000000000000002,
+				33D300000000000000000003,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		33D30000000000000000001F /* Proxy */ = {
+			isa = PBXGroup;
+			children = (
+				33D300000000000000000004,
+				33D300000000000000000005,
+				33D300000000000000000006,
+				33D300000000000000000007,
+				33D300000000000000000008,
+				33D300000000000000000009,
+			);
+			path = Proxy;
+			sourceTree = "<group>";
+		};
+		33D300000000000000000020 /* zstd */ = {
+			isa = PBXGroup;
+			children = (
+				33D30000000000000000000A,
+				33D30000000000000000000B,
+			);
+			path = zstd;
+			sourceTree = "<group>";
+		};
+		33D300000000000000000021 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				33D300000000000000000010,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		33D300000000000000000023 /* GRID0 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 33D30000000000000000002C /* Build configuration list for PBXNativeTarget "GRID0" */;
+			buildPhases = (
+				33D300000000000000000024 /* Sources */,
+				33D300000000000000000026 /* Frameworks */,
+				33D300000000000000000025 /* Resources */,
+			);
+			buildRules = ( );
+			dependencies = ( );
+			name = GRID0;
+			productName = GRID0;
+			productReference = 33D300000000000000000010 /* GRID0.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		33D300000000000000000022 /* Project object */ = {
+			isa = PBXProject;
+			attributes = { LastSwiftUpdateCheck = 1500; LastUpgradeCheck = 1500; TargetAttributes = { }; };
+			buildConfigurationList = 33D30000000000000000002B /* Build configuration list for PBXProject "GRID0" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = ( en, Base, );
+			mainGroup = 33D30000000000000000001C;
+			productRefGroup = 33D300000000000000000021 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = ( 33D300000000000000000023 /* GRID0 */, );
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		33D300000000000000000025 /* Resources */ = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ( 33D30000000000000000001B /* Assets.xcassets in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		33D300000000000000000024 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				33D300000000000000000011 /* GRID0App.swift in Sources */,
+				33D300000000000000000012 /* AppModel.swift in Sources */,
+				33D300000000000000000013 /* ContentView.swift in Sources */,
+				33D300000000000000000014 /* Crypto.swift in Sources */,
+				33D300000000000000000015 /* Zstd.swift in Sources */,
+				33D300000000000000000016 /* ProxyCore.swift in Sources */,
+				33D300000000000000000017 /* Relay.swift in Sources */,
+				33D300000000000000000018 /* RelayHandlers.swift in Sources */,
+				33D300000000000000000019 /* RelayGame.swift in Sources */,
+				33D30000000000000000001A /* zstd.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		33D300000000000000000027 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		33D300000000000000000028 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		33D300000000000000000029 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = GRID0/GRID0.entitlements;
+				CURRENT_PROJECT_VERSION = 32;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/GRID0/zstd";
+				GCC_PREPROCESSOR_DEFINITIONS = "ZSTD_STATIC_LINKING_ONLY=1";
+				INFOPLIST_FILE = GRID0/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 3.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grid0.ofw;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "GRID0/GRID0-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		33D30000000000000000002A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGN_ENTITLEMENTS = GRID0/GRID0.entitlements;
+				CURRENT_PROJECT_VERSION = 32;
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "$(inherited) $(SRCROOT)/GRID0/zstd";
+				GCC_PREPROCESSOR_DEFINITIONS = "ZSTD_STATIC_LINKING_ONLY=1";
+				INFOPLIST_FILE = GRID0/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				MARKETING_VERSION = 3.3.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.grid0.ofw;
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_OBJC_BRIDGING_HEADER = "GRID0/GRID0-Bridging-Header.h";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		33D30000000000000000002B /* Build configuration list for PBXProject "GRID0" */ = { isa = XCConfigurationList; buildConfigurations = ( 33D300000000000000000027 /* Debug */, 33D300000000000000000028 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		33D30000000000000000002C /* Build configuration list for PBXNativeTarget "GRID0" */ = { isa = XCConfigurationList; buildConfigurations = ( 33D300000000000000000029 /* Debug */, 33D30000000000000000002A /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = 33D300000000000000000022 /* Project object */;
+}

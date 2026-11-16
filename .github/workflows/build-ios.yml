@@ -1,0 +1,64 @@
+name: Build iOS
+
+# The iOS build is ready to attach to a release, but the release trigger is
+# commented out on purpose: normal releases do not ship the iOS build yet.
+# To release it with 3.3.0, uncomment the release block below.
+on:
+  # release:
+  #   types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to upload the IPA to (leave empty for an artifact only)"
+        required: false
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
+      - name: Build the app (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/GRID0.xcodeproj -scheme GRID0 -configuration Release \
+            -sdk iphoneos -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CONFIGURATION_BUILD_DIR="$PWD/build-ios" build 2>&1 | tee xcodebuild.log
+      - name: Upload the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: xcodebuild.log
+      - name: Inject game key
+        env:
+          GAME_KEY_HEX: ${{ secrets.GAME_KEY_HEX }}
+        run: |
+          if [ -n "$GAME_KEY_HEX" ]; then
+            printf %s "$GAME_KEY_HEX" > build-ios/GRID0.app/game_key.txt
+          else
+            echo "GAME_KEY_HEX secret not set, building without a game key"
+          fi
+      - name: Package the IPA
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" build-ios/GRID0.app/Info.plist)
+          mkdir -p Payload
+          cp -R build-ios/GRID0.app Payload/
+          zip -qry "GRID0.ofw.v${VERSION}.ipa" Payload
+          echo "IPA=GRID0.ofw.v${VERSION}.ipa" >> "$GITHUB_ENV"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grid0-ios-ipa
+          path: ${{ env.IPA }}
+      - name: Upload to the release
+        if: env.TAG != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$TAG" "$IPA" --clobber
