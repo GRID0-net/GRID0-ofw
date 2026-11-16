@@ -7,6 +7,9 @@ let DISCOVERY_PORT = 35000
 let GAME_PORT = 49152
 let GAME_PORTS = [49152, 49153, 49154, 49155]
 let MK8D_PORT = 30000
+// One local game port per remote player in the room, so the Switch sees every
+// player as its own station (phone IP + port).
+let SLOT_PORTS = (0..<8).map { 49152 + $0 }
 let MK8D_KEY: [UInt8] = Array("ABCDEFGHIJKLMNOP".utf8)
 let GAME_NAMES = ["splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe"]
 let CHAL_OFF = ["splatoon3": 27, "mk8d": 575]
@@ -74,6 +77,64 @@ func addressPairs(_ pairs: [BytePair], port: Int = GAME_PORT) -> [BytePair] {
     a += extra
     a += a.map { (o, n) in (Array(o.reversed()), Array(n.reversed())) }
     return a.filter { $0.o != $0.n }
+}
+
+// The ways a Pia station address shows up in Splatoon 3 game data:
+// little-endian IP + tail + port, big-endian IP + port, and tail+port both ways.
+func stationForms(_ ip: [UInt8], _ port: Int) -> [[UInt8]] {
+    let tail = [ip[3], ip[2]]
+    let pLe = [UInt8(port & 0xFF), UInt8((port >> 8) & 0xFF)]
+    let pBe = [UInt8((port >> 8) & 0xFF), UInt8(port & 0xFF)]
+    return [Array(ip.reversed()) + tail + pLe, ip + pBe, tail + pLe, pBe + [ip[2], ip[3]]]
+}
+
+// slots: remote station IP -> local port on the Switch leg.
+func slotTables(_ slots: [([UInt8], Int)], hostIp: [UInt8]?, sw: [UInt8], swMe: [UInt8],
+                hMe: [UInt8]) -> (s2h: [BytePair], h2s: [BytePair], ipS2h: [BytePair], ipH2s: [BytePair]) {
+    var h2s: [BytePair] = []
+    var s2h: [BytePair] = []
+    for (r, port) in slots {
+        let fr = stationForms(r, GAME_PORT)
+        let fm = stationForms(swMe, port)
+        for i in 0..<fr.count {
+            h2s.append((fr[i], fm[i]))
+            s2h.append((fm[i], fr[i]))
+        }
+    }
+    for (r, _) in slots {
+        h2s.append((r, swMe))
+        h2s.append((Array(r.reversed()), Array(swMe.reversed())))
+    }
+    if let h = hostIp {
+        s2h.append((swMe, h))
+        s2h.append((Array(swMe.reversed()), Array(h.reversed())))
+    }
+    h2s += addressPairs([(hMe, sw)])
+    s2h += addressPairs([(sw, hMe)])
+    var ipS2h: [BytePair] = []
+    if let h = hostIp { ipS2h.append((swMe, h)) }
+    ipS2h.append((sw, hMe))
+    var ipH2s: [BytePair] = slots.map { ($0.0, swMe) }
+    ipH2s.append((hMe, sw))
+    let keep: (BytePair) -> Bool = { $0.o != $0.n }
+    return (s2h.filter(keep), h2s.filter(keep), ipS2h.filter(keep), ipH2s.filter(keep))
+}
+
+// Remote station IPs named in the plaintext, in either address layout.
+func findStations(_ plain: [UInt8], _ prefix3: [UInt8]) -> Set<[UInt8]> {
+    var found = Set<[UInt8]>()
+    let n = plain.count
+    if n < 4 { return found }
+    for i in 0...(n - 4) {
+        if plain[i] == prefix3[0] && plain[i + 1] == prefix3[1] && plain[i + 2] == prefix3[2] {
+            found.insert(Array(plain[i..<(i + 4)]))
+        }
+        if i >= 1 && plain[i] == prefix3[2] && plain[i + 1] == prefix3[1] && plain[i + 2] == prefix3[0]
+            && i + 5 <= n && plain[i + 3] == plain[i - 1] && plain[i + 4] == prefix3[2] {
+            found.insert(prefix3 + [plain[i - 1]])
+        }
+    }
+    return found
 }
 
 func replaceAll(_ body: [UInt8], _ needle: [UInt8], _ replacement: [UInt8]) -> [UInt8] {
@@ -283,7 +344,10 @@ var noBitsEnabled = false
 var rewriteProtos: Set<Int>? = nil
 
 func relayGame(key: [UInt8], srcIp: [UInt8], myIp: [UInt8], d: [UInt8],
-               table: [BytePair], ipPairs: [BytePair]?) -> (out: [UInt8], label: String, changed: Bool)? {
+               table tableIn: [BytePair], ipPairs ipPairsIn: [BytePair]?,
+               onPlain: (([UInt8]) -> ([BytePair], [BytePair])?)? = nil) -> (out: [UInt8], label: String, changed: Bool)? {
+    var table = tableIn
+    var ipPairs = ipPairsIn
     guard let o = openGame(key: key, srcIp: srcIp, d: d) else { return nil }
     let raw = o.plain
     var plain: [UInt8]
@@ -292,6 +356,10 @@ func relayGame(key: [UInt8], srcIp: [UInt8], myIp: [UInt8], d: [UInt8],
         plain = dec
     } else {
         plain = raw
+    }
+    if let hook = onPlain, let upd = hook(plain) {
+        table = upd.0
+        ipPairs = upd.1
     }
     var new: [UInt8]
     if let protos = rewriteProtos {

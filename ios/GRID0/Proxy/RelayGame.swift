@@ -5,7 +5,7 @@ import Darwin
 
 extension Relay {
 
-    func onGame(_ data: [UInt8], _ src: Addr, _ direction: String) {
+    func onGame(_ data: [UInt8], _ src: Addr, _ direction: String, _ localPort: Int? = nil) {
         guard let tbl = tables, key != nil || keyMk8d != nil else {
             note([("ev", .s("drop_nokey")), ("dir", .s(direction)),
                   ("src", .s(src.ip)), ("len", .i(data.count))])
@@ -82,8 +82,11 @@ extension Relay {
                 rr = relayGameMk8d(key: k!, srcIp: ip4(src.ip), myIp: myIp, d: data,
                                    table: direction == "s2h" ? t2.mkS2h : t2.mkH2s)
             } else {
+                let srcIpStr = src.ip
+                let hook: (([UInt8]) -> ([BytePair], [BytePair])?)? = direction == "h2s"
+                    ? { [unowned self] plain in self.learnStations(srcIpStr, plain) } : nil
                 rr = relayGame(key: k!, srcIp: ip4(src.ip), myIp: myIp, d: data,
-                               table: table, ipPairs: pairs)
+                               table: table, ipPairs: pairs, onPlain: hook)
             }
             if rr != nil {
                 r = rr
@@ -156,11 +159,15 @@ extension Relay {
         }
         _ = tbl
         if direction == "h2s" {
-            if hostSide == "sw" {
-                peerAddr = src
-            } else {
-                hostAddr = src
+            let cur = sessionPeer()
+            if cur == nil || cur!.ip == src.ip {
+                if hostSide == "sw" {
+                    peerAddr = src
+                } else {
+                    hostAddr = src
+                }
             }
+            stationPorts[src.ip] = src.port
         }
         game = usedGame
         let out = result.out
@@ -188,14 +195,23 @@ extension Relay {
                 mk8dState = true
             }
         } else {
-            send(sock, out, dest!.ip, dest!.port, direction, meta: meta)
+            var to = dest!
+            var via = sock
+            if direction == "s2h" {
+                if let lp = localPort, let owner = ownerOfPort(lp), owner != sessionPeer()?.ip {
+                    to = (owner, stationPorts[owner] ?? GAME_PORT)
+                }
+            } else if let slot = slotOf(src.ip), let s = swSlotSocks[slot] {
+                via = s
+            }
+            send(via, out, to.ip, to.port, direction, meta: meta)
         }
     }
 
-    func onGameSock(_ data: [UInt8], _ src: Addr, _ boundLeg: String) {
+    func onGameSock(_ data: [UInt8], _ src: Addr, _ boundLeg: String, _ localPort: Int? = nil) {
         if src.ip == swIp || src.ip == hIp { return }
         let leg = legOf(src.ip) ?? boundLeg
-        onGame(data, src, leg == "sw" ? "s2h" : "h2s")
+        onGame(data, src, leg == "sw" ? "s2h" : "h2s", localPort)
     }
 
     func run() {
@@ -211,7 +227,7 @@ extension Relay {
         handlers[dH.fd] = { d, s in discHandler(Array(d), s) }
         handlers[dSw2.fd] = { d, s in discHandler(Array(d), s) }
         handlers[dH2.fd] = { d, s in discHandler(Array(d), s) }
-        handlers[gSw.fd] = { [self] d, s in onGameSock(Array(d), s, "sw") }
+        handlers[gSw.fd] = { [self] d, s in onGameSock(Array(d), s, "sw", GAME_PORT) }
         handlers[gH.fd] = { [self] d, s in onGameSock(Array(d), s, "h") }
         handlers[gbSw.fd] = { [self] d, s in onGameSock(Array(d), s, "sw") }
         handlers[gbH.fd] = { [self] d, s in onGameSock(Array(d), s, "h") }
@@ -221,7 +237,8 @@ extension Relay {
         }
         for (s, leg) in gx {
             sockByFd[s.fd] = s
-            handlers[s.fd] = { [self] d, src in onGameSock(Array(d), src, leg) }
+            let lp: Int? = (leg == "sw" && s.boundIp == swIp) ? s.port : nil
+            handlers[s.fd] = { [self] d, src in onGameSock(Array(d), src, leg, lp) }
         }
         var lastStat = now()
         while !stopRequested {

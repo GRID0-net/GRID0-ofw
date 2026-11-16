@@ -59,6 +59,10 @@ else:
 
 DISCOVERY_PORT, GAME_PORT = 35000, 49152
 GAME_PORTS = (49152, 49153, 49154, 49155)
+# One local game port per remote player in the room, so the Switch sees every
+# player as its own station (phone IP + port) instead of all of them at once
+# on the phone's single address.
+SLOT_PORTS = tuple(49152 + i for i in range(8))
 MK8D_PORT = 30000
 DISCOVERY_PORTS = (DISCOVERY_PORT, MK8D_PORT)
 GAME_NAMES = {"splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe"}
@@ -267,6 +271,49 @@ def address_pairs(pairs, port=GAME_PORT):
     a += [(o[::-1], n[::-1]) for o, n in list(a)]
     return [(o, n) for o, n in a if o != n]
 
+def station_forms(ip, port):
+    # The ways a Pia station address shows up in Splatoon 3 game data:
+    # little-endian IP + tail + port, big-endian IP + port, and the tail+port pair
+    # in both byte orders.
+    tail = ip[3:] + ip[2:3]
+    p_le, p_be = port.to_bytes(2, "little"), port.to_bytes(2, "big")
+    return [ip[::-1] + tail + p_le, ip + p_be, tail + p_le, p_be + ip[2:4]]
+
+def slot_tables(slots, host_ip, sw, sw_me, h_me):
+    # slots: remote station IP (packed) -> local port on the Switch leg.
+    h2s, s2h = [], []
+    for r, port in slots.items():
+        h2s += list(zip(station_forms(r, GAME_PORT), station_forms(sw_me, port)))
+        s2h += list(zip(station_forms(sw_me, port), station_forms(r, GAME_PORT)))
+    for r in slots:
+        h2s += [(r, sw_me), (r[::-1], sw_me[::-1])]
+    if host_ip:
+        s2h += [(sw_me, host_ip), (sw_me[::-1], host_ip[::-1])]
+    h2s += address_pairs([(h_me, sw)])
+    s2h += address_pairs([(sw, h_me)])
+    tables = {"s2h": [(o, n) for o, n in s2h if o != n], "h2s": [(o, n) for o, n in h2s if o != n]}
+    s2h_ip = ([(sw_me, host_ip)] if host_ip else []) + [(sw, h_me)]
+    h2s_ip = [(r, sw_me) for r in slots] + [(h_me, sw)]
+    pairs = {"s2h": [(o, n) for o, n in s2h_ip if o != n], "h2s": [(o, n) for o, n in h2s_ip if o != n]}
+    return tables, pairs
+
+def find_stations(plain, prefix3):
+    # Remote station IPs named in the plaintext, in either address layout.
+    found = set()
+    rev = prefix3[::-1]
+    i = plain.find(rev, 1)
+    while i >= 1:
+        last = plain[i - 1]
+        if plain[i + 3:i + 5] == bytes([last, prefix3[2]]):
+            found.add(prefix3 + bytes([last]))
+        i = plain.find(rev, i + 1)
+    i = plain.find(prefix3)
+    while i >= 0:
+        if i + 4 <= len(plain):
+            found.add(plain[i:i + 4])
+        i = plain.find(prefix3, i + 1)
+    return found
+
 def rewrite(body, table):
     for o, n in table:
         body = body.replace(o, n)
@@ -389,12 +436,16 @@ def rewrite_bits(body, ip_pairs):
             i += 1
     return x.to_bytes(len(body), "little") if hit else body
 
-def relay_game(key, src_ip, my_ip, d, table, ip_pairs=None):
+def relay_game(key, src_ip, my_ip, d, table, ip_pairs=None, on_plain=None):
     o = open_game(key, src_ip, d)
     if o is None:
         return None
     raw, compressed = o
     plain = _zstd_decompress(raw) if compressed else raw
+    if on_plain is not None:
+        upd = on_plain(plain)
+        if upd is not None:
+            table, ip_pairs = upd
     new = rewrite(plain, table) if REWRITE_PROTOS is None else rewrite_some(plain, table, REWRITE_PROTOS)
     if ip_pairs and not NO_BITS:
         new = rewrite_bits(new, ip_pairs)
@@ -679,6 +730,17 @@ class Relay:
             self.gx.append((udp_bind(socket.inet_ntoa(self.sw_bc), p, broadcast=True), "sw"))
             self.gx.append((udp_bind(self.h_ip, p, broadcast=True, bind_devices=zt_cands), "h"))
             self.gx.append((udp_bind(socket.inet_ntoa(self.h_bc), p, broadcast=True, bind_devices=zt_cands), "h"))
+        self.sw_slot_socks = {GAME_PORT: self.g_sw}
+        for s, leg in self.gx:
+            if leg == "sw" and s.getsockname()[0] == self.sw_ip:
+                self.sw_slot_socks[s.getsockname()[1]] = s
+        for p in SLOT_PORTS:
+            if p not in self.sw_slot_socks:
+                s = udp_bind(self.sw_ip, p, broadcast=True)
+                self.sw_slot_socks[p] = s
+                self.gx.append((s, "sw"))
+        self.slots = {}
+        self.station_ports = {}
         self.cap = Capture(a.capture) if a.capture else None
 
     def note(self, **kw):
@@ -712,9 +774,58 @@ class Relay:
         }
         return tables, ip_pairs, tables_mk8d
 
+    def slot_of(self, ip):
+        return getattr(self, "slots", {}).get(ip)
+
+    def owner_of_port(self, port):
+        for ip, p in getattr(self, "slots", {}).items():
+            if p == port:
+                return ip
+        return None
+
+    def add_station(self, ip):
+        slots = self.__dict__.setdefault("slots", {})
+        if ip in slots or ip == self.h_ip:
+            return False
+        used = set(slots.values())
+        free = [p for p in SLOT_PORTS if p not in used and p in getattr(self, "sw_slot_socks", {GAME_PORT: None})]
+        if not free:
+            return False
+        slots[ip] = free[0]
+        print(f"station: {ip} mapped to {self.sw_ip}:{free[0]}", flush=True)
+        self.note(ev="station", ip=ip, port=free[0])
+        return True
+
+    def rebuild_slot_tables(self):
+        peer = self.session_peer()
+        if not self.switch or not peer:
+            return
+        slots = {ip4(ip): p for ip, p in self.slots.items()}
+        t, pr = slot_tables(slots, ip4(peer[0]), ip4(self.switch[0]), self.sw_me, self.h_me)
+        self.tables, self.ip_pairs = t, pr
+
+    def learn_stations(self, src_ip, plain):
+        changed = self.add_station(src_ip)
+        net = getattr(self, "h_net", None)
+        for raw in find_stations(plain, self.h_me[:3]):
+            ip = socket.inet_ntoa(raw)
+            if net is not None and (ipaddress.IPv4Address(ip) in (net.network_address, net.broadcast_address)):
+                continue
+            changed = self.add_station(ip) or changed
+        if changed:
+            self.rebuild_slot_tables()
+            return self.tables["h2s"], self.ip_pairs["h2s"]
+        return None
+
     def build_tables(self):
         peer = self.session_peer()
         self.tables, self.ip_pairs, self.tables_mk8d = self.tables_for(peer[0])
+        slots = self.__dict__.setdefault("slots", {})
+        others = {ip: p for ip, p in slots.items() if ip != peer[0] and p != GAME_PORT}
+        slots.clear()
+        slots[peer[0]] = GAME_PORT
+        slots.update(others)
+        self.rebuild_slot_tables()
         if self.host_side == "sw":
             print(f"paired: Switch {self.switch[0]} is hosting, peer {peer[0]} joined", flush=True)
         elif self.host_side == "h":
@@ -1181,7 +1292,7 @@ class Relay:
         self.rooms[("mk8d", host)] = now
         self.note_room("mk8d", host)
 
-    def on_game(self, data, src, direction):
+    def on_game(self, data, src, direction, local_port=None):
         if not self.tables or (not self.key and not self.key_mk8d):
             self.note(ev="drop_nokey", dir=direction, src=src[0], len=len(data))
             return
@@ -1223,8 +1334,9 @@ class Relay:
             if not k:
                 continue
             tbl = getattr(self, "tables_mk8d", {}).get(direction, table) if g == "mk8d" else table
+            hook = (lambda plain, ip=src[0]: self.learn_stations(ip, plain)) if direction == "h2s" else None
             rr = relay_game_mk8d(k, ip4(src[0]), my_ip, data, tbl) if g == "mk8d" else \
-                relay_game(k, ip4(src[0]), my_ip, data, table, pairs)
+                relay_game(k, ip4(src[0]), my_ip, data, table, pairs, on_plain=hook)
             if rr is not None:
                 r, used = rr, g
                 break
@@ -1272,10 +1384,13 @@ class Relay:
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
             return
         if direction == "h2s":
-            if self.host_side == "sw":
-                self.peer = src
-            else:
-                self.host = src
+            cur = self.session_peer()
+            if cur is None or cur[0] == src[0]:
+                if self.host_side == "sw":
+                    self.peer = src
+                else:
+                    self.host = src
+            self.__dict__.setdefault("station_ports", {})[src[0]] = src[1]
         self.game = used
         out, label, changed = r
         nonce = data[12:20] if used == "mk8d" else data[13:21]
@@ -1294,13 +1409,21 @@ class Relay:
             if label == "01004600":
                 self.mk8d_state = True
         else:
+            if direction == "s2h":
+                owner = self.owner_of_port(local_port) if local_port is not None else None
+                peer = self.session_peer()
+                if owner and (not peer or owner != peer[0]):
+                    dest = (owner, getattr(self, "station_ports", {}).get(owner, GAME_PORT))
+            else:
+                slot = self.slot_of(src[0])
+                sock = getattr(self, "sw_slot_socks", {}).get(slot, sock) if slot else sock
             self.send(sock, out, dest, direction, label=label, nonce=nonce.hex(), changed=changed)
 
-    def on_game_sock(self, data, src, bound_leg):
+    def on_game_sock(self, data, src, bound_leg, local_port=None):
         if src[0] in (self.sw_ip, self.h_ip):
             return
         leg = self.leg_of(src[0]) or bound_leg
-        self.on_game(data, src, "s2h" if leg == "sw" else "h2s")
+        self.on_game(data, src, "s2h" if leg == "sw" else "h2s", local_port)
 
     def run(self, out_path):
         self.load_stash()
@@ -1313,12 +1436,13 @@ class Relay:
                   host=(self.host[0] if self.host else None))
         socks = {self.d_sw: self.on_disc, self.d_h: self.on_disc,
                  self.d_sw2: self.on_disc, self.d_h2: self.on_disc,
-                 self.g_sw: lambda d, s: self.on_game_sock(d, s, "sw"),
+                 self.g_sw: lambda d, s: self.on_game_sock(d, s, "sw", GAME_PORT),
                  self.g_h: lambda d, s: self.on_game_sock(d, s, "h"),
                  self.gb_sw: lambda d, s: self.on_game_sock(d, s, "sw"),
                  self.gb_h: lambda d, s: self.on_game_sock(d, s, "h")}
         for s, leg in self.gx:
-            socks[s] = lambda d, src, leg=leg: self.on_game_sock(d, src, leg)
+            lp = s.getsockname()[1] if leg == "sw" and s.getsockname()[0] == self.sw_ip else None
+            socks[s] = lambda d, src, leg=leg, lp=lp: self.on_game_sock(d, src, leg, lp)
         stop = [False]
         signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
         signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))

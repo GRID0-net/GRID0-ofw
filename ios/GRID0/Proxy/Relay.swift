@@ -70,6 +70,8 @@ struct ProxyConfig {
 
 final class UDPSock {
     let fd: Int32
+    let port: Int
+    let boundIp: String
     init?(ip: String, port: Int, broadcast: Bool, log: (String) -> Void) {
         let f = socket(AF_INET, SOCK_DGRAM, 0)
         if f < 0 { return nil }
@@ -91,12 +93,14 @@ final class UDPSock {
             }
             return r == 0
         }
+        var bound = ip
         if !tryBind(ip) {
             if ip == "0.0.0.0" {
                 Darwin.close(f)
                 return nil
             }
             log("warning: cannot bind \(ip):\(port), using all interfaces")
+            bound = "0.0.0.0"
             if !tryBind("0.0.0.0") {
                 log("error: cannot bind 0.0.0.0:\(port) (error \(errno))")
                 Darwin.close(f)
@@ -106,6 +110,8 @@ final class UDPSock {
         let flags = fcntl(f, F_GETFL, 0)
         _ = fcntl(f, F_SETFL, flags | O_NONBLOCK)
         fd = f
+        self.port = port
+        boundIp = bound
     }
 
     @discardableResult
@@ -249,6 +255,9 @@ final class Relay {
     let gbSw: UDPSock
     let gbH: UDPSock
     var gx: [(UDPSock, String)] = []
+    var swSlotSocks: [Int: UDPSock] = [:]
+    var slots: [String: Int] = [:]          // remote station IP -> local port
+    var stationPorts: [String: Int] = [:]   // remote station IP -> its game port
     var cap: Capture? = nil
 
     private let stopLock = NSLock()
@@ -338,6 +347,16 @@ final class Relay {
             gx.append((x3, "h"))
             gx.append((x4, "h"))
         }
+        swSlotSocks[GAME_PORT] = gSw
+        for (s, leg) in gx where leg == "sw" && s.boundIp == swIp {
+            swSlotSocks[s.port] = s
+        }
+        for p in SLOT_PORTS where swSlotSocks[p] == nil {
+            if let s = UDPSock(ip: swIp, port: p, broadcast: true, log: log) {
+                swSlotSocks[p] = s
+                gx.append((s, "sw"))
+            }
+        }
         if let base = cfg.captureBase {
             cap = Capture(base: base)
         }
@@ -375,9 +394,61 @@ final class Relay {
             mkH2s: h2s + idFragments([(h, swMe), (hMe, sw)]))
     }
 
+    func slotOf(_ ip: String) -> Int? {
+        return slots[ip]
+    }
+
+    func ownerOfPort(_ port: Int) -> String? {
+        return slots.first { $0.value == port }?.key
+    }
+
+    @discardableResult
+    func addStation(_ ip: String) -> Bool {
+        if slots[ip] != nil || ip == hIp { return false }
+        let used = Set(slots.values)
+        guard let free = SLOT_PORTS.first(where: { !used.contains($0) && swSlotSocks[$0] != nil }) else {
+            return false
+        }
+        slots[ip] = free
+        cfg.log("station: \(ip) mapped to \(swIp):\(free)")
+        note([("ev", .s("station")), ("ip", .s(ip)), ("port", .i(free))])
+        return true
+    }
+
+    func rebuildSlotTables() {
+        guard let peer = sessionPeer(), let sw = switchAddr, var t = tables else { return }
+        let list = slots.map { (ip4($0.key), $0.value) }
+        let st = slotTables(list, hostIp: ip4(peer.ip), sw: ip4(sw.ip), swMe: swMe, hMe: hMe)
+        t.s2h = st.s2h
+        t.h2s = st.h2s
+        t.ipS2h = st.ipS2h
+        t.ipH2s = st.ipH2s
+        tables = t
+    }
+
+    func learnStations(_ srcIp: String, _ plain: [UInt8]) -> ([BytePair], [BytePair])? {
+        var changed = addStation(srcIp)
+        let netLow = ipToUInt32(hIp) & prefixMask(hPrefix)
+        let netHigh = netLow | ~prefixMask(hPrefix)
+        for raw in findStations(plain, Array(hMe[0..<3])) {
+            let v = ipToUInt32(ipString(raw))
+            if v == netLow || v == netHigh { continue }
+            if addStation(ipString(raw)) { changed = true }
+        }
+        if changed {
+            rebuildSlotTables()
+            if let t = tables { return (t.h2s, t.ipH2s) }
+        }
+        return nil
+    }
+
     func buildTables() {
         guard let peer = sessionPeer(), switchAddr != nil else { return }
         tables = tablesFor(peer.ip)
+        let others = slots.filter { $0.key != peer.ip && $0.value != GAME_PORT }
+        slots = others
+        slots[peer.ip] = GAME_PORT
+        rebuildSlotTables()
         if hostSide == "sw" {
             cfg.log("paired: Switch \(switchAddr!.ip) is hosting, peer \(peer.ip) joined")
         } else if hostSide == "h" {

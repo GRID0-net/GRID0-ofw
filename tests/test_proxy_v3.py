@@ -971,6 +971,98 @@ class TestMk8dPortDelivery(unittest.TestCase):
         self.assertEqual(new[0][1], (HOST, 49154))
 
 
+class TestMultiStation(unittest.TestCase):
+    """Rooms with more than one remote player: each gets its own local port."""
+    THIRD = "10.147.17.120"
+
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        m = self.m
+        self.r = r = make_relay(m)
+        r.sw_slot_socks = {p: (r.g_sw if p == m.GAME_PORT else FakeSocket()) for p in m.SLOT_PORTS}
+        r.slots, r.station_ports = {}, {}
+        r.key = KEY_A
+        r.host_side = "h"
+        r.switch = (SWITCH, 49152)
+        r.host = (HOST, 49152)
+        r.build_tables()
+
+    def station_body(self, ip, port=49152):
+        return b"\x00" * 8 + self.m.station_forms(self.m.ip4(ip), port)[0] + b"\x5e\xd7" + b"\x00" * 8
+
+    def seal(self, src_ip, body):
+        return self.m.seal_game(KEY_A, self.m.ip4(src_ip), game_header(self.m), body)
+
+    def open_to_switch(self, data):
+        o = self.m.open_game(KEY_A, self.r.sw_me, data)
+        self.assertIsNotNone(o)
+        return o[0]
+
+    def test_station_forms_layouts(self):
+        f = self.m.station_forms(bytes([10, 147, 17, 54]), 49152)
+        self.assertEqual(f[0].hex(), "3611930a361100c0")
+        self.assertEqual(f[1].hex(), "0a931136c000")
+        self.assertEqual(f[2].hex(), "361100c0")
+        self.assertEqual(f[3].hex(), "c0001136")
+
+    def test_find_stations(self):
+        m = self.m
+        body = self.station_body(self.THIRD) + b"\x01" + m.ip4("10.147.17.33") + b"\x00\x00"
+        found = {ipaddress.IPv4Address(b) for b in m.find_stations(body, m.ip4(ZT_PHONE)[:3])}
+        self.assertEqual(found, {ipaddress.IPv4Address(self.THIRD), ipaddress.IPv4Address("10.147.17.33")})
+
+    def test_host_keeps_game_port(self):
+        self.assertEqual(self.r.slots, {HOST: 49152})
+
+    def test_third_player_gets_own_port_and_socket(self):
+        r = self.r
+        r.on_game(self.seal(self.THIRD, self.station_body(HOST)), (self.THIRD, 49152), "h2s")
+        self.assertEqual(r.slots[self.THIRD], 49153)
+        sock = r.sw_slot_socks[49153]
+        self.assertEqual(len(sock.sent), 1)
+        data, dest = sock.sent[0]
+        self.assertEqual(dest, (SWITCH, 49152))
+        body = self.open_to_switch(data)
+        self.assertIn(self.m.station_forms(r.sw_me, 49152)[0], body)
+        self.assertEqual(r.host, (HOST, 49152))
+
+    def test_host_packet_naming_third_player_is_rewritten(self):
+        r = self.r
+        r.on_game(self.seal(HOST, self.station_body(self.THIRD)), (HOST, 49152), "h2s")
+        self.assertEqual(r.slots[self.THIRD], 49153)
+        data, dest = r.g_sw.sent[-1]
+        body = self.open_to_switch(data)
+        self.assertIn(self.m.station_forms(r.sw_me, 49153)[0], body)
+        self.assertNotIn(self.m.ip4(self.THIRD)[::-1], body)
+
+    def test_switch_packet_to_slot_goes_to_that_player(self):
+        r = self.r
+        r.on_game(self.seal(self.THIRD, self.station_body(HOST)), (self.THIRD, 49152), "h2s")
+        sw_body = self.station_body(SW_PHONE, 49153)
+        r.on_game(self.m.seal_game(KEY_A, self.m.ip4(SWITCH), game_header(self.m), sw_body),
+                  (SWITCH, 49152), "s2h", 49153)
+        data, dest = r.g_h.sent[-1]
+        self.assertEqual(dest, (self.THIRD, 49152))
+        o = self.m.open_game(KEY_A, r.h_me, data)
+        self.assertIn(self.m.station_forms(self.m.ip4(self.THIRD), 49152)[0], o[0])
+
+    def test_switch_packet_to_game_port_goes_to_host(self):
+        r = self.r
+        body = self.station_body(SW_PHONE)
+        r.on_game(self.m.seal_game(KEY_A, self.m.ip4(SWITCH), game_header(self.m), body),
+                  (SWITCH, 49152), "s2h", 49152)
+        self.assertEqual(r.g_h.sent[-1][1], (HOST, 49152))
+
+    def test_slots_run_out_quietly(self):
+        r = self.r
+        for i in range(20):
+            r.add_station(f"10.147.17.{100 + i}")
+        self.assertEqual(len(r.slots), len(self.m.SLOT_PORTS))
+
+
 class TestCrossCopy(unittest.TestCase):
     def test_single_pc_copy(self):
         self.assertTrue(os.path.exists(PC_COPIES[0]))
