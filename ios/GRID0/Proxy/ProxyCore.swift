@@ -160,7 +160,7 @@ func relayGameMk8d(key: [UInt8], srcIp: [UInt8], myIp: [UInt8], d: [UInt8],
     guard let plain = openGameMk8d(key: key, srcIp: srcIp, d: d) else { return nil }
     let new = rewrite(plain, table)
     return (sealGameMk8d(key: key, myIp: myIp, hdr: d, body: new),
-            plain[0..<4].map { String(format: "%02x", $0) }.joined(),
+            plain.prefix(4).map { String(format: "%02x", $0) }.joined(),
             new != plain)
 }
 
@@ -176,6 +176,7 @@ func trimJoinResponse(_ plain: [UInt8]) -> [UInt8] {
         if mask & ~31 != 0 { return plain }
         var q = pos + 1
         for (bit, w) in FIELD_WIDTHS where mask & bit != 0 {
+            if q + w > plain.count { return plain }
             var v = 0
             for i in 0..<w { v = (v << 8) | Int(plain[q + i]) }
             f[bit] = v
@@ -204,6 +205,7 @@ func rewriteSome(_ plain: [UInt8], _ table: [BytePair], _ protos: Set<Int>) -> [
         if mask & ~31 != 0 { break }
         var q = pos + 1
         for (bit, w) in FIELD_WIDTHS where mask & bit != 0 {
+            if q + w > plain.count { return out }
             var v = 0
             for i in 0..<w { v = (v << 8) | Int(plain[q + i]) }
             f[bit] = v
@@ -306,7 +308,7 @@ func relayGame(key: [UInt8], srcIp: [UInt8], myIp: [UInt8], d: [UInt8],
     let changed = new != plain
     let body = changed ? (o.compressed ? zstdCompress(new) : new) : raw
     return (sealGame(key: key, myIp: myIp, hdr: d, body: body),
-            plain[0..<4].map { String(format: "%02x", $0) }.joined(),
+            plain.prefix(4).map { String(format: "%02x", $0) }.joined(),
             changed)
 }
 
