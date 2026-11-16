@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v20
+# GRID0 proxy v21
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -415,6 +415,17 @@ def rekey_request(game_key, req, bc, counter):
     ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter.to_bytes(8, "big")).encrypt_and_digest(pt)
     return req[:29] + counter.to_bytes(8, "big") + chal + tag + ct, chal
 
+def rekey_request_mk8d(game_key, req, bc, counter):
+    if len(req) != 873 or req[0] != 0:
+        raise ValueError("not an mk8d browse request")
+    cr = req[575:]
+    k_old = AES.new(game_key, AES.MODE_ECB).encrypt(cr[10:26])
+    pt = AES.new(k_old, AES.MODE_GCM, nonce=bc + cr[2:10]).decrypt_and_verify(cr[42:], cr[26:42])
+    chal = os.urandom(16)
+    k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter.to_bytes(8, "big")).encrypt_and_digest(pt)
+    return req[:577] + counter.to_bytes(8, "big") + chal + tag + ct, chal
+
 def mk8d_param_off(rep):
     size = int.from_bytes(rep[1:5], "big")
     if 32 <= size <= len(rep) - 5:
@@ -582,6 +593,8 @@ class Relay:
         self.scan_counter = 0
         self.last_scan = 0.0
         self.stash_req = None
+        self.stash_mk8d = None
+        self.scan_chals_mk8d = []
         self.room_noted = {}
         self.key = None
         self.key_mk8d = None
@@ -810,6 +823,9 @@ class Relay:
         if game == "splatoon3":
             self.stash_req = out
             self.save_stash()
+        elif game == "mk8d":
+            self.stash_mk8d = out
+            self.save_stash_mk8d()
         self.last_sw_game = game
         self.send(sock, out, (socket.inet_ntoa(self.h_bc), port), "s2h", kind="browse_req")
         now = time.time()
@@ -855,6 +871,63 @@ class Relay:
                 self.stash_req = data
         except Exception:
             pass
+
+    def stash_path_mk8d(self):
+        ev = os.environ.get("EVENTS")
+        if ev:
+            return os.path.join(os.path.dirname(ev), "last_browse_request_mk8d.bin")
+        return None
+
+    def save_stash_mk8d(self):
+        path = self.stash_path_mk8d()
+        if not path or not self.stash_mk8d:
+            return
+        try:
+            with open(path, "wb") as fh:
+                fh.write(self.stash_mk8d)
+        except Exception:
+            pass
+
+    def load_stash_mk8d(self):
+        path = self.stash_path_mk8d()
+        if not path:
+            return
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            if len(data) == 873 and data[0] == 0:
+                self.stash_mk8d = data
+        except Exception:
+            pass
+
+    def scan_poll_mk8d(self):
+        if self.key_mk8d or not self.stash_mk8d:
+            return
+        self.scan_counter += 1
+        try:
+            req, chal = rekey_request_mk8d(self.key_for("mk8d"), self.stash_mk8d, self.h_bc, self.scan_counter)
+        except Exception:
+            return
+        self.scan_chals_mk8d.append(chal)
+        del self.scan_chals_mk8d[:-4]
+        sock = self.sock_for("h", "mk8d")
+        port = self.port_for("mk8d")
+        self.send(sock, req, (socket.inet_ntoa(self.h_bc), port), "scan", kind="browse_req_scan", probe=1)
+        now = time.time()
+        self.rooms = {k: v for k, v in self.rooms.items() if now - v < 60}
+        targets = {ip for (g, ip) in self.rooms if g == "mk8d"}
+        if self.host:
+            targets.add(self.host[0])
+        targets.discard(self.h_ip)
+        if targets:
+            for ip in sorted(targets):
+                self.send(sock, req, (ip, port), "scan", kind="browse_req_scan_uni", probe=1)
+        elif self.h_net is not None:
+            for addr in self.h_net.hosts():
+                ip = str(addr)
+                if ip == self.h_ip:
+                    continue
+                self.send(sock, req, (ip, port), "scan", kind="browse_req_scan_uni", probe=1)
 
     def scan_poll(self):
         self.scan_counter += 1
@@ -910,6 +983,26 @@ class Relay:
                 rname = splatoon_host_name(data)
                 if rname:
                     self.note(ev="room", game="splatoon3", host=src[0], name=rname, ts=int(time.time()))
+                return
+            self.disc_note(f"note: a reply from {src} did not open with a scan challenge")
+            if self.cap:
+                self.cap.save("disc", data, src[0], self.h_ip, src[1], src[1])
+        if len(data) >= 64 and data[0] == 1 and self.scan_chals_mk8d:
+            cands = list(self.scan_chals_mk8d)
+            if not self.switch:
+                cands.append(self.pin_s2h)
+            opened = False
+            for chal in cands:
+                try:
+                    reseal_reply(self.key_for("mk8d"), data, chal, self.h_bc, self.h_bc,
+                                 ip4(src[0]), ip4(src[0]), mk8d_param_off(data), frag=True)
+                    opened = True
+                    break
+                except Exception:
+                    continue
+            if opened:
+                self.rooms[("mk8d", src[0])] = time.time()
+                self.note(ev="room", game="mk8d", host=src[0], ts=int(time.time()))
                 return
             self.disc_note(f"note: a reply from {src} did not open with a scan challenge")
             if self.cap:
@@ -1168,6 +1261,7 @@ class Relay:
 
     def run(self, out_path):
         self.load_stash()
+        self.load_stash_mk8d()
         try:
             self._evf = open(out_path, "w", buffering=1)
         except Exception:
@@ -1216,6 +1310,10 @@ class Relay:
                 self.last_scan = now
                 try:
                     self.scan_poll()
+                except Exception:
+                    pass
+                try:
+                    self.scan_poll_mk8d()
                 except Exception:
                     pass
             if now - last_stat > 5:
@@ -1275,7 +1373,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v20", flush=True)
+    print("GRID0 proxy v21", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

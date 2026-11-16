@@ -152,6 +152,8 @@ def make_relay(m):
     r.scan_counter = 0
     r.last_scan = 0.0
     r.stash_req = None
+    r.stash_mk8d = None
+    r.scan_chals_mk8d = []
     r.room_noted = {}
     r.key = None
     r.key_mk8d = None
@@ -1890,6 +1892,68 @@ class TestScanRequest(unittest.TestCase):
             body = AES.new(k, AES.MODE_GCM, nonce=r.h_bc + cr[2:10]).decrypt_and_verify(cr[42:], cr[26:42])
             self.assertEqual(body, pt)
             self.assertIn(chal, r.scan_chals)
+
+    def test_rekey_mk8d_real_capture(self):
+        from Crypto.Cipher import AES
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            bc = mod.ip4("192.168.2.255")
+            req = read_fixture("mk8d_browse_request_wifi.bin")
+            out, chal2 = mod.rekey_request_mk8d(MK8D_KEY, req, bc, 9)
+            self.assertNotEqual(chal2, req[585:601])
+            back, back_chal = mod.reseal_request(MK8D_KEY, out, bc, bc, mod.CHAL_OFF["mk8d"])
+            self.assertEqual(back_chal, chal2)
+
+            def body(packet, chal):
+                cr = packet[575:]
+                k = AES.new(MK8D_KEY, AES.MODE_ECB).encrypt(chal)
+                return AES.new(k, AES.MODE_GCM, nonce=bc + cr[2:10]).decrypt_and_verify(cr[42:], cr[26:42])
+
+            self.assertEqual(body(out, chal2), body(req, req[585:601]))
+
+    def test_scan_poll_mk8d_uses_stash(self):
+        import socket as _socket
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            r = make_relay(mod)
+            stash, _ = make_mk8d_browse_request(mod, r.h_bc)
+            r.stash_mk8d = stash
+            r.scan_poll_mk8d()
+            sent = [data for (data, dest) in r.d_h2.sent if dest == (_socket.inet_ntoa(r.h_bc), 30000)]
+            self.assertEqual(len(sent), 1)
+            out, chal = mod.reseal_request(MK8D_KEY, sent[0], r.h_bc, r.h_bc, mod.CHAL_OFF["mk8d"])
+            self.assertIn(chal, r.scan_chals_mk8d)
+            from Crypto.Cipher import AES
+            cr = out[575:]
+            k = AES.new(MK8D_KEY, AES.MODE_ECB).encrypt(chal)
+            body = AES.new(k, AES.MODE_GCM, nonce=r.h_bc + cr[2:10]).decrypt_and_verify(cr[42:], cr[26:42])
+            self.assertEqual(body, bytes(range(256)))
+
+    def test_scan_reply_mk8d_notes_room(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            r = make_relay(mod)
+            stash, _ = make_mk8d_browse_request(mod, r.h_bc)
+            r.stash_mk8d = stash
+            r.scan_poll_mk8d()
+            chal = r.scan_chals_mk8d[-1]
+            rep, _ = make_mk8d_browse_reply(mod, chal, r.h_bc, host_ip=HOST)
+            r.on_disc(rep, (HOST, 30000))
+            rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
+            self.assertEqual(len(rooms), 1)
+            self.assertEqual(rooms[0]["host"], HOST)
+
+    def test_scan_does_not_swallow_session_reply(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            r = make_relay(mod)
+            req, chal = make_mk8d_browse_request(mod, r.sw_bc)
+            r.on_disc(req, (SWITCH, 30000))
+            r.scan_chals_mk8d = [b"\x98" * 16]
+            rep, _ = make_mk8d_browse_reply(mod, r.pin_s2h, r.h_bc, host_ip=HOST)
+            r.on_disc(rep, (HOST, 30000))
+            self.assertTrue(r.d_sw2.sent)
+            self.assertIsNotNone(r.key_mk8d)
 
     def test_scan_poll_unicasts_known_rooms_only(self):
         import socket as _socket
