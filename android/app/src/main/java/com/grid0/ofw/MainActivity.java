@@ -1895,15 +1895,10 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
         box.setPadding(pad, (int) (12 * getResources().getDisplayMetrics().density), pad, pad);
-
-        TextView s3List = new TextView(this);
-        TextView mkList = new TextView(this);
-        addGameSection(box, R.drawable.logo_splatoon3, s3List, "splatoon3");
-        addGameSection(box, R.drawable.logo_mk8d, mkList, "mk8d");
-        refreshWhosOnlineSection(s3List, "splatoon3");
-        refreshWhosOnlineSection(mkList, "mk8d");
-
         box.setBackgroundColor(0xFF9E9E9E);
+
+        buildWhosOnlineSections(box);
+
         AlertDialog roomsDialog = new AlertDialog.Builder(this)
                 .setTitle("Current Rooms")
                 .setView(box)
@@ -1914,6 +1909,77 @@ public class MainActivity extends Activity {
             roomsDialog.getWindow().setBackgroundDrawable(
                     new android.graphics.drawable.ColorDrawable(0xFF9E9E9E));
         }
+    }
+
+    private void buildWhosOnlineSections(final LinearLayout box) {
+        box.removeAllViews();
+
+        Button refreshAll = new Button(this);
+        refreshAll.setText("Refresh All");
+        refreshAll.setAllCaps(false);
+        refreshAll.setTextSize(15);
+        refreshAll.setTextColor(Color.BLACK);
+        GradientDrawable allBg = new GradientDrawable();
+        allBg.setShape(GradientDrawable.RECTANGLE);
+        allBg.setCornerRadius(24 * getResources().getDisplayMetrics().density);
+        allBg.setColor(0xFFEEEEEE);
+        allBg.setStroke((int) (1 * getResources().getDisplayMetrics().density), Color.BLACK);
+        refreshAll.setBackground(allBg);
+        refreshAll.setStateListAnimator(null);
+        LinearLayout.LayoutParams allParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        allParams.gravity = Gravity.CENTER_HORIZONTAL;
+        allParams.bottomMargin = (int) (10 * getResources().getDisplayMetrics().density);
+        refreshAll.setLayoutParams(allParams);
+        refreshAll.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                buildWhosOnlineSections(box);
+            }
+        });
+        box.addView(refreshAll);
+
+        final String[] games = {"splatoon3", "mk8d", "splatoon2"};
+        final int[] logos = {R.drawable.logo_splatoon3, R.drawable.logo_mk8d, R.drawable.logo_splatoon2};
+        final java.util.Map<String, Integer> totals = readPlayersByGame();
+        Integer[] order = {0, 1, 2};
+        java.util.Arrays.sort(order, new java.util.Comparator<Integer>() {
+            @Override
+            public int compare(Integer a, Integer b) {
+                int pa = totals.containsKey(games[a]) ? totals.get(games[a]) : 0;
+                int pb = totals.containsKey(games[b]) ? totals.get(games[b]) : 0;
+                if (pa != pb) {
+                    return pb - pa;
+                }
+                return a - b;
+            }
+        });
+
+        for (int i : order) {
+            TextView list = new TextView(this);
+            addGameSection(box, logos[i], list, games[i]);
+            refreshWhosOnlineSection(list, games[i]);
+        }
+    }
+
+    private java.util.Map<String, Integer> readPlayersByGame() {
+        try {
+            File f = new File(getFilesDir(), "proxy_events.jsonl");
+
+            if (f.exists()) {
+                java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r");
+                long len = raf.length();
+                long start = Math.max(0, len - 200000);
+                raf.seek(start);
+                byte[] buf = new byte[(int) (len - start)];
+                raf.readFully(buf);
+                raf.close();
+                return V3Util.playersByGame(new String(buf, "UTF-8"), System.currentTimeMillis() / 1000);
+            }
+        } catch (Exception ignored) {
+        }
+
+        return new java.util.LinkedHashMap<>();
     }
 
     private void addGameSection(LinearLayout box, int logoRes, final TextView listView, final String game) {

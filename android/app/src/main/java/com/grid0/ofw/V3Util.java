@@ -146,6 +146,57 @@ public final class V3Util {
         return out;
     }
 
+    // Total players per game from room events in the last 90 seconds,
+    // using the latest player count noted for each host.
+    public static java.util.Map<String, Integer> playersByGame(String text, long nowSeconds) {
+        java.util.LinkedHashMap<String, java.util.LinkedHashMap<String, Long>> byGame = new java.util.LinkedHashMap<>();
+        int idx = 0;
+
+        while (true) {
+            int d = text.indexOf("\"ev\": \"room\"", idx);
+
+            if (d < 0) {
+                break;
+            }
+
+            int lineStart = text.lastIndexOf("\n", d) + 1;
+            int lineEnd = text.indexOf("\n", d);
+            String line = text.substring(lineStart, lineEnd < 0 ? text.length() : lineEnd);
+            String game = stringField(line, "game");
+            String host = stringField(line, "host");
+            long players = longField(line, "players");
+            long ts = longField(line, "ts");
+
+            if (game != null && host != null && players > 0 && ts > 0 && nowSeconds - ts <= 90) {
+                java.util.LinkedHashMap<String, Long> byHost = byGame.get(game);
+
+                if (byHost == null) {
+                    byHost = new java.util.LinkedHashMap<>();
+                    byGame.put(game, byHost);
+                }
+
+                byHost.remove(host);
+                byHost.put(host, players);
+            }
+
+            idx = d + 10;
+        }
+
+        java.util.LinkedHashMap<String, Integer> out = new java.util.LinkedHashMap<>();
+
+        for (java.util.Map.Entry<String, java.util.LinkedHashMap<String, Long>> e : byGame.entrySet()) {
+            int total = 0;
+
+            for (Long v : e.getValue().values()) {
+                total += v.intValue();
+            }
+
+            out.put(e.getKey(), total);
+        }
+
+        return out;
+    }
+
     private static long longField(String json, String name) {
         String marker = "\"" + name + "\":";
         int s = json.indexOf(marker);

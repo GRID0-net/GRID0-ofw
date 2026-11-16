@@ -16,6 +16,7 @@ ANDROID_COPY = os.path.join(ROOT, "android", "app", "src", "main", "python", "zt
 KEY_A = bytes.fromhex("00112233445566778899aabbccddeeff")
 KEY_B = bytes.fromhex("ffeeddccbbaa99887766554433221100")
 MK8D_KEY = b"ABCDEFGHIJKLMNOP"
+SPLATOON2_KEY = bytes.fromhex("ee182a63e216cdb1f51ad4bed8cf6508")
 WIKI_KEY = bytes.fromhex("78deee82d86875782c40b15278f37815")
 
 WIKI_PAGE = """In LDN and LAN mode, Pia derives encryption keys using a game-specific key.
@@ -44,6 +45,8 @@ def load_copy(src_path, beside_key=KEY_A, env_key=None, home_key=None):
             fh.write(beside_key.hex())
     with open(os.path.join(mod_dir, "game_key_mk8d.txt"), "w") as fh:
         fh.write(b"ABCDEFGHIJKLMNOP".hex())
+    with open(os.path.join(mod_dir, "game_key_splatoon2.txt"), "w") as fh:
+        fh.write(SPLATOON2_KEY.hex())
     if home_key is not None:
         with open(os.path.join(home, "game_key.txt"), "w") as fh:
             fh.write(home_key.hex())
@@ -125,6 +128,7 @@ def make_relay(m):
     r = m.Relay.__new__(m.Relay)
     r.game_key = KEY_A
     r.game_key_mk8d = getattr(m, "GAME_KEY_MK8D", None) or getattr(m, "MK8D_KEY", None)
+    r.game_key_splatoon2 = getattr(m, "GAME_KEY_SPLATOON2", None) or SPLATOON2_KEY
     r.sw_ip, r.h_ip = SW_PHONE, ZT_PHONE
     r.sw_prefix = r.h_prefix = 24
     r.sw_me, r.h_me = m.ip4(SW_PHONE), m.ip4(ZT_PHONE)
@@ -142,6 +146,8 @@ def make_relay(m):
     r.host_req_chals = []
     r.mk8d_req_chals = []
     r.mk8d_host_req_chals = []
+    r.splatoon2_req_chals = []
+    r.splatoon2_host_req_chals = []
     r.pin_s2h = b"\x99" * 16
     r.pin_h2s = b"\x88" * 16
     r.host_side = None
@@ -154,11 +160,16 @@ def make_relay(m):
     r.stash_req = None
     r.stash_mk8d = None
     r.scan_chals_mk8d = []
+    r.stash_splatoon2 = None
+    r.scan_chals_splatoon2 = []
     r.room_noted = {}
     r.room_names = {}
+    r.room_counts = {}
     r.key = None
     r.key_mk8d = None
+    r.key_splatoon2 = None
     r.mk8d_state = False
+    r.splatoon2_state = False
     r.game = None
     r.tables = None
     r.ip_pairs = None
@@ -1621,6 +1632,52 @@ def make_mk8d_browse_reply(m, req_chal, bc, host_ip=None, param=None,
     return bytes(rep), pt
 
 
+def make_splatoon2_browse_request(m, bc, chal=b"\x21" * 16, counter=b"\x22" * 8, pt=None):
+    from Crypto.Cipher import AES
+    if pt is None:
+        pt = bytes(range(256))
+    k = AES.new(SPLATOON2_KEY, AES.MODE_ECB).encrypt(chal)
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter).encrypt_and_digest(pt)
+    req = bytearray(873)
+    req[0] = 0
+    req[1:5] = (0x23A).to_bytes(4, "big")
+    req[575] = 1
+    req[576] = 1
+    req[577:585] = counter
+    req[585:601] = chal
+    req[601:617] = tag
+    req[617:873] = ct
+    return bytes(req), chal
+
+
+def make_splatoon2_browse_reply(m, req_chal, bc, host_ip=None, param=None,
+                                rchal=b"\x55" * 16, counter=b"\x44" * 8, pt=b"\x33" * 16,
+                                name=None, players=None):
+    from Crypto.Cipher import AES
+    if param is None:
+        param = bytes(range(32, 64))
+    rep = bytearray(1361)
+    rep[0] = 1
+    rep[1:5] = (1298).to_bytes(4, "big")
+    if players is not None:
+        rep[37:39] = players.to_bytes(2, "big")
+    if name is not None:
+        nb = name.encode("utf-8")
+        rep[471] = 1
+        rep[472] = 1
+        rep[473:473 + len(nb)] = nb
+    if host_ip is not None:
+        rep[436:440] = m.ip4(host_ip)
+    rep[1271:1303] = param
+    k = hmac_mod.new(SPLATOON2_KEY, rchal + req_chal, hashlib.sha256).digest()[:16]
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + counter).encrypt_and_digest(pt)
+    rep[1305:1313] = counter
+    rep[1313:1329] = rchal
+    rep[1329:1345] = tag
+    rep[1345:1361] = ct
+    return bytes(rep), pt
+
+
 class TestMK8D(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -2098,6 +2155,156 @@ class TestScanRequest(unittest.TestCase):
             r.scan_poll()
             dests = {dest for (_, dest) in r.d_h.sent}
             self.assertEqual(dests, {(_socket.inet_ntoa(r.h_bc), 35000), (HOST, 35000)})
+
+
+class TestSplatoon2(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        self.r = make_relay(self.m)
+        self.orig_urlopen = urllib.request.urlopen
+
+    def tearDown(self):
+        urllib.request.urlopen = self.orig_urlopen
+
+    def serve_wiki(self):
+        class Resp:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+            def read(self):
+                return WIKI_PAGE.encode()
+        urllib.request.urlopen = lambda *a, **k: Resp()
+
+    def test_fetch_splatoon2_key_from_wiki(self):
+        self.serve_wiki()
+        self.assertEqual(self.m.fetch_game_key("Splatoon 2"), SPLATOON2_KEY)
+
+    def test_load_splatoon2_key_fetches_and_caches(self):
+        beside = os.path.join(self.m._test_mod_dir, "game_key_splatoon2.txt")
+        if os.path.exists(beside):
+            os.remove(beside)
+        self.serve_wiki()
+        key = self.m.load_game_key_splatoon2()
+        self.assertEqual(key, SPLATOON2_KEY)
+        with open(beside) as fh:
+            self.assertEqual(fh.read().strip(), SPLATOON2_KEY.hex())
+
+    def test_request_shape_detects_as_family(self):
+        req, chal = make_splatoon2_browse_request(self.m, self.r.sw_bc)
+        self.assertEqual(self.m.detect_game(req), "mk8d")
+
+    def test_splatoon2_request_disambiguated(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            with self.subTest(path=path):
+                mod = load_copy(path)
+                r = make_relay(mod)
+                req, chal = make_splatoon2_browse_request(mod, r.sw_bc)
+                r.on_disc(req, (SWITCH, 30000))
+                self.assertEqual(r.game, "splatoon2")
+                self.assertEqual(r.splatoon2_req_chals, [chal])
+                self.assertEqual(r.mk8d_req_chals, [])
+                self.assertEqual(r.d_h.sent, [])
+                dests = [d for _, d in r.d_h2.sent]
+                self.assertIn(("10.147.17.255", 30000), dests)
+                first = r.d_h2.sent[0][0]
+                self.assertEqual(first[585:601], r.pin_s2h)
+                from Crypto.Cipher import AES
+                k = AES.new(SPLATOON2_KEY, AES.MODE_ECB).encrypt(r.pin_s2h)
+                pt = AES.new(k, AES.MODE_GCM, nonce=r.h_bc + first[577:585]).decrypt_and_verify(
+                    first[617:873], first[601:617])
+                self.assertEqual(pt, bytes(range(256)))
+
+    def test_mk8d_request_still_mk8d(self):
+        m, r = self.m, self.r
+        req, chal = make_mk8d_browse_request(m, r.sw_bc)
+        r.on_disc(req, (SWITCH, 30000))
+        self.assertEqual(r.game, "mk8d")
+        self.assertEqual(r.mk8d_req_chals, [chal])
+        self.assertEqual(r.splatoon2_req_chals, [])
+
+    def pair_splatoon2(self, mod=None, r=None, name="Hosty", players=3):
+        mod = mod or self.m
+        r = r or self.r
+        req, chal = make_splatoon2_browse_request(mod, r.sw_bc)
+        r.on_disc(req, (SWITCH, 30000))
+        rep, pt = make_splatoon2_browse_reply(mod, chal, r.h_bc, host_ip=HOST,
+                                              name=name, players=players)
+        r.on_disc(rep, (HOST, 30000))
+        return req, chal, rep, pt
+
+    def test_pairing_notes_room_with_name_and_players(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            with self.subTest(path=path):
+                mod = load_copy(path)
+                r = make_relay(mod)
+                self.pair_splatoon2(mod, r)
+                rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "splatoon2"]
+                self.assertEqual(len(rooms), 1)
+                self.assertEqual(rooms[0]["host"], HOST)
+                self.assertEqual(rooms[0]["name"], "Hosty")
+                self.assertEqual(rooms[0]["players"], 3)
+
+    def test_reply_sets_splatoon2_session_key_only(self):
+        m, r = self.m, self.r
+        req, chal, rep, pt = self.pair_splatoon2()
+        self.assertEqual(r.key_splatoon2, m.session_key(SPLATOON2_KEY, rep, m.mk8d_param_off(rep)))
+        self.assertIsNone(r.key_mk8d)
+        self.assertIsNone(r.key)
+        self.assertEqual(r.host_side, "h")
+        data, dest = r.d_sw2.sent[-1]
+        self.assertEqual(dest, (SWITCH, 30000))
+        self.assertEqual(open_reply(m, SPLATOON2_KEY, data, chal, r.sw_bc), pt)
+
+    def test_host_name_and_players_units(self):
+        m = self.m
+        rep, pt = make_splatoon2_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"),
+                                              name="Hosty", players=3)
+        self.assertEqual(m.splatoon2_host_name(rep), "Hosty")
+        self.assertEqual(m.room_players("splatoon2", rep), 3)
+        self.assertEqual(m.room_players("mk8d", rep), 3)
+        rep0, _ = make_splatoon2_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), players=0)
+        self.assertIsNone(m.room_players("splatoon2", rep0))
+        rep17, _ = make_splatoon2_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), players=17)
+        self.assertIsNone(m.room_players("splatoon2", rep17))
+        noname, _ = make_splatoon2_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), players=2)
+        self.assertIsNone(m.splatoon2_host_name(noname))
+
+    def test_host_name_utf16_station(self):
+        m = self.m
+        rep, pt = make_splatoon2_browse_reply(m, b"\x21" * 16, m.ip4("10.147.17.255"), players=1)
+        rep = bytearray(rep)
+        nb = "Ink2".encode("utf-16-le")
+        rep[471] = 1
+        rep[472] = 2
+        rep[473:473 + len(nb)] = nb
+        self.assertEqual(m.splatoon2_host_name(bytes(rep)), "Ink2")
+
+    def test_splatoon3_room_players_offset(self):
+        m = self.m
+        rep, pt = make_browse_reply(m, KEY_A, b"\x11" * 16, m.ip4("10.147.17.255"))
+        rep = bytearray(rep)
+        rep[35] = 5
+        self.assertEqual(m.room_players("splatoon3", bytes(rep)), 5)
+        rep[35] = 0
+        self.assertIsNone(m.room_players("splatoon3", bytes(rep)))
+
+    def test_mk8d_room_note_carries_players(self):
+        m, r = self.m, self.r
+        req, chal = make_mk8d_browse_request(m, r.sw_bc)
+        r.on_disc(req, (SWITCH, 30000))
+        rep, pt = make_mk8d_browse_reply(m, chal, r.h_bc, host_ip=HOST)
+        rep = bytearray(rep)
+        rep[37:39] = (4).to_bytes(2, "big")
+        r.on_disc(bytes(rep), (HOST, 30000))
+        rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
+        self.assertEqual(len(rooms), 1)
+        self.assertEqual(rooms[0]["players"], 4)
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ struct RoomEntry: Identifiable {
     let game: String
     let host: String
     let name: String?
+    let players: Int?
     var display: String { name ?? host }
 }
 
@@ -183,6 +184,7 @@ final class AppModel: ObservableObject {
             eventsPath: eventsPath,
             filesDir: filesDir.path,
             gameKey: key,
+            gameKeySplatoon2: loadGameKeySplatoon2(),
             log: { [weak self] line in
                 self?.appendLogLine(line)
                 _ = logPathCopy
@@ -194,6 +196,9 @@ final class AppModel: ObservableObject {
             return
         }
         self.relay = relay
+        if cfg.gameKeySplatoon2 == nil {
+            fetchGameKeySplatoon2(relay)
+        }
         let thread = Thread {
             relay.run()
             DispatchQueue.main.async { [weak self] in
@@ -227,6 +232,37 @@ final class AppModel: ObservableObject {
             if key.count == 16 { return key }
         }
         return nil
+    }
+
+    private func loadGameKeySplatoon2() -> [UInt8]? {
+        let local = filesDir.appendingPathComponent("game_key_splatoon2.txt")
+        if let hex = try? String(contentsOf: local, encoding: .utf8) {
+            let key = hexToBytes(hex.trimmingCharacters(in: .whitespacesAndNewlines))
+            if key.count == 16 { return key }
+        }
+        return nil
+    }
+
+    private func fetchGameKeySplatoon2(_ relay: Relay) {
+        guard let url = URL(string: "https://raw.githubusercontent.com/kinnay/NintendoClientsWiki/master/Pia-Game-Keys.md") else { return }
+        URLSession.shared.dataTask(with: url) { [weak self] data, _, _ in
+            guard let self = self, let data = data,
+                  let text = String(data: data, encoding: .utf8) else { return }
+            for line in text.split(separator: "\n") {
+                if !line.contains("Splatoon 2") { continue }
+                let parts = line.split(separator: "`")
+                if parts.count >= 2 {
+                    let tok = String(parts[1]).trimmingCharacters(in: .whitespaces)
+                    let key = self.hexToBytes(tok)
+                    if key.count == 16 {
+                        let local = self.filesDir.appendingPathComponent("game_key_splatoon2.txt")
+                        try? tok.write(to: local, atomically: true, encoding: .utf8)
+                        relay.gameKeySplatoon2 = key
+                    }
+                }
+                break
+            }
+        }.resume()
     }
 
     private func hexToBytes(_ hex: String) -> [UInt8] {
@@ -305,7 +341,8 @@ final class AppModel: ObservableObject {
                let host = obj["host"] as? String,
                let ts = (obj["ts"] as? NSNumber)?.doubleValue,
                ts >= cutoff {
-                latest[game + "|" + host] = RoomEntry(game: game, host: host, name: obj["name"] as? String)
+                latest[game + "|" + host] = RoomEntry(game: game, host: host, name: obj["name"] as? String,
+                                                      players: (obj["players"] as? NSNumber)?.intValue)
             }
             if obj["kind"] as? String == "browse_req", obj["dir"] as? String == "s2h",
                let src = obj["src"] as? String {
@@ -313,7 +350,7 @@ final class AppModel: ObservableObject {
             }
         }
         let newRooms = latest.values.sorted { $0.game + $0.host < $1.game + $1.host }
-        if newRooms.map({ $0.id + ($0.name ?? "") }) != rooms.map({ $0.id + ($0.name ?? "") }) {
+        if newRooms.map({ $0.id + ($0.name ?? "") + String($0.players ?? 0) }) != rooms.map({ $0.id + ($0.name ?? "") + String($0.players ?? 0) }) {
             rooms = newRooms
         }
         if let sw = lastSwitch {
@@ -329,6 +366,10 @@ final class AppModel: ObservableObject {
 
     func roomsFor(_ game: String) -> [RoomEntry] {
         return rooms.filter { $0.game == game }
+    }
+
+    func playersFor(_ game: String) -> Int {
+        return roomsFor(game).reduce(0) { $0 + ($1.players ?? 0) }
     }
 
     // MARK: - Sharing

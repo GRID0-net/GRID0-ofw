@@ -11,8 +11,8 @@ let MK8D_PORT = 30000
 // player as its own station (phone IP + port).
 let SLOT_PORTS = (0..<8).map { 49152 + $0 }
 let MK8D_KEY: [UInt8] = Array("ABCDEFGHIJKLMNOP".utf8)
-let GAME_NAMES = ["splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe"]
-let CHAL_OFF = ["splatoon3": 27, "mk8d": 575]
+let GAME_NAMES = ["splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe", "splatoon2": "Splatoon 2"]
+let CHAL_OFF = ["splatoon3": 27, "mk8d": 575, "splatoon2": 575]
 let PARAM_OFF = ["splatoon3": 105, "mk8d": 1270]
 let MAGIC: [UInt8] = [0x32, 0xAB, 0x98, 0x64]
 let ZSTD_MAGIC: [UInt8] = [0x28, 0xB5, 0x2F, 0xFD]
@@ -446,6 +446,49 @@ func mk8dHostName(_ rep: [UInt8]) -> String? {
         }
     }
     return nil
+}
+
+func splatoon2HostName(_ rep: [UInt8]) -> String? {
+    let base = 5 + 0x1D2
+    for i in 0..<16 {
+        let off = base + i * 50
+        if off + 42 > rep.count { break }
+        if rep[off] != 1 { continue }
+        let raw = Array(rep[(off + 2)..<(off + 42)])
+        var name: String? = nil
+        if rep[off + 1] == 2 {
+            var units: [UInt16] = []
+            var j = 0
+            while j + 1 < raw.count {
+                let u = UInt16(raw[j]) | (UInt16(raw[j + 1]) << 8)
+                if u == 0 { break }
+                units.append(u)
+                j += 2
+            }
+            name = String(utf16CodeUnits: units, count: units.count)
+        } else if let end = raw.firstIndex(of: 0) {
+            name = String(bytes: Array(raw[0..<end]), encoding: .utf8)
+        } else {
+            name = String(bytes: raw, encoding: .utf8)
+        }
+        if let n = name?.trimmingCharacters(in: .whitespaces), !n.isEmpty,
+           n.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) {
+            return n
+        }
+    }
+    return nil
+}
+
+func roomPlayers(_ game: String, _ rep: [UInt8]) -> Int? {
+    let n: Int
+    if game == "splatoon3" {
+        n = rep.count > 35 ? Int(rep[35]) : 0
+    } else if rep.count >= 39 {
+        n = Int(rep[37]) << 8 | Int(rep[38])
+    } else {
+        n = 0
+    }
+    return (1...16).contains(n) ? n : nil
 }
 
 let SCAN_HEADER: [UInt8] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00,

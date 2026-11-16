@@ -388,8 +388,22 @@ struct CurrentRoomsView: View {
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(.black)
                         .padding(.top, 20)
-                    gameSection(game: "splatoon3", logo: "logo_splatoon3")
-                    gameSection(game: "mk8d", logo: "logo_mk8d")
+                    Button(action: { model.refreshFromFiles() }) {
+                        Text("Refresh All")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.black)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(Color(red: 0xEE / 255, green: 0xEE / 255, blue: 0xEE / 255))
+                                    .overlay(Capsule().stroke(Color.black, lineWidth: 1.5))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    ForEach(orderedGames(), id: \.game) { entry in
+                        gameSection(game: entry.game, logo: entry.logo)
+                    }
                     Button("Close") { dismiss() }
                         .font(.system(size: 16, weight: .medium))
                         .foregroundColor(.black)
@@ -400,6 +414,20 @@ struct CurrentRoomsView: View {
                 .padding(.bottom, 30)
             }
         }
+    }
+
+    private func orderedGames() -> [(game: String, logo: String)] {
+        let all: [(game: String, logo: String)] = [
+            ("splatoon3", "logo_splatoon3"),
+            ("mk8d", "logo_mk8d"),
+            ("splatoon2", "logo_splatoon2"),
+        ]
+        return all.enumerated().sorted { a, b in
+            let pa = model.playersFor(a.element.game)
+            let pb = model.playersFor(b.element.game)
+            if pa != pb { return pa > pb }
+            return a.offset < b.offset
+        }.map { $0.element }
     }
 
     private func gameSection(game: String, logo: String) -> some View {

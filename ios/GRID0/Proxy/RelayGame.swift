@@ -6,12 +6,12 @@ import Darwin
 extension Relay {
 
     func onGame(_ data: [UInt8], _ src: Addr, _ direction: String, _ localPort: Int? = nil) {
-        guard let tbl = tables, key != nil || keyMk8d != nil else {
+        guard let tbl = tables, key != nil || keyMk8d != nil || keySplatoon2 != nil else {
             note([("ev", .s("drop_nokey")), ("dir", .s(direction)),
                   ("src", .s(src.ip)), ("len", .i(data.count))])
             return
         }
-        if game == "mk8d" {
+        if game == "mk8d" || game == "splatoon2" {
             var peer: String? = nil
             if direction == "s2h" {
                 peer = hostAddr?.ip
@@ -19,10 +19,10 @@ extension Relay {
                 peer = src.ip
             }
             if let p = peer {
-                touchRoom(p)
+                touchRoom(p, game ?? "mk8d")
             }
         }
-        if game == "mk8d" && dup(data, src.ip) {
+        if (game == "mk8d" || game == "splatoon2") && dup(data, src.ip) {
             return
         }
         var table: [BytePair]
@@ -70,14 +70,14 @@ extension Relay {
             udest = (dest!.ip, swGamePort ?? GAME_PORT)
             pknown = swGamePort != nil
         }
-        let order = game == "mk8d" ? ["mk8d", "splatoon3"] : ["splatoon3", "mk8d"]
+        let order = (game == "mk8d" || game == "splatoon2") ? ["mk8d", "splatoon2", "splatoon3"] : ["splatoon3", "mk8d", "splatoon2"]
         var r: (out: [UInt8], label: String, changed: Bool)? = nil
         var used: String? = nil
         for g in order {
-            let k = g == "mk8d" ? keyMk8d : key
+            let k = g == "splatoon3" ? key : (g == "splatoon2" ? keySplatoon2 : keyMk8d)
             if k == nil { continue }
             let rr: (out: [UInt8], label: String, changed: Bool)?
-            if g == "mk8d" {
+            if g == "mk8d" || g == "splatoon2" {
                 let t2 = tables!
                 rr = relayGameMk8d(key: k!, srcIp: ip4(src.ip), myIp: myIp, d: data,
                                    table: direction == "s2h" ? t2.mkS2h : t2.mkH2s)
@@ -110,9 +110,10 @@ extension Relay {
             for ip in cands {
                 guard let entry = sessions[ip], let et = entry.tables else { continue }
                 for g in order {
-                    guard let k2 = entry.keys[g] else { continue }
+                    let k2 = g == "splatoon2" ? (entry.keys[g] ?? keySplatoon2) : entry.keys[g]
+                    guard let k2 = k2 else { continue }
                     let rr: (out: [UInt8], label: String, changed: Bool)?
-                    if g == "mk8d" {
+                    if g == "mk8d" || g == "splatoon2" {
                         rr = relayGameMk8d(key: k2, srcIp: ip4(src.ip), myIp: myIp, d: data,
                                            table: direction == "s2h" ? et.mkS2h : et.mkH2s)
                     } else {
@@ -130,6 +131,7 @@ extension Relay {
                     hostAddr = (ip, (hostAddr != nil && hostAddr!.ip == ip) ? hostAddr!.port : GAME_PORT)
                     key = entry.keys["splatoon3"]
                     keyMk8d = entry.keys["mk8d"]
+                    keySplatoon2 = entry.keys["splatoon2"]
                     tables = et
                     table = direction == "s2h" ? et.s2h : et.h2s
                     pairs = direction == "s2h" ? et.ipS2h : et.ipH2s
@@ -143,12 +145,13 @@ extension Relay {
             }
         }
         guard let result = r, let usedGame = used else {
-            if game == "mk8d" && data.count >= 36 && Array(data[0..<4]) == MAGIC && data[4] == 1 {
+            if (game == "mk8d" || game == "splatoon2") && data.count >= 36 && Array(data[0..<4]) == MAGIC && data[4] == 1 {
                 if !pknown {
                     send(sock, data, bdest.ip, bdest.port, direction, meta: [("label", .s("plain"))])
                 }
                 send(sock, data, udest.ip, udest.port, direction, meta: [("label", .s("plain"))])
-                if !mk8dState {
+                let state = game == "mk8d" ? mk8dState : splatoon2State
+                if !state {
                     sendExtraPorts(sock, data, udest.ip, skipPort: udest.port)
                 }
                 return
@@ -173,7 +176,7 @@ extension Relay {
         let out = result.out
         let label = result.label
         let changed = result.changed
-        let nonceBytes = usedGame == "mk8d" ? Array(data[12..<20]) : Array(data[13..<21])
+        let nonceBytes = (usedGame == "mk8d" || usedGame == "splatoon2") ? Array(data[12..<20]) : Array(data[13..<21])
         let nonce = nonceBytes.map { String(format: "%02x", $0) }.joined()
         note([("ev", .s("rx")), ("dir", .s(direction)), ("src", .s(src.ip)),
               ("len", .i(data.count)), ("label", .s(label)), ("nonce", .s(nonce))])
@@ -183,16 +186,21 @@ extension Relay {
             cap?.save(kind: "hs-game", data: data, src: swIp, dst: src.ip, sport: GAME_PORT, dport: src.port)
         }
         let meta: [(String, JVal)] = [("label", .s(label)), ("nonce", .s(nonce)), ("changed", .b(changed))]
-        if usedGame == "mk8d" {
+        if usedGame == "mk8d" || usedGame == "splatoon2" {
             if !pknown {
                 send(sock, out, bdest.ip, bdest.port, direction, meta: meta)
             }
             send(sock, out, udest.ip, udest.port, direction, meta: meta)
-            if !mk8dState {
+            let state = usedGame == "mk8d" ? mk8dState : splatoon2State
+            if !state {
                 sendExtraPorts(sock, out, udest.ip, skipPort: udest.port)
             }
             if label == "01004600" {
-                mk8dState = true
+                if usedGame == "mk8d" {
+                    mk8dState = true
+                } else {
+                    splatoon2State = true
+                }
             }
         } else {
             var to = dest!
@@ -217,6 +225,7 @@ extension Relay {
     func run() {
         loadStash()
         loadStashMk8d()
+        loadStashSplatoon2()
         FileManager.default.createFile(atPath: cfg.eventsPath, contents: nil)
         eventsHandle = FileHandle(forWritingAtPath: cfg.eventsPath)
         note([("ev", .s("start")), ("sw", .s(swIp)), ("h", .s(hIp)),
@@ -272,6 +281,8 @@ extension Relay {
                 scanPoll()
                 mark("scan mk8d")
                 scanPollMk8d()
+                mark("scan splatoon2")
+                scanPollSplatoon2()
             }
             if t - lastStat > 5 {
                 lastStat = t

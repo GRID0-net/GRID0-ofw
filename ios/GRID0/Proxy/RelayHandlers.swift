@@ -22,14 +22,22 @@ extension Relay {
             onReplyFromSwitch(data, src)
             return
         }
-        guard let game = detectGame(data) else { return }
-        let sealed: (out: [UInt8], chal: [UInt8])?
-        if game == "mk8d" {
-            sealed = resealRequestPinned(gameKey: keyFor(game), req: data, oldBc: swBc, newBc: hBc,
-                                         chalOff: CHAL_OFF[game]!, pin: pinS2h)
-        } else {
-            sealed = resealRequest(gameKey: keyFor(game), req: data, oldBc: swBc, newBc: hBc,
-                                   chalOff: CHAL_OFF[game]!)
+        guard let detected = detectGame(data) else { return }
+        var game = detected
+        var sealed: (out: [UInt8], chal: [UInt8])? = nil
+        for g in (detected == "mk8d" ? ["mk8d", "splatoon2"] : [detected]) {
+            if keyFor(g).isEmpty { continue }
+            if g == "splatoon3" {
+                sealed = resealRequest(gameKey: keyFor(g), req: data, oldBc: swBc, newBc: hBc,
+                                       chalOff: CHAL_OFF[g]!)
+            } else {
+                sealed = resealRequestPinned(gameKey: keyFor(g), req: data, oldBc: swBc, newBc: hBc,
+                                             chalOff: CHAL_OFF[g]!, pin: pinS2h)
+            }
+            if sealed != nil {
+                game = g
+                break
+            }
         }
         guard let (out, chal) = sealed else {
             cap?.save(kind: "disc", data: data, src: src.ip, dst: ipString(swBc),
@@ -59,6 +67,9 @@ extension Relay {
         } else if game == "mk8d" {
             stashMk8d = out
             saveStashMk8d()
+        } else if game == "splatoon2" {
+            stashSplatoon2 = out
+            saveStashSplatoon2()
         }
         lastSwGame = game
         send(sock, out, ipString(hBc), port, "s2h", meta: [("kind", .s("browse_req"))])
@@ -120,6 +131,22 @@ extension Relay {
         }
     }
 
+    func stashPathSplatoon2() -> String {
+        return cfg.filesDir + "/last_browse_request_splatoon2.bin"
+    }
+
+    func saveStashSplatoon2() {
+        guard let data = stashSplatoon2 else { return }
+        try? Data(data).write(to: URL(fileURLWithPath: stashPathSplatoon2()))
+    }
+
+    func loadStashSplatoon2() {
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: stashPathSplatoon2())),
+           data.count == 873 && data[0] == 0 {
+            stashSplatoon2 = Array(data)
+        }
+    }
+
     func roomTargets(_ game: String) -> Set<String> {
         return Set(rooms.keys.compactMap { k -> String? in
             let parts = k.split(separator: "|")
@@ -141,6 +168,44 @@ extension Relay {
         let t = now()
         rooms = rooms.filter { t - $0.value < 60 }
         var targets = roomTargets("mk8d")
+        if let h = hostAddr {
+            targets.insert(h.ip)
+        }
+        targets.remove(hIp)
+        if !targets.isEmpty {
+            for ip in targets.sorted() {
+                send(sock, req, ip, port, "scan",
+                     meta: [("kind", .s("browse_req_scan_uni")), ("probe", .i(1))])
+            }
+        } else {
+            let base = ipToUInt32(hIp) & prefixMask(hPrefix)
+            let bc = base | ~prefixMask(hPrefix)
+            var v = base + 1
+            while v < bc {
+                let ip = uint32ToIp(v)
+                if ip != hIp {
+                    send(sock, req, ip, port, "scan",
+                         meta: [("kind", .s("browse_req_scan_uni")), ("probe", .i(1))])
+                }
+                v += 1
+            }
+        }
+    }
+
+    func scanPollSplatoon2() {
+        if keySplatoon2 != nil || stashSplatoon2 == nil { return }
+        scanCounter += 1
+        guard let (req, chal) = rekeyRequestMk8d(gameKey: keyFor("splatoon2"), req: stashSplatoon2!,
+                                                 bc: hBc, counter: scanCounter) else { return }
+        scanChalsSplatoon2.append(chal)
+        scanChalsSplatoon2 = Array(scanChalsSplatoon2.suffix(4))
+        let sock = sockFor("h", "splatoon2")
+        let port = portFor("splatoon2")
+        send(sock, req, ipString(hBc), port, "scan",
+             meta: [("kind", .s("browse_req_scan")), ("probe", .i(1))])
+        let t = now()
+        rooms = rooms.filter { t - $0.value < 60 }
+        var targets = roomTargets("splatoon2")
         if let h = hostAddr {
             targets.insert(h.ip)
         }
@@ -235,8 +300,7 @@ extension Relay {
             if opened {
                 rooms["splatoon3|\(src.ip)"] = now()
                 if let rname = splatoonHostName(data) {
-                    note([("ev", .s("room")), ("game", .s("splatoon3")), ("host", .s(src.ip)),
-                          ("name", .s(rname)), ("ts", .i(Int(now())))])
+                    noteRoom("splatoon3", src.ip, rname, roomPlayers("splatoon3", data))
                 }
                 return
             }
@@ -259,7 +323,29 @@ extension Relay {
             }
             if opened {
                 rooms["mk8d|\(src.ip)"] = now()
-                noteRoom("mk8d", src.ip, mk8dHostName(data))
+                noteRoom("mk8d", src.ip, mk8dHostName(data), roomPlayers("mk8d", data))
+                return
+            }
+            discNote("note: a reply from \(src.ip):\(src.port) did not open with a scan challenge")
+            cap?.save(kind: "disc", data: data, src: src.ip, dst: hIp, sport: src.port, dport: src.port)
+        }
+        if data.count >= 64 && data[0] == 1 && !scanChalsSplatoon2.isEmpty {
+            var cands = scanChalsSplatoon2
+            if switchAddr == nil {
+                cands.append(pinS2h)
+            }
+            var opened = false
+            for chal in cands {
+                if resealReply(gameKey: keyFor("splatoon2"), rep: data, reqChal: chal,
+                               oldBc: hBc, newBc: hBc, oldHost: ip4(src.ip), newHost: ip4(src.ip),
+                               paramOff: mk8dParamOff(data)) != nil {
+                    opened = true
+                    break
+                }
+            }
+            if opened {
+                rooms["splatoon2|\(src.ip)"] = now()
+                noteRoom("splatoon2", src.ip, splatoon2HostName(data), roomPlayers("splatoon2", data))
                 return
             }
             discNote("note: a reply from \(src.ip):\(src.port) did not open with a scan challenge")
@@ -277,12 +363,19 @@ extension Relay {
                                    paramOff: mk8dParamOff(data), frag: true)
             if out != nil { game = "mk8d" }
         }
+        if out == nil && !splatoon2ReqChals.isEmpty {
+            out = resealReplyRekey(gameKey: keyFor("splatoon2"), rep: data, chalIn: pinS2h,
+                                   chalOut: splatoon2ReqChals[0], oldBc: hBc, newBc: swBc,
+                                   oldHost: ip4(src.ip), newHost: swMe,
+                                   paramOff: mk8dParamOff(data))
+            if out != nil { game = "splatoon2" }
+        }
         if out == nil {
-            for g in ["splatoon3", "mk8d"] {
+            for g in ["splatoon3", "mk8d", "splatoon2"] {
                 for chal in chalsFor("s2h", g) {
                     let r = resealReply(gameKey: keyFor(g), rep: data, reqChal: chal,
                                         oldBc: hBc, newBc: swBc, oldHost: ip4(src.ip), newHost: swMe,
-                                        paramOff: g == "mk8d" ? mk8dParamOff(data) : PARAM_OFF[g]!,
+                                        paramOff: (g == "mk8d" || g == "splatoon2") ? mk8dParamOff(data) : PARAM_OFF[g]!,
                                         frag: g == "mk8d")
                     if r != nil {
                         out = r
@@ -311,14 +404,15 @@ extension Relay {
         rooms["\(g)|\(src.ip)"] = now()
         if g == "splatoon3" {
             if let rname = splatoonHostName(data) {
-                note([("ev", .s("room")), ("game", .s(g)), ("host", .s(src.ip)),
-                      ("name", .s(rname)), ("ts", .i(Int(now())))])
+                noteRoom("splatoon3", src.ip, rname, roomPlayers("splatoon3", data))
             }
         } else if g == "mk8d" {
-            noteRoom("mk8d", src.ip, mk8dHostName(data))
+            noteRoom("mk8d", src.ip, mk8dHostName(data), roomPlayers("mk8d", data))
+        } else if g == "splatoon2" {
+            noteRoom("splatoon2", src.ip, splatoon2HostName(data), roomPlayers("splatoon2", data))
         }
         var entry = sessions[src.ip] ?? SessionEntry()
-        if let k = (g == "mk8d" ? keyMk8d : key) {
+        if let k = (g == "mk8d" ? keyMk8d : (g == "splatoon2" ? keySplatoon2 : key)) {
             entry.keys[g] = k
         }
         entry.tables = tablesFor(src.ip)
@@ -330,14 +424,22 @@ extension Relay {
         send(sockFor("sw", g), sealed, switchAddr!.ip, port, "h2s", meta: [("kind", .s("browse_reply"))])
     }
 
-    func onRequestFromHost(_ data: [UInt8], _ src: Addr, _ game: String) {
-        let sealed: (out: [UInt8], chal: [UInt8])?
-        if game == "mk8d" {
-            sealed = resealRequestPinned(gameKey: keyFor(game), req: data, oldBc: hBc, newBc: swBc,
-                                         chalOff: CHAL_OFF[game]!, pin: pinH2s)
-        } else {
-            sealed = resealRequest(gameKey: keyFor(game), req: data, oldBc: hBc, newBc: swBc,
-                                   chalOff: CHAL_OFF[game]!)
+    func onRequestFromHost(_ data: [UInt8], _ src: Addr, _ detected: String) {
+        var game = detected
+        var sealed: (out: [UInt8], chal: [UInt8])? = nil
+        for g in (detected == "mk8d" ? ["mk8d", "splatoon2"] : [detected]) {
+            if keyFor(g).isEmpty { continue }
+            if g == "splatoon3" {
+                sealed = resealRequest(gameKey: keyFor(g), req: data, oldBc: hBc, newBc: swBc,
+                                       chalOff: CHAL_OFF[g]!)
+            } else {
+                sealed = resealRequestPinned(gameKey: keyFor(g), req: data, oldBc: hBc, newBc: swBc,
+                                             chalOff: CHAL_OFF[g]!, pin: pinH2s)
+            }
+            if sealed != nil {
+                game = g
+                break
+            }
         }
         guard let (out, chal) = sealed else {
             cap?.save(kind: "disc", data: data, src: src.ip, dst: ipString(hBc),
@@ -370,12 +472,19 @@ extension Relay {
                                    paramOff: mk8dParamOff(data), frag: true)
             if out != nil { game = "mk8d" }
         }
+        if out == nil && !splatoon2HostReqChals.isEmpty {
+            out = resealReplyRekey(gameKey: keyFor("splatoon2"), rep: data, chalIn: pinH2s,
+                                   chalOut: splatoon2HostReqChals[0], oldBc: swBc, newBc: hBc,
+                                   oldHost: ip4(src.ip), newHost: hMe,
+                                   paramOff: mk8dParamOff(data))
+            if out != nil { game = "splatoon2" }
+        }
         if out == nil {
-            for g in ["splatoon3", "mk8d"] {
+            for g in ["splatoon3", "mk8d", "splatoon2"] {
                 for chal in chalsFor("h2s", g) {
                     let r = resealReply(gameKey: keyFor(g), rep: data, reqChal: chal,
                                         oldBc: swBc, newBc: hBc, oldHost: ip4(src.ip), newHost: hMe,
-                                        paramOff: g == "mk8d" ? mk8dParamOff(data) : PARAM_OFF[g]!,
+                                        paramOff: (g == "mk8d" || g == "splatoon2") ? mk8dParamOff(data) : PARAM_OFF[g]!,
                                         frag: g == "mk8d")
                     if r != nil {
                         out = r
@@ -408,24 +517,29 @@ extension Relay {
         send(sockFor("h", g), sealed, destPeer.ip, port, "s2h", meta: [("kind", .s("browse_reply"))])
     }
 
-    func noteRoom(_ game: String, _ host: String, _ name: String?) {
+    func noteRoom(_ game: String, _ host: String, _ name: String?, _ players: Int? = nil) {
         if let name = name {
             roomNames[host] = name
         }
-        if let known = roomNames[host] {
-            note([("ev", .s("room")), ("game", .s(game)), ("host", .s(host)),
-                  ("name", .s(known)), ("ts", .i(Int(now())))])
-        } else {
-            note([("ev", .s("room")), ("game", .s(game)), ("host", .s(host)),
-                  ("ts", .i(Int(now())))])
+        if let players = players {
+            roomCounts[host] = players
         }
+        var fields: [(String, JVal)] = [("ev", .s("room")), ("game", .s(game)), ("host", .s(host))]
+        if let known = roomNames[host] {
+            fields.append(("name", .s(known)))
+        }
+        if let count = roomCounts[host] {
+            fields.append(("players", .i(count)))
+        }
+        fields.append(("ts", .i(Int(now()))))
+        note(fields)
     }
 
-    func touchRoom(_ host: String) {
+    func touchRoom(_ host: String, _ game: String = "mk8d") {
         let t = now()
         if t - (roomNoted[host] ?? 0) < 30 { return }
         roomNoted[host] = t
-        rooms["mk8d|\(host)"] = t
-        noteRoom("mk8d", host, nil)
+        rooms["\(game)|\(host)"] = t
+        noteRoom(game, host, nil)
     }
 }

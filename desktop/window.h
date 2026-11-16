@@ -36,6 +36,7 @@ private:
     void showWhosOnline();
     void fillRoomsList(QLabel *label, const QString &game);
     QMap<QString, QStringList> roomsByGame();
+    QMap<QString, int> playersByGame();
     void refreshInfo();
     Preferences preferences;
     QList<Adapter> adapters;

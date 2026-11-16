@@ -1,4 +1,5 @@
 #include "window.h"
+#include <algorithm>
 #include <QApplication>
 #include <QClipboard>
 #include <QCloseEvent>
@@ -692,6 +693,34 @@ QMap<QString, QStringList> Window::roomsByGame() {
     return out;
 }
 
+QMap<QString, int> Window::playersByGame() {
+    QMap<QString, int> out;
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/proxy_events.jsonl";
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return out;
+    QByteArray data = file.readAll();
+    file.close();
+    if (data.size() > 200000) data = data.mid(data.size() - 200000);
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    QMap<QString, QMap<QString, int>> byGame;
+    for (const QByteArray &line : data.split('\n')) {
+        if (!line.contains("\"ev\": \"room\"")) continue;
+        const QJsonObject obj = QJsonDocument::fromJson(line).object();
+        const QString game = obj.value("game").toString();
+        const QString host = obj.value("host").toString();
+        const int players = obj.value("players").toInt();
+        const qint64 ts = obj.value("ts").toVariant().toLongLong();
+        if (!game.isEmpty() && !host.isEmpty() && players > 0 && ts > 0 && now - ts <= 90)
+            byGame[game].insert(host, players);
+    }
+    for (auto it = byGame.constBegin(); it != byGame.constEnd(); ++it) {
+        int total = 0;
+        for (int v : it.value()) total += v;
+        out.insert(it.key(), total);
+    }
+    return out;
+}
+
 void Window::fillRoomsList(QLabel *label, const QString &game) {
     const QStringList rooms = roomsByGame().value(game);
     if (rooms.isEmpty()) { label->setText("No rooms open right now"); return; }
@@ -705,7 +734,14 @@ void Window::showWhosOnline() {
     dialog.setWindowTitle("Current Rooms");
     dialog.setStyleSheet("QDialog { background-color: #9E9E9E; }");
     auto *layout = new QVBoxLayout(&dialog);
-    auto addSection = [this, layout](const QString &logoPath, const QString &game) {
+    QVector<QPair<QLabel *, QString>> lists;
+    auto *refreshAll = new QPushButton("Refresh All");
+    refreshAll->setStyleSheet("QPushButton { background-color: #EEEEEE; color: black; border: 1px solid black; border-radius: 12px; padding: 6px 16px; font-size: 14px; }");
+    layout->addWidget(refreshAll, 0, Qt::AlignCenter);
+    connect(refreshAll, &QPushButton::clicked, this, [this, &lists] {
+        for (const auto &entry : lists) fillRoomsList(entry.first, entry.second);
+    });
+    auto addSection = [this, layout, &lists](const QString &logoPath, const QString &game) {
         auto *logo = new QLabel;
         const QPixmap pix(logoPath);
         if (!pix.isNull()) logo->setPixmap(pix.scaledToWidth(220, Qt::SmoothTransformation));
@@ -719,11 +755,20 @@ void Window::showWhosOnline() {
         list->setAlignment(Qt::AlignCenter);
         list->setWordWrap(true);
         layout->addWidget(list);
+        lists.append({list, game});
         connect(refresh, &QPushButton::clicked, this, [this, list, game] { fillRoomsList(list, game); });
         fillRoomsList(list, game);
     };
-    addSection(":/branding/logo_splatoon3.png", "splatoon3");
-    addSection(":/branding/logo_mk8d.png", "mk8d");
+    const QMap<QString, int> totals = playersByGame();
+    QVector<QPair<QString, QString>> sections = {
+        {":/branding/logo_splatoon3.png", "splatoon3"},
+        {":/branding/logo_mk8d.png", "mk8d"},
+        {":/branding/logo_splatoon2.png", "splatoon2"},
+    };
+    std::stable_sort(sections.begin(), sections.end(), [&totals](const QPair<QString, QString> &a, const QPair<QString, QString> &b) {
+        return totals.value(a.second) > totals.value(b.second);
+    });
+    for (const auto &section : sections) addSection(section.first, section.second);
     auto *close = new QPushButton("Close");
     layout->addWidget(close, 0, Qt::AlignCenter);
     connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
