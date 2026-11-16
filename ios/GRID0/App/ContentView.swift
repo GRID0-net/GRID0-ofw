@@ -209,7 +209,7 @@ struct ContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("v3.3.1")
+                    Text("v3.3.2")
                         .font(.system(size: 12))
                         .foregroundColor(Color(red: 0xAA / 255, green: 0xAA / 255, blue: 0xAA / 255))
                     Spacer()
