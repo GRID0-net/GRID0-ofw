@@ -33,7 +33,6 @@ private:
     void setupDependencies();
     void updateHeaderTheme();
     void refreshZtUsers();
-    void refreshRooms();
     void showWhosOnline();
     void fillRoomsList(QLabel *label, const QString &game);
     QMap<QString, QStringList> roomsByGame();
@@ -54,8 +53,6 @@ private:
     QRadioButton *manualMode, *autoMode, *proxyMode;
     QLabel *ztUsers = nullptr;
     QTimer *ztUsersTimer = nullptr;
-    QLabel *roomsStatus = nullptr;
-    QTimer *roomsTimer = nullptr;
     QRadioButton *dnsUsFirst, *dnsFrFirst;
     QGroupBox *switchSettingsGroup;
     QGroupBox *autoSettingsGroup;

@@ -112,10 +112,10 @@ Window::Window(bool preview) : previewMode(preview) {
     actions->addWidget(manualMode); actions->addWidget(autoMode); actions->addWidget(proxyMode);
     summaryLayout->addLayout(actions);
     ztUsers = text("on GRID0 ZT: -"); ztUsers->setVisible(false); summaryLayout->addWidget(ztUsers);
-    roomsStatus = text(""); roomsStatus->setVisible(false); summaryLayout->addWidget(roomsStatus);
     playLayout->addWidget(summary);
-    auto *whosOnline = new QPushButton("Who's Online?");
-    playLayout->addWidget(whosOnline, 0, Qt::AlignLeft);
+    auto *whosOnline = new QPushButton("Current Rooms");
+    whosOnline->setStyleSheet("QPushButton { background-color: #9E9E9E; color: black; border: 2px solid black; border-radius: 20px; padding: 6px 22px; }");
+    playLayout->addWidget(whosOnline, 0, Qt::AlignCenter);
     connect(whosOnline, &QPushButton::clicked, this, [this] { showWhosOnline(); });
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
@@ -328,15 +328,13 @@ Window::Window(bool preview) : previewMode(preview) {
     manualMode->setChecked(!preferences.dhcp); autoMode->setChecked(preferences.dhcp);
     ztUsersTimer = new QTimer(this); ztUsersTimer->setInterval(15000);
     connect(ztUsersTimer, &QTimer::timeout, this, [this] { if (proxyMode->isChecked()) refreshZtUsers(); });
-    roomsTimer = new QTimer(this); roomsTimer->setInterval(2000);
-    connect(roomsTimer, &QTimer::timeout, this, [this] { if (proxyMode->isChecked()) refreshRooms(); });
     for (auto *mode : {manualMode, autoMode, proxyMode}) connect(mode, &QRadioButton::toggled, this, [this] {
         if (loading) return;
         preferences.dhcp = autoMode->isChecked();
         preferences.autoSelectLocalAdapter(adapters);
         const int li = local->findData(preferences.localInterface);
         if (li >= 0) local->setCurrentIndex(li);
-        if (proxyMode->isChecked()) { refreshZtUsers(); refreshRooms(); ztUsersTimer->start(); roomsTimer->start(); } else { ztUsersTimer->stop(); roomsTimer->stop(); }
+        if (proxyMode->isChecked()) { refreshZtUsers(); ztUsersTimer->start(); } else { ztUsersTimer->stop(); }
         save();
     });
     dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
@@ -669,31 +667,6 @@ void Window::refreshZtUsers() {
     refreshInfo();
 }
 
-void Window::refreshRooms() {
-    if (!roomsStatus) return;
-    const QString path = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/proxy_events.jsonl";
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) { roomsStatus->setVisible(false); return; }
-    QByteArray data = file.readAll();
-    file.close();
-    if (data.size() > 200000) data = data.mid(data.size() - 200000);
-    const qint64 now = QDateTime::currentSecsSinceEpoch();
-    QMap<QString, QString> byHost;
-    for (const QByteArray &line : data.split('\n')) {
-        if (!line.contains("\"ev\": \"room\"")) continue;
-        const QJsonObject obj = QJsonDocument::fromJson(line).object();
-        const QString host = obj.value("host").toString();
-        const QString name = obj.value("name").toString();
-        const qint64 ts = obj.value("ts").toVariant().toLongLong();
-        if (!host.isEmpty() && !name.isEmpty() && ts > 0 && now - ts <= 90) byHost.insert(host, name);
-    }
-    if (byHost.isEmpty()) { roomsStatus->setText("Splatoon 3 rooms open: 0"); roomsStatus->setVisible(true); return; }
-    QString label = "Splatoon 3 rooms open: " + QString::number(byHost.size());
-    for (const QString &name : byHost.values()) label += "\n" + name;
-    roomsStatus->setText(label);
-    roomsStatus->setVisible(true);
-}
-
 QMap<QString, QStringList> Window::roomsByGame() {
     QMap<QString, QStringList> out;
     const QString path = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/proxy_events.jsonl";
@@ -729,7 +702,8 @@ void Window::fillRoomsList(QLabel *label, const QString &game) {
 
 void Window::showWhosOnline() {
     QDialog dialog(this);
-    dialog.setWindowTitle("Who's Online?");
+    dialog.setWindowTitle("Current Rooms");
+    dialog.setStyleSheet("QDialog { background-color: #9E9E9E; }");
     auto *layout = new QVBoxLayout(&dialog);
     auto addSection = [this, layout](const QString &logoPath, const QString &game) {
         auto *logo = new QLabel;
@@ -737,7 +711,9 @@ void Window::showWhosOnline() {
         if (!pix.isNull()) logo->setPixmap(pix.scaledToWidth(220, Qt::SmoothTransformation));
         logo->setAlignment(Qt::AlignCenter);
         layout->addWidget(logo);
-        auto *refresh = new QPushButton("Refresh");
+        auto *refresh = new QPushButton(QString(QChar(0x21BB)));
+        refresh->setFixedSize(40, 40);
+        refresh->setStyleSheet("QPushButton { background-color: #EEEEEE; color: black; border: 1px solid black; border-radius: 20px; font-size: 20px; }");
         layout->addWidget(refresh, 0, Qt::AlignCenter);
         auto *list = new QLabel;
         list->setAlignment(Qt::AlignCenter);
@@ -791,7 +767,6 @@ void Window::updateState() {
     autoSettingsGroup->setVisible(preferences.dhcp && !proxyOn);
     settingsHint->setVisible(!preferences.dhcp && !proxyOn);
     if (ztUsers) ztUsers->setVisible(proxyOn);
-    if (roomsStatus && !proxyOn) roomsStatus->setVisible(false);
     QString hotspotIp;
     for (const auto &ad : adapters) if (ad.hotspot && ad.up) { hotspotIp = ad.ip; break; }
     const bool hotspotOn = !hotspotIp.isEmpty();

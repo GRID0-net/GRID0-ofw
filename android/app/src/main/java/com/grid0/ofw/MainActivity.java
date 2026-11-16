@@ -97,7 +97,16 @@ public class MainActivity extends Activity {
     private ValueAnimator borderAnimator;
     private TextView statusText;
     private TextView switchDetectedView;
-    private TextView roomsView;
+    private boolean switchBannerShown = false;
+    private final Runnable hideSwitchDetectedRunnable = new Runnable() {
+        @Override
+        public void run() {
+            switchBannerShown = false;
+            if (switchDetectedView != null) {
+                switchDetectedView.setVisibility(View.GONE);
+            }
+        }
+    };
     private TextView step1Label;
     private Button step1Button;
     private ImageView step1Check;
@@ -489,13 +498,13 @@ public class MainActivity extends Activity {
         int pillPadX = (int) (14 * getResources().getDisplayMetrics().density);
         int pillPadY = (int) (6 * getResources().getDisplayMetrics().density);
         switchDetectedView.setPadding(pillPadX, pillPadY, pillPadX, pillPadY);
-        FrameLayout.LayoutParams sdParams = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        sdParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        sdParams.topMargin = (int) (372 * getResources().getDisplayMetrics().density);
+        LinearLayout.LayoutParams sdParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sdParams.gravity = Gravity.CENTER_HORIZONTAL;
+        sdParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
         switchDetectedView.setLayoutParams(sdParams);
         switchDetectedView.setVisibility(View.GONE);
-        root.addView(switchDetectedView);
+        main.addView(switchDetectedView, 1);
 
         View spacer = new View(this);
         LinearLayout.LayoutParams spacerParams = new LinearLayout.LayoutParams(
@@ -503,19 +512,6 @@ public class MainActivity extends Activity {
                 (int) (20 * getResources().getDisplayMetrics().density));
         spacer.setLayoutParams(spacerParams);
         homeContent.addView(spacer);
-
-        roomsView = new TextView(this);
-        roomsView.setTextSize(14);
-        roomsView.setTextColor(Color.WHITE);
-        roomsView.setGravity(Gravity.CENTER);
-        roomsView.setTypeface(Typeface.create("sans-serif-light", Typeface.NORMAL));
-        LinearLayout.LayoutParams roomsParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        roomsParams.gravity = Gravity.CENTER;
-        roomsParams.bottomMargin = (int) (8 * getResources().getDisplayMetrics().density);
-        roomsView.setLayoutParams(roomsParams);
-        roomsView.setVisibility(View.GONE);
-        homeContent.addView(roomsView);
 
         if (!zeroTierInstalled) {
             TextView msg = new TextView(this);
@@ -569,7 +565,18 @@ public class MainActivity extends Activity {
         step3Row = makeStepRow(step3Button);
         homeContent.addView(step3Row);
 
-        whosOnlineButton = makeButton("Who's Online?", 245);
+        whosOnlineButton = new Button(this);
+        whosOnlineButton.setText("Current Rooms");
+        whosOnlineButton.setAllCaps(false);
+        whosOnlineButton.setTextSize(14);
+        whosOnlineButton.setTextColor(Color.BLACK);
+        whosOnlineButton.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        GradientDrawable roomsBtnBg = new GradientDrawable();
+        roomsBtnBg.setColor(0xFF9E9E9E);
+        roomsBtnBg.setCornerRadius(999);
+        roomsBtnBg.setStroke((int) (2 * getResources().getDisplayMetrics().density), Color.BLACK);
+        whosOnlineButton.setBackground(roomsBtnBg);
+        whosOnlineButton.setStateListAnimator(null);
         whosOnlineButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -577,6 +584,11 @@ public class MainActivity extends Activity {
             }
         });
         FrameLayout whosRow = makeStepRow(whosOnlineButton);
+        FrameLayout.LayoutParams roomsBtnParams = new FrameLayout.LayoutParams(
+                (int) (170 * getResources().getDisplayMetrics().density),
+                (int) (40 * getResources().getDisplayMetrics().density));
+        roomsBtnParams.gravity = Gravity.CENTER;
+        whosOnlineButton.setLayoutParams(roomsBtnParams);
         LinearLayout.LayoutParams whosParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         whosParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
@@ -1247,11 +1259,18 @@ public class MainActivity extends Activity {
             public void run() {
                 if (switchDetectedView == null) return;
                 if (currentTab != 0 || lastSwitchId == null) {
+                    switchBannerShown = false;
+                    logRefreshHandler.removeCallbacks(hideSwitchDetectedRunnable);
                     switchDetectedView.setVisibility(View.GONE);
                     return;
                 }
                 switchDetectedView.setText("Switch detected: " + lastSwitchId);
                 switchDetectedView.setVisibility(View.VISIBLE);
+                if (!switchBannerShown) {
+                    switchBannerShown = true;
+                    logRefreshHandler.removeCallbacks(hideSwitchDetectedRunnable);
+                    logRefreshHandler.postDelayed(hideSwitchDetectedRunnable, 5000);
+                }
             }
         });
     }
@@ -1856,7 +1875,6 @@ public class MainActivity extends Activity {
             }
 
             refreshProxyLog();
-            refreshRooms();
             applyLearnedSwitchIp();
             setMoreValue("switch_ip", switchIpResult);
             logRefreshHandler.postDelayed(this, 2000);
@@ -1885,11 +1903,17 @@ public class MainActivity extends Activity {
         refreshWhosOnlineSection(s3List, "splatoon3");
         refreshWhosOnlineSection(mkList, "mk8d");
 
-        new AlertDialog.Builder(this)
-                .setTitle("Who's Online?")
+        box.setBackgroundColor(0xFF9E9E9E);
+        AlertDialog roomsDialog = new AlertDialog.Builder(this)
+                .setTitle("Current Rooms")
                 .setView(box)
                 .setPositiveButton("Close", null)
-                .show();
+                .create();
+        roomsDialog.show();
+        if (roomsDialog.getWindow() != null) {
+            roomsDialog.getWindow().setBackgroundDrawable(
+                    new android.graphics.drawable.ColorDrawable(0xFF9E9E9E));
+        }
     }
 
     private void addGameSection(LinearLayout box, int logoRes, final TextView listView, final String game) {
@@ -1904,10 +1928,22 @@ public class MainActivity extends Activity {
         box.addView(logo);
 
         Button refresh = new Button(this);
-        refresh.setText("Refresh");
+        refresh.setText("\u21BB");
         refresh.setAllCaps(false);
+        refresh.setTextSize(20);
+        refresh.setTextColor(Color.BLACK);
+        refresh.setMinWidth(0);
+        refresh.setMinHeight(0);
+        refresh.setPadding(0, 0, 0, 0);
+        GradientDrawable refreshBg = new GradientDrawable();
+        refreshBg.setShape(GradientDrawable.OVAL);
+        refreshBg.setColor(0xFFEEEEEE);
+        refreshBg.setStroke((int) (1 * getResources().getDisplayMetrics().density), Color.BLACK);
+        refresh.setBackground(refreshBg);
+        refresh.setStateListAnimator(null);
         LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                (int) (44 * getResources().getDisplayMetrics().density),
+                (int) (44 * getResources().getDisplayMetrics().density));
         refreshParams.gravity = Gravity.CENTER_HORIZONTAL;
         refreshParams.topMargin = (int) (6 * getResources().getDisplayMetrics().density);
         refresh.setLayoutParams(refreshParams);
@@ -1972,55 +2008,6 @@ public class MainActivity extends Activity {
         }
 
         listView.setText(sb.toString());
-    }
-
-    private void refreshRooms() {
-        if (roomsView == null) {
-            return;
-        }
-
-        if (!proxyRunning) {
-            roomsView.setVisibility(View.GONE);
-            return;
-        }
-
-        try {
-            File f = new File(getFilesDir(), "proxy_events.jsonl");
-
-            if (!f.exists()) {
-                roomsView.setText("Splatoon 3 rooms open: 0");
-                roomsView.setVisibility(View.VISIBLE);
-                return;
-            }
-
-            java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r");
-            long len = raf.length();
-            long start = Math.max(0, len - 200000);
-            raf.seek(start);
-            byte[] buf = new byte[(int) (len - start)];
-            raf.readFully(buf);
-            raf.close();
-            String text = new String(buf, "UTF-8");
-            java.util.List<String> rooms = V3Util.roomsFromEvents(text, System.currentTimeMillis() / 1000);
-
-            if (rooms.isEmpty()) {
-                roomsView.setText("Splatoon 3 rooms open: 0");
-                roomsView.setVisibility(View.VISIBLE);
-                return;
-            }
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("Splatoon 3 rooms open: ").append(rooms.size());
-
-            for (String n : rooms) {
-                sb.append("\n").append(n);
-            }
-
-            roomsView.setText(sb.toString());
-            roomsView.setVisibility(View.VISIBLE);
-        } catch (Exception e) {
-            roomsView.setVisibility(View.GONE);
-        }
     }
 
     private void refreshProxyLog() {
@@ -2462,10 +2449,6 @@ public class MainActivity extends Activity {
 
         if (consoleBox != null) {
             consoleBox.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
-        }
-
-        if (roomsView != null && !proxyRunning) {
-            roomsView.setVisibility(View.GONE);
         }
 
         if (socialRow != null && discordBtn != null && supportBtn != null) {
