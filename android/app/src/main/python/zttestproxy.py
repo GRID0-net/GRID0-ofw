@@ -229,9 +229,12 @@ def slot_tables(slots, host_ip, sw, sw_me, h_me):
     h2s += address_pairs([(h_me, sw)])
     s2h += address_pairs([(sw, h_me)])
     tables = {"s2h": [(o, n) for o, n in s2h if o != n], "h2s": [(o, n) for o, n in h2s if o != n]}
-    s2h_ip = ([(sw_me, host_ip)] if host_ip else []) + [(sw, h_me)]
-    h2s_ip = [(r, sw_me) for r in slots] + [(h_me, sw)]
-    pairs = {"s2h": [(o, n) for o, n in s2h_ip if o != n], "h2s": [(o, n) for o, n in h2s_ip if o != n]}
+    s2h_ip = [(sw_me, r, port, GAME_PORT) for r, port in slots.items()]
+    s2h_ip += ([(sw_me, host_ip)] if host_ip else []) + [(sw, h_me)]
+    h2s_ip = [(r, sw_me, GAME_PORT, port) for r, port in slots.items()]
+    h2s_ip += [(r, sw_me) for r in slots] + [(h_me, sw)]
+    keep = lambda pr: pr[0] != pr[1] or (len(pr) > 2 and pr[2] != pr[3])
+    pairs = {"s2h": [pr for pr in s2h_ip if keep(pr)], "h2s": [pr for pr in h2s_ip if keep(pr)]}
     return tables, pairs
 
 def find_stations(plain, prefix3):
@@ -379,25 +382,42 @@ def rewrite_some(plain, table, protos):
         pos = end
     return bytes(out)
 
+def _bits_port(port):
+    return None if port is None else int.from_bytes(port.to_bytes(2, "big"), "little")
+
 def rewrite_bits(body, ip_pairs):
+    # Bit-packed station records (Broadcast Reliable): a 16-bit port, then a
+    # 16-bit copy of the address's last two octets, then the address itself.
+    # Pairs are (old, new) or (old, new, old_port, new_port); a pair with ports
+    # only matches a record carrying old_port, and moves it to new_port.
     if len(body) < 4 or not ip_pairs:
         return body
     n = len(body) * 8
     x = int.from_bytes(body, "little")
-    pats = [(int.from_bytes(o, "little"), int.from_bytes(nw, "little"),
-             int.from_bytes(o[2:4], "little"), int.from_bytes(nw[2:4], "little")) for o, nw in ip_pairs]
+    pats = []
+    for pr in ip_pairs:
+        o, nw = pr[0], pr[1]
+        op, np_ = (pr[2], pr[3]) if len(pr) > 2 else (None, None)
+        pats.append((int.from_bytes(o, "little"), int.from_bytes(nw, "little"),
+                     int.from_bytes(o[2:4], "little"), int.from_bytes(nw[2:4], "little"),
+                     _bits_port(op), _bits_port(np_)))
     first = {p[0] for p in pats}
     mask, m16, i, hit = 0xFFFFFFFF, 0xFFFF, 0, False
     while i <= n - 32:
         w = (x >> i) & mask
         if w in first:
-            for p, q, p16, q16 in pats:
-                if w == p:
-                    x = (x & ~(mask << i)) | (q << i)
-                    if i >= 16 and (x >> (i - 16)) & m16 == p16:
-                        x = (x & ~(m16 << (i - 16))) | (q16 << (i - 16))
-                    hit = True
-                    break
+            for p, q, p16, q16, pp, qp in pats:
+                if w != p:
+                    continue
+                if pp is not None and (i < 32 or (x >> (i - 32)) & m16 != pp):
+                    continue
+                x = (x & ~(mask << i)) | (q << i)
+                if i >= 16 and (x >> (i - 16)) & m16 == p16:
+                    x = (x & ~(m16 << (i - 16))) | (q16 << (i - 16))
+                if qp is not None and i >= 32:
+                    x = (x & ~(m16 << (i - 32))) | (qp << (i - 32))
+                hit = True
+                break
             i += 32
         else:
             i += 1

@@ -182,8 +182,8 @@ final class Capture {
 struct SessionTables {
     var s2h: [BytePair]
     var h2s: [BytePair]
-    var ipS2h: [BytePair]
-    var ipH2s: [BytePair]
+    var ipS2h: [BitPair]
+    var ipH2s: [BitPair]
     var mkS2h: [BytePair]
     var mkH2s: [BytePair]
 }
@@ -386,8 +386,8 @@ final class Relay {
         let h = ip4(peerIp)
         let s2h = addressPairs([(swMe, h), (sw, hMe)])
         let h2s = addressPairs([(h, swMe), (hMe, sw)])
-        let ipS2h: [BytePair] = [(swMe, h), (sw, hMe)].filter { $0.o != $0.n }
-        let ipH2s: [BytePair] = [(h, swMe), (hMe, sw)].filter { $0.o != $0.n }
+        let ipS2h = bitPairs([(swMe, h), (sw, hMe)].filter { $0.o != $0.n })
+        let ipH2s = bitPairs([(h, swMe), (hMe, sw)].filter { $0.o != $0.n })
         return SessionTables(
             s2h: s2h, h2s: h2s, ipS2h: ipS2h, ipH2s: ipH2s,
             mkS2h: s2h + idFragments([(swMe, h), (sw, hMe)]),
@@ -426,7 +426,7 @@ final class Relay {
         tables = t
     }
 
-    func learnStations(_ srcIp: String, _ plain: [UInt8]) -> ([BytePair], [BytePair])? {
+    func learnStations(_ srcIp: String, _ plain: [UInt8]) -> ([BytePair], [BitPair])? {
         var changed = addStation(srcIp)
         let netLow = ipToUInt32(hIp) & prefixMask(hPrefix)
         let netHigh = netLow | ~prefixMask(hPrefix)

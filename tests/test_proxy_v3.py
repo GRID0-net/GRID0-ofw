@@ -729,7 +729,7 @@ class TestRelayHandlers(unittest.TestCase):
         self.assertIn((self.m.ip4(HOST), r.sw_me), r.ip_pairs["h2s"])
         self.assertIn((r.h_me, self.m.ip4(SWITCH)), r.ip_pairs["h2s"])
         self.assertIn((r.sw_me, self.m.ip4(HOST)), r.tables["s2h"])
-        self.assertTrue(all(o != n for pairs in r.ip_pairs.values() for o, n in pairs))
+        self.assertTrue(all(pr[0] != pr[1] or pr[2] != pr[3] for pairs in r.ip_pairs.values() for pr in pairs))
 
     def test_on_disc_ignores_own_and_unknown(self):
         r = self.r

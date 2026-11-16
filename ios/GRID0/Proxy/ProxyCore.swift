@@ -66,6 +66,13 @@ func networkContains(_ ip: String, network: String, prefix: Int) -> Bool {
 }
 
 typealias BytePair = (o: [UInt8], n: [UInt8])
+// A bit-record address rewrite; with ports set it only matches records carrying
+// op and moves them to np.
+typealias BitPair = (o: [UInt8], n: [UInt8], op: Int?, np: Int?)
+
+func bitPairs(_ pairs: [BytePair]) -> [BitPair] {
+    return pairs.map { ($0.o, $0.n, nil, nil) }
+}
 
 func addressPairs(_ pairs: [BytePair], port: Int = GAME_PORT) -> [BytePair] {
     var a = pairs
@@ -92,7 +99,7 @@ func stationForms(_ ip: [UInt8], _ port: Int) -> [[UInt8]] {
 
 // slots: remote station IP -> local port on the Switch leg.
 func slotTables(_ slots: [([UInt8], Int)], hostIp: [UInt8]?, sw: [UInt8], swMe: [UInt8],
-                hMe: [UInt8]) -> (s2h: [BytePair], h2s: [BytePair], ipS2h: [BytePair], ipH2s: [BytePair]) {
+                hMe: [UInt8]) -> (s2h: [BytePair], h2s: [BytePair], ipS2h: [BitPair], ipH2s: [BitPair]) {
     var h2s: [BytePair] = []
     var s2h: [BytePair] = []
     for (r, port) in slots {
@@ -113,13 +120,15 @@ func slotTables(_ slots: [([UInt8], Int)], hostIp: [UInt8]?, sw: [UInt8], swMe: 
     }
     h2s += addressPairs([(hMe, sw)])
     s2h += addressPairs([(sw, hMe)])
-    var ipS2h: [BytePair] = []
-    if let h = hostIp { ipS2h.append((swMe, h)) }
-    ipS2h.append((sw, hMe))
-    var ipH2s: [BytePair] = slots.map { ($0.0, swMe) }
-    ipH2s.append((hMe, sw))
+    var ipS2h: [BitPair] = slots.map { (swMe, $0.0, $0.1, GAME_PORT) }
+    if let h = hostIp { ipS2h.append((swMe, h, nil, nil)) }
+    ipS2h.append((sw, hMe, nil, nil))
+    var ipH2s: [BitPair] = slots.map { ($0.0, swMe, GAME_PORT, $0.1) }
+    ipH2s += slots.map { ($0.0, swMe, nil, nil) }
+    ipH2s.append((hMe, sw, nil, nil))
     let keep: (BytePair) -> Bool = { $0.o != $0.n }
-    return (s2h.filter(keep), h2s.filter(keep), ipS2h.filter(keep), ipH2s.filter(keep))
+    let keepBits: (BitPair) -> Bool = { $0.o != $0.n || ($0.op != nil && $0.op != $0.np) }
+    return (s2h.filter(keep), h2s.filter(keep), ipS2h.filter(keepBits), ipH2s.filter(keepBits))
 }
 
 // Remote station IPs named in the plaintext, in either address layout.
@@ -308,15 +317,22 @@ private func setBits(_ body: inout [UInt8], _ i: Int, _ count: Int, _ v: UInt32)
 
 // The bit-packed address rewrite for Splatoon 3 Broadcast Reliable records:
 // addresses sit big-endian inside an LSB-first bit stream, each preceded by a
-// 16-bit copy of its last two octets.
-func rewriteBits(_ body: [UInt8], _ ipPairs: [BytePair]) -> [UInt8] {
+// 16-bit copy of its last two octets, and before that the 16-bit port.
+private func bitsPort(_ p: Int?) -> UInt32? {
+    guard let p = p else { return nil }
+    return UInt32((p >> 8) & 0xFF) | UInt32(p & 0xFF) << 8
+}
+
+func rewriteBits(_ body: [UInt8], _ ipPairs: [BitPair]) -> [UInt8] {
     if body.count < 4 || ipPairs.isEmpty { return body }
     let n = body.count * 8
-    let pats: [(full: UInt32, newFull: UInt32, tail: UInt32, newTail: UInt32)] = ipPairs.map { (o, nw) in
-        (UInt32(o[0]) | UInt32(o[1]) << 8 | UInt32(o[2]) << 16 | UInt32(o[3]) << 24,
-         UInt32(nw[0]) | UInt32(nw[1]) << 8 | UInt32(nw[2]) << 16 | UInt32(nw[3]) << 24,
-         UInt32(o[2]) | UInt32(o[3]) << 8,
-         UInt32(nw[2]) | UInt32(nw[3]) << 8)
+    let pats: [(full: UInt32, newFull: UInt32, tail: UInt32, newTail: UInt32, port: UInt32?, newPort: UInt32?)] = ipPairs.map { pr in
+        let o = pr.o, nw = pr.n
+        return (UInt32(o[0]) | UInt32(o[1]) << 8 | UInt32(o[2]) << 16 | UInt32(o[3]) << 24,
+                UInt32(nw[0]) | UInt32(nw[1]) << 8 | UInt32(nw[2]) << 16 | UInt32(nw[3]) << 24,
+                UInt32(o[2]) | UInt32(o[3]) << 8,
+                UInt32(nw[2]) | UInt32(nw[3]) << 8,
+                bitsPort(pr.op), bitsPort(pr.np))
     }
     let first = Set(pats.map { $0.full })
     var out = body
@@ -326,9 +342,13 @@ func rewriteBits(_ body: [UInt8], _ ipPairs: [BytePair]) -> [UInt8] {
         let w = getBits(out, i, 32)
         if first.contains(w) {
             for p in pats where w == p.full {
+                if let pp = p.port, i < 32 || getBits(out, i - 32, 16) != pp { continue }
                 setBits(&out, i, 32, p.newFull)
                 if i >= 16 && getBits(out, i - 16, 16) == p.tail {
                     setBits(&out, i - 16, 16, p.newTail)
+                }
+                if let np = p.newPort, i >= 32 {
+                    setBits(&out, i - 32, 16, np)
                 }
                 hit = true
                 break
@@ -346,8 +366,8 @@ var noBitsEnabled = false
 var rewriteProtos: Set<Int>? = nil
 
 func relayGame(key: [UInt8], srcIp: [UInt8], myIp: [UInt8], d: [UInt8],
-               table tableIn: [BytePair], ipPairs ipPairsIn: [BytePair]?,
-               onPlain: (([UInt8]) -> ([BytePair], [BytePair])?)? = nil) -> (out: [UInt8], label: String, changed: Bool)? {
+               table tableIn: [BytePair], ipPairs ipPairsIn: [BitPair]?,
+               onPlain: (([UInt8]) -> ([BytePair], [BitPair])?)? = nil) -> (out: [UInt8], label: String, changed: Bool)? {
     var table = tableIn
     var ipPairs = ipPairsIn
     guard let o = openGame(key: key, srcIp: srcIp, d: d) else { return nil }

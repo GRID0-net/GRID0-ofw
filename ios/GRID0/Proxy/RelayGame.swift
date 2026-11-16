@@ -26,7 +26,7 @@ extension Relay {
             return
         }
         var table: [BytePair]
-        var pairs: [BytePair]
+        var pairs: [BitPair]
         var myIp: [UInt8]
         var sock: UDPSock
         var dest: Addr?
@@ -83,7 +83,7 @@ extension Relay {
                                    table: direction == "s2h" ? t2.mkS2h : t2.mkH2s)
             } else {
                 let srcIpStr = src.ip
-                let hook: (([UInt8]) -> ([BytePair], [BytePair])?)? = direction == "h2s"
+                let hook: (([UInt8]) -> ([BytePair], [BitPair])?)? = direction == "h2s"
                     ? { [unowned self] plain in self.learnStations(srcIpStr, plain) } : nil
                 rr = relayGame(key: k!, srcIp: ip4(src.ip), myIp: myIp, d: data,
                                table: table, ipPairs: pairs, onPlain: hook)
