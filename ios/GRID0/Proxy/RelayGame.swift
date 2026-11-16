@@ -225,6 +225,7 @@ extension Relay {
         }
         var lastStat = now()
         while !stopRequested {
+            mark("poll")
             var timeout = 0.5
             if let first = queue.first {
                 timeout = max(0.0, min(timeout, first.due - now()))
@@ -237,6 +238,7 @@ extension Relay {
                 for f in fds where f.revents & Int16(POLLIN) != 0 {
                     guard let sock = sockByFd[f.fd], let handler = handlers[f.fd] else { continue }
                     while let pkt = sock.recv() {
+                        mark("packet fd \(f.fd) from \(pkt.ip):\(pkt.port) len \(pkt.data.count) game \(game ?? "-") host \(hostSide ?? "-")")
                         handler(Data(pkt.data), (pkt.ip, pkt.port))
                     }
                 }
@@ -246,9 +248,12 @@ extension Relay {
                 queue.removeFirst()
                 tx(first.sock, first.data, first.ip, first.port, first.direction, first.meta)
             }
+            mark("timers")
             if t - lastScan >= 15 {
                 lastScan = t
+                mark("scan splatoon3")
                 scanPoll()
+                mark("scan mk8d")
                 scanPollMk8d()
             }
             if t - lastStat > 5 {

@@ -252,6 +252,20 @@ final class Relay {
     var cap: Capture? = nil
 
     private let stopLock = NSLock()
+    private var _stage = "starting"
+    private var _beat = Date().timeIntervalSince1970
+    // Watchdog breadcrumb: what the relay thread is doing and when it last moved.
+    func mark(_ stage: String) {
+        stopLock.lock()
+        _stage = stage
+        _beat = Date().timeIntervalSince1970
+        stopLock.unlock()
+    }
+    var heartbeat: (stage: String, beat: Double) {
+        stopLock.lock()
+        defer { stopLock.unlock() }
+        return (_stage, _beat)
+    }
     private var _stop = false
     var stopRequested: Bool {
         stopLock.lock()

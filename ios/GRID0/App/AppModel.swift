@@ -257,9 +257,26 @@ final class AppModel: ObservableObject {
             }
         }
         parseEvents()
+        checkStall()
         if let deadline = pillDeadline, Date() > deadline {
             switchPillVisible = false
             pillDeadline = nil
+        }
+    }
+
+    private var stallReported = false
+    private func checkStall() {
+        guard proxyRunning, let r = relay else { stallReported = false; return }
+        let hb = r.heartbeat
+        let idle = Date().timeIntervalSince1970 - hb.beat
+        if idle > 10 {
+            if !stallReported {
+                stallReported = true
+                appendLogLine(String(format: "watchdog: proxy stuck for %.0fs in: %@", idle, hb.stage))
+            }
+        } else if stallReported {
+            stallReported = false
+            appendLogLine("watchdog: proxy moving again")
         }
     }
 
