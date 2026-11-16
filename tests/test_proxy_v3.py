@@ -155,6 +155,7 @@ def make_relay(m):
     r.stash_mk8d = None
     r.scan_chals_mk8d = []
     r.room_noted = {}
+    r.room_names = {}
     r.key = None
     r.key_mk8d = None
     r.mk8d_state = False
@@ -1497,12 +1498,16 @@ def make_mk8d_browse_request(m, bc, chal=b"\x21" * 16, counter=b"\x22" * 8, pt=N
 
 
 def make_mk8d_browse_reply(m, req_chal, bc, host_ip=None, param=None,
-                           rchal=b"\x55" * 16, counter=b"\x44" * 8, pt=b"\x33" * 16):
+                           rchal=b"\x55" * 16, counter=b"\x44" * 8, pt=b"\x33" * 16,
+                           name=None):
     from Crypto.Cipher import AES
     if param is None:
         param = bytes(range(32, 64))
     rep = bytearray(1361)
     rep[0] = 1
+    if name is not None:
+        nb = name.encode("utf-8")
+        rep[48:48 + len(nb)] = nb
     rep[1:5] = (1298).to_bytes(4, "big")
     if host_ip is not None:
         rep[436:440] = m.ip4(host_ip)
@@ -1942,6 +1947,34 @@ class TestScanRequest(unittest.TestCase):
             rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
             self.assertEqual(len(rooms), 1)
             self.assertEqual(rooms[0]["host"], HOST)
+
+    def test_mk8d_host_name_real_reply(self):
+        with open(os.path.join(FIXTURES, "mk8d_browse_reply.bin"), "rb") as fh:
+            rep = fh.read()
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            self.assertEqual(mod.mk8d_host_name(rep), "RyuPlayer")
+            self.assertIsNone(mod.mk8d_host_name(rep[:40]))
+            self.assertIsNone(mod.mk8d_host_name(bytes(1361)))
+
+    def test_scan_reply_mk8d_notes_room_name(self):
+        for path in PC_COPIES + [ANDROID_COPY]:
+            mod = load_copy(path)
+            r = make_relay(mod)
+            stash, _ = make_mk8d_browse_request(mod, r.h_bc)
+            r.stash_mk8d = stash
+            r.scan_poll_mk8d()
+            chal = r.scan_chals_mk8d[-1]
+            rep, _ = make_mk8d_browse_reply(mod, chal, r.h_bc, host_ip=HOST,
+                                             name="RyuPlayer")
+            r.on_disc(rep, (HOST, 30000))
+            rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
+            self.assertEqual(len(rooms), 1)
+            self.assertEqual(rooms[0]["name"], "RyuPlayer")
+            r.room_noted[HOST] = 0.0
+            r.touch_room(HOST)
+            rooms = [n for n in r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
+            self.assertEqual(rooms[-1]["name"], "RyuPlayer")
 
     def test_scan_does_not_swallow_session_reply(self):
         for path in PC_COPIES + [ANDROID_COPY]:

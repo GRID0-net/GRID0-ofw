@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v21
+# GRID0 proxy v22
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -430,6 +430,19 @@ def splatoon_host_name(rep):
         pass
     return None
 
+def mk8d_host_name(rep):
+    try:
+        if len(rep) > 80:
+            raw = rep[48:80]
+            end = raw.find(b"\x00")
+            if end >= 1:
+                name = raw[:end].decode("utf-8")
+                if name and all(c.isprintable() for c in name):
+                    return name
+    except Exception:
+        pass
+    return None
+
 SCAN_HEADER = bytes.fromhex("00000000160000000000000000000a000400060100c2500fc20000")
 
 def make_scan_request(game_key, bc, counter):
@@ -630,6 +643,7 @@ class Relay:
         self.stash_mk8d = None
         self.scan_chals_mk8d = []
         self.room_noted = {}
+        self.room_names = {}
         self.key = None
         self.key_mk8d = None
         self.mk8d_state = False
@@ -1022,7 +1036,7 @@ class Relay:
                     continue
             if opened:
                 self.rooms[("mk8d", src[0])] = time.time()
-                self.note(ev="room", game="mk8d", host=src[0], ts=int(time.time()))
+                self.note_room("mk8d", src[0], mk8d_host_name(data))
                 return
             self.disc_note(f"note: a reply from {src} did not open with a scan challenge")
             if self.cap:
@@ -1071,7 +1085,7 @@ class Relay:
             if rname:
                 self.note(ev="room", game=game, host=src[0], name=rname, ts=int(time.time()))
         elif game == "mk8d":
-            self.note(ev="room", game=game, host=src[0], ts=int(time.time()))
+            self.note_room("mk8d", src[0], mk8d_host_name(data))
         entry = self.sessions.setdefault(src[0], {"keys": {}, "tables": None})
         entry["keys"][game] = self.key_mk8d if game == "mk8d" else self.key
         entry["tables"] = self.tables_for(src[0])
@@ -1150,13 +1164,22 @@ class Relay:
             self.cap.save("disc", data, src[0], dest_peer[0], src[1], port)
         self.send(self.sock_for("h", game), out, (dest_peer[0], port), "s2h", kind="browse_reply")
 
+    def note_room(self, game, host, name=None):
+        if name:
+            self.room_names[host] = name
+        known = self.room_names.get(host)
+        if known:
+            self.note(ev="room", game=game, host=host, name=known, ts=int(time.time()))
+        else:
+            self.note(ev="room", game=game, host=host, ts=int(time.time()))
+
     def touch_room(self, host):
         now = time.time()
         if now - self.room_noted.get(host, 0.0) < 30:
             return
         self.room_noted[host] = now
         self.rooms[("mk8d", host)] = now
-        self.note(ev="room", game="mk8d", host=host, ts=int(now))
+        self.note_room("mk8d", host)
 
     def on_game(self, data, src, direction):
         if not self.tables or (not self.key and not self.key_mk8d):
@@ -1372,7 +1395,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v21", flush=True)
+    print("GRID0 proxy v22", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
