@@ -80,12 +80,14 @@ func addressPairs(_ pairs: [BytePair], port: Int = GAME_PORT) -> [BytePair] {
 }
 
 // The ways a Pia station address shows up in Splatoon 3 game data:
-// little-endian IP + tail + port, big-endian IP + port, and tail+port both ways.
+// little-endian IP + tail + port, big-endian IP + port, tail+port both ways, and
+// the member-list entry (IP padded to 16 bytes, then the port).
 func stationForms(_ ip: [UInt8], _ port: Int) -> [[UInt8]] {
     let tail = [ip[3], ip[2]]
     let pLe = [UInt8(port & 0xFF), UInt8((port >> 8) & 0xFF)]
     let pBe = [UInt8((port >> 8) & 0xFF), UInt8(port & 0xFF)]
-    return [Array(ip.reversed()) + tail + pLe, ip + pBe, tail + pLe, pBe + [ip[2], ip[3]]]
+    return [Array(ip.reversed()) + tail + pLe, ip + pBe, tail + pLe, pBe + [ip[2], ip[3]],
+            ip + [UInt8](repeating: 0, count: 12) + pBe]
 }
 
 // slots: remote station IP -> local port on the Switch leg.

@@ -209,11 +209,12 @@ def address_pairs(pairs, port=GAME_PORT):
 
 def station_forms(ip, port):
     # The ways a Pia station address shows up in Splatoon 3 game data:
-    # little-endian IP + tail + port, big-endian IP + port, and the tail+port pair
-    # in both byte orders.
+    # little-endian IP + tail + port, big-endian IP + port, the tail+port pair
+    # in both byte orders, and the member-list entry (IP padded to 16 bytes, then
+    # the port).
     tail = ip[3:] + ip[2:3]
     p_le, p_be = port.to_bytes(2, "little"), port.to_bytes(2, "big")
-    return [ip[::-1] + tail + p_le, ip + p_be, tail + p_le, p_be + ip[2:4]]
+    return [ip[::-1] + tail + p_le, ip + p_be, tail + p_le, p_be + ip[2:4], ip + bytes(12) + p_be]
 
 def slot_tables(slots, host_ip, sw, sw_me, h_me):
     # slots: remote station IP (packed) -> local port on the Switch leg.

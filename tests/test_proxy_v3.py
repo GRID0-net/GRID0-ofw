@@ -1007,6 +1007,14 @@ class TestMultiStation(unittest.TestCase):
         self.assertEqual(f[1].hex(), "0a931136c000")
         self.assertEqual(f[2].hex(), "361100c0")
         self.assertEqual(f[3].hex(), "c0001136")
+        self.assertEqual(f[4].hex(), "0a931136" + "00" * 12 + "c000")
+
+    def test_member_list_entry_gets_player_port(self):
+        r = self.r
+        entry = self.m.ip4(self.THIRD) + bytes(12) + (49152).to_bytes(2, "big") + b"\x00\x01"
+        r.on_game(self.seal(HOST, b"\x00" * 4 + entry), (HOST, 49152), "h2s")
+        body = self.open_to_switch(r.g_sw.sent[-1][0])
+        self.assertIn(r.sw_me + bytes(12) + (49153).to_bytes(2, "big"), body)
 
     def test_find_stations(self):
         m = self.m
