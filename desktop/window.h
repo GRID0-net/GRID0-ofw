@@ -12,6 +12,8 @@
 #include <QGroupBox>
 #include <QLineEdit>
 #include <QPlainTextEdit>
+#include <QMap>
+#include <QStringList>
 
 class Window : public QMainWindow {
     Q_OBJECT
@@ -32,6 +34,9 @@ private:
     void updateHeaderTheme();
     void refreshZtUsers();
     void refreshRooms();
+    void showWhosOnline();
+    void fillRoomsList(QLabel *label, const QString &game);
+    QMap<QString, QStringList> roomsByGame();
     void refreshInfo();
     Preferences preferences;
     QList<Adapter> adapters;

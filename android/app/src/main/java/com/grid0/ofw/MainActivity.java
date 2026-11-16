@@ -106,6 +106,7 @@ public class MainActivity extends Activity {
     private ImageView step2Check;
     private TextView step3Label;
     private Button step3Button;
+    private Button whosOnlineButton;
     private Bitmap checkBitmap;
     private ScrollView logScroll;
     private TextView logView;
@@ -567,6 +568,20 @@ public class MainActivity extends Activity {
         });
         step3Row = makeStepRow(step3Button);
         homeContent.addView(step3Row);
+
+        whosOnlineButton = makeButton("Who's Online?", 245);
+        whosOnlineButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showWhosOnline();
+            }
+        });
+        FrameLayout whosRow = makeStepRow(whosOnlineButton);
+        LinearLayout.LayoutParams whosParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        whosParams.topMargin = (int) (16 * getResources().getDisplayMetrics().density);
+        whosRow.setLayoutParams(whosParams);
+        homeContent.addView(whosRow);
 
         moreContent = new LinearLayout(this);
         moreContent.setOrientation(LinearLayout.VERTICAL);
@@ -1855,6 +1870,108 @@ public class MainActivity extends Activity {
 
     private void stopLogRefresh() {
         logRefreshHandler.removeCallbacks(logRefreshRunnable);
+    }
+
+    private void showWhosOnline() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = (int) (20 * getResources().getDisplayMetrics().density);
+        box.setPadding(pad, (int) (12 * getResources().getDisplayMetrics().density), pad, pad);
+
+        TextView s3List = new TextView(this);
+        TextView mkList = new TextView(this);
+        addGameSection(box, R.drawable.logo_splatoon3, s3List, "splatoon3");
+        addGameSection(box, R.drawable.logo_mk8d, mkList, "mk8d");
+        refreshWhosOnlineSection(s3List, "splatoon3");
+        refreshWhosOnlineSection(mkList, "mk8d");
+
+        new AlertDialog.Builder(this)
+                .setTitle("Who's Online?")
+                .setView(box)
+                .setPositiveButton("Close", null)
+                .show();
+    }
+
+    private void addGameSection(LinearLayout box, int logoRes, final TextView listView, final String game) {
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(logoRes);
+        logo.setAdjustViewBounds(true);
+        LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(
+                (int) (150 * getResources().getDisplayMetrics().density),
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        logoParams.gravity = Gravity.CENTER_HORIZONTAL;
+        logo.setLayoutParams(logoParams);
+        box.addView(logo);
+
+        Button refresh = new Button(this);
+        refresh.setText("Refresh");
+        refresh.setAllCaps(false);
+        LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        refreshParams.gravity = Gravity.CENTER_HORIZONTAL;
+        refreshParams.topMargin = (int) (6 * getResources().getDisplayMetrics().density);
+        refresh.setLayoutParams(refreshParams);
+        refresh.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                refreshWhosOnlineSection(listView, game);
+            }
+        });
+        box.addView(refresh);
+
+        listView.setTextSize(14);
+        listView.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams listParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        listParams.topMargin = (int) (6 * getResources().getDisplayMetrics().density);
+        listParams.bottomMargin = (int) (14 * getResources().getDisplayMetrics().density);
+        listView.setLayoutParams(listParams);
+        box.addView(listView);
+    }
+
+    private void refreshWhosOnlineSection(TextView listView, String game) {
+        java.util.List<String> rooms = new java.util.ArrayList<>();
+
+        try {
+            File f = new File(getFilesDir(), "proxy_events.jsonl");
+
+            if (f.exists()) {
+                java.io.RandomAccessFile raf = new java.io.RandomAccessFile(f, "r");
+                long len = raf.length();
+                long start = Math.max(0, len - 200000);
+                raf.seek(start);
+                byte[] buf = new byte[(int) (len - start)];
+                raf.readFully(buf);
+                raf.close();
+                java.util.Map<String, java.util.List<String>> byGame =
+                        V3Util.roomsByGame(new String(buf, "UTF-8"), System.currentTimeMillis() / 1000);
+                java.util.List<String> found = byGame.get(game);
+
+                if (found != null) {
+                    rooms = found;
+                }
+            }
+        } catch (Exception e) {
+        }
+
+        if (!proxyRunning) {
+            listView.setText("Start the proxy to see open rooms");
+            return;
+        }
+
+        if (rooms.isEmpty()) {
+            listView.setText("No rooms open right now");
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(rooms.size()).append(rooms.size() == 1 ? " room open" : " rooms open");
+
+        for (String n : rooms) {
+            sb.append("\n").append(n);
+        }
+
+        listView.setText(sb.toString());
     }
 
     private void refreshRooms() {

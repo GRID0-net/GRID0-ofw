@@ -5,6 +5,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QDialog>
 #include <QJsonDocument>
 #include <QMap>
 #include <QJsonArray>
@@ -113,6 +114,9 @@ Window::Window(bool preview) : previewMode(preview) {
     ztUsers = text("on GRID0 ZT: -"); ztUsers->setVisible(false); summaryLayout->addWidget(ztUsers);
     roomsStatus = text(""); roomsStatus->setVisible(false); summaryLayout->addWidget(roomsStatus);
     playLayout->addWidget(summary);
+    auto *whosOnline = new QPushButton("Who's Online?");
+    playLayout->addWidget(whosOnline, 0, Qt::AlignLeft);
+    connect(whosOnline, &QPushButton::clicked, this, [this] { showWhosOnline(); });
     auto *group = new QGroupBox("Enter these settings on your Switch"); auto *form = new QGridLayout(group);
     switchSettingsGroup = group;
     auto *autoGroup = new QGroupBox("Windows Hotspot Setup");
@@ -688,6 +692,66 @@ void Window::refreshRooms() {
     for (const QString &name : byHost.values()) label += "\n" + name;
     roomsStatus->setText(label);
     roomsStatus->setVisible(true);
+}
+
+QMap<QString, QStringList> Window::roomsByGame() {
+    QMap<QString, QStringList> out;
+    const QString path = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/proxy_events.jsonl";
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return out;
+    QByteArray data = file.readAll();
+    file.close();
+    if (data.size() > 200000) data = data.mid(data.size() - 200000);
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    QMap<QString, QMap<QString, QString>> byGame;
+    for (const QByteArray &line : data.split('\n')) {
+        if (!line.contains("\"ev\": \"room\"")) continue;
+        const QJsonObject obj = QJsonDocument::fromJson(line).object();
+        const QString game = obj.value("game").toString();
+        const QString host = obj.value("host").toString();
+        const QString name = obj.value("name").toString();
+        const qint64 ts = obj.value("ts").toVariant().toLongLong();
+        if (!game.isEmpty() && !host.isEmpty() && ts > 0 && now - ts <= 90)
+            byGame[game].insert(host, name.isEmpty() ? host : name);
+    }
+    for (auto it = byGame.constBegin(); it != byGame.constEnd(); ++it)
+        out.insert(it.key(), it.value().values());
+    return out;
+}
+
+void Window::fillRoomsList(QLabel *label, const QString &game) {
+    const QStringList rooms = roomsByGame().value(game);
+    if (rooms.isEmpty()) { label->setText("No rooms open right now"); return; }
+    QString text = QString::number(rooms.size()) + (rooms.size() == 1 ? " room open" : " rooms open");
+    for (const QString &room : rooms) text += "\n" + room;
+    label->setText(text);
+}
+
+void Window::showWhosOnline() {
+    QDialog dialog(this);
+    dialog.setWindowTitle("Who's Online?");
+    auto *layout = new QVBoxLayout(&dialog);
+    auto addSection = [this, layout](const QString &logoPath, const QString &game) {
+        auto *logo = new QLabel;
+        const QPixmap pix(logoPath);
+        if (!pix.isNull()) logo->setPixmap(pix.scaledToWidth(220, Qt::SmoothTransformation));
+        logo->setAlignment(Qt::AlignCenter);
+        layout->addWidget(logo);
+        auto *refresh = new QPushButton("Refresh");
+        layout->addWidget(refresh, 0, Qt::AlignCenter);
+        auto *list = new QLabel;
+        list->setAlignment(Qt::AlignCenter);
+        list->setWordWrap(true);
+        layout->addWidget(list);
+        connect(refresh, &QPushButton::clicked, this, [this, list, game] { fillRoomsList(list, game); });
+        fillRoomsList(list, game);
+    };
+    addSection(":/branding/logo_splatoon3.png", "splatoon3");
+    addSection(":/branding/logo_mk8d.png", "mk8d");
+    auto *close = new QPushButton("Close");
+    layout->addWidget(close, 0, Qt::AlignCenter);
+    connect(close, &QPushButton::clicked, &dialog, &QDialog::accept);
+    dialog.exec();
 }
 
 void Window::refreshInfo() {

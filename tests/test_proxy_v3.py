@@ -1679,6 +1679,12 @@ class TestMK8DRelay(unittest.TestCase):
         pt = AES.new(k, AES.MODE_GCM, nonce=r.h_bc + first[577:585]).decrypt_and_verify(first[617:873], first[601:617])
         self.assertEqual(pt, bytes(range(256)))
 
+    def test_pairing_notes_mk8d_room(self):
+        self.pair_mk8d()
+        rooms = [n for n in self.r.log if n.get("ev") == "room" and n.get("game") == "mk8d"]
+        self.assertEqual(len(rooms), 1)
+        self.assertEqual(rooms[0]["host"], HOST)
+
     def test_reply_sets_mk8d_session_key_only(self):
         m, r = self.m, self.r
         req, chal, rep, pt = self.pair_mk8d()

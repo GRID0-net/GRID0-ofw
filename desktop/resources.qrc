@@ -8,6 +8,8 @@
         <file alias="windows-circle.png">resources/windows-circle.png</file>
         <file alias="combo-arrow-white.png">resources/combo-arrow-white.png</file>
         <file alias="combo-arrow-black.png">resources/combo-arrow-black.png</file>
+        <file alias="logo_splatoon3.png">resources/logo_splatoon3.png</file>
+        <file alias="logo_mk8d.png">resources/logo_mk8d.png</file>
     </qresource>
 </RCC>
 
