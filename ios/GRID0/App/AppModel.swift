@@ -99,6 +99,9 @@ final class AppModel: ObservableObject {
             }
             if name == "en0" {
                 wifi = (ip, prefix)
+            } else if name.hasPrefix("bridge") && wifi == nil {
+                // Personal Hotspot: the Switch joins the phone's own network.
+                wifi = (ip, prefix)
             } else if name.hasPrefix("utun") && ip != "0.0.0.0" {
                 ztCands.append((ip, prefix))
             }
