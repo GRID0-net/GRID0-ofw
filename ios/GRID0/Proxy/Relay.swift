@@ -75,6 +75,7 @@ final class UDPSock {
         if f < 0 { return nil }
         var yes: Int32 = 1
         setsockopt(f, SOL_SOCKET, SO_REUSEADDR, &yes, socklen_t(MemoryLayout<Int32>.size))
+        setsockopt(f, SOL_SOCKET, SO_REUSEPORT, &yes, socklen_t(MemoryLayout<Int32>.size))
         if broadcast {
             setsockopt(f, SOL_SOCKET, SO_BROADCAST, &yes, socklen_t(MemoryLayout<Int32>.size))
         }
@@ -97,6 +98,7 @@ final class UDPSock {
             }
             log("warning: cannot bind \(ip):\(port), using all interfaces")
             if !tryBind("0.0.0.0") {
+                log("error: cannot bind 0.0.0.0:\(port) (error \(errno))")
                 Darwin.close(f)
                 return nil
             }

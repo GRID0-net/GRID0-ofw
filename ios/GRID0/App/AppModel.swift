@@ -159,6 +159,7 @@ final class AppModel: ObservableObject {
     }
 
     func startProxy() {
+        refreshInterfaces()
         guard let phone = phoneIp, let zt = ztIp else {
             showToast("Connect to Wi-Fi and ZeroTier first")
             return
@@ -187,7 +188,7 @@ final class AppModel: ObservableObject {
                 _ = logPathCopy
             })
         guard let relay = Relay(cfg: cfg) else {
-            appendLogLine("could not open the proxy sockets (is Local Network access allowed?)")
+            appendLogLine("could not open the proxy sockets, see the errors above")
             showToast("Could not start the proxy")
             refreshFromFiles()
             return
