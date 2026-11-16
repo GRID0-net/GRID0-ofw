@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AVFoundation
 
 // App state and proxy control, mirroring MainActivity's behaviour: interface
 // detection, the three steps, the events file driving the rooms list and the
@@ -195,6 +196,7 @@ final class AppModel: ObservableObject {
         let thread = Thread {
             relay.run()
             DispatchQueue.main.async { [weak self] in
+                BackgroundKeeper.shared.stop()
                 self?.proxyRunning = false
                 self?.relay = nil
                 UIApplication.shared.isIdleTimerDisabled = false
@@ -204,6 +206,7 @@ final class AppModel: ObservableObject {
         relayThread = thread
         proxyRunning = true
         UIApplication.shared.isIdleTimerDisabled = true
+        BackgroundKeeper.shared.start()
         thread.start()
     }
 
@@ -410,5 +413,66 @@ final class AppModel: ObservableObject {
                 self?.toast = nil
             }
         }
+    }
+}
+
+// Keeps the app running in the background while the proxy is on, by playing
+// silence (the "audio" background mode). Mixes with other audio so Instagram,
+// music and so on play normally. A sideload-only trick: the real fix is a
+// Network Extension, which needs a paid developer account.
+final class BackgroundKeeper {
+    static let shared = BackgroundKeeper()
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private var running = false
+    private var observers: [NSObjectProtocol] = []
+
+    private init() {
+        engine.attach(player)
+        let fmt = engine.mainMixerNode.outputFormat(forBus: 0)
+        engine.connect(player, to: engine.mainMixerNode, format: fmt)
+        let nc = NotificationCenter.default
+        observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification,
+                                        object: nil, queue: .main) { [weak self] note in
+            guard let self = self, self.running,
+                  let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+            self.play()
+        })
+        observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange,
+                                        object: engine, queue: .main) { [weak self] _ in
+            guard let self = self, self.running else { return }
+            self.play()
+        })
+    }
+
+    func start() {
+        running = true
+        play()
+    }
+
+    private func play() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, options: [.mixWithOthers])
+            try session.setActive(true)
+            let fmt = engine.mainMixerNode.outputFormat(forBus: 0)
+            guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(fmt.sampleRate)) else { return }
+            buf.frameLength = buf.frameCapacity  // zero-filled: silence
+            if !engine.isRunning { try engine.start() }
+            player.stop()
+            player.scheduleBuffer(buf, at: nil, options: .loops)
+            player.volume = 0
+            player.play()
+        } catch {
+            print("background audio failed: \(error)")
+        }
+    }
+
+    func stop() {
+        running = false
+        player.stop()
+        engine.stop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 }
