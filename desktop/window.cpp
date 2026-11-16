@@ -683,7 +683,7 @@ void Window::refreshRooms() {
         const qint64 ts = obj.value("ts").toVariant().toLongLong();
         if (!host.isEmpty() && !name.isEmpty() && ts > 0 && now - ts <= 90) byHost.insert(host, name);
     }
-    if (byHost.isEmpty()) { roomsStatus->setVisible(false); return; }
+    if (byHost.isEmpty()) { roomsStatus->setText("Splatoon 3 rooms open: 0"); roomsStatus->setVisible(true); return; }
     QString label = "Splatoon 3 rooms open: " + QString::number(byHost.size());
     for (const QString &name : byHost.values()) label += "\n" + name;
     roomsStatus->setText(label);

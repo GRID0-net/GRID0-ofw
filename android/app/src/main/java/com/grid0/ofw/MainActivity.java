@@ -1871,7 +1871,8 @@ public class MainActivity extends Activity {
             File f = new File(getFilesDir(), "proxy_events.jsonl");
 
             if (!f.exists()) {
-                roomsView.setVisibility(View.GONE);
+                roomsView.setText("Splatoon 3 rooms open: 0");
+                roomsView.setVisibility(View.VISIBLE);
                 return;
             }
 
@@ -1886,7 +1887,8 @@ public class MainActivity extends Activity {
             java.util.List<String> rooms = V3Util.roomsFromEvents(text, System.currentTimeMillis() / 1000);
 
             if (rooms.isEmpty()) {
-                roomsView.setVisibility(View.GONE);
+                roomsView.setText("Splatoon 3 rooms open: 0");
+                roomsView.setVisibility(View.VISIBLE);
                 return;
             }
 
