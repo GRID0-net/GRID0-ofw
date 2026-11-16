@@ -11,7 +11,7 @@ on a real iPhone yet. The first device test decides whether it works.
 
 1. Get the IPA. Go to the Actions tab, open the "Build iOS" workflow, and
    either open the latest run or press "Run workflow" yourself. Download the
-   `grid0-ios-ipa` artifact from the run. Inside is `GRID0.ofw.v3.3.2.ipa`.
+   `grid0-ios-ipa` artifact from the run. Inside is `GRID0.ofw.v3.3.3.ipa`.
 2. Install it with Sideloadly or AltStore using your Apple ID. There is no
    developer account on this project, so a free install expires after 7 days
    and needs a refresh.
