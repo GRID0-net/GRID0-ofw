@@ -54,7 +54,5 @@ needs a paid developer account. Everything else can be fixed in code.
 
 ## Releasing
 
-The `build-ios` workflow is set up to attach the IPA to a release, but the
-release trigger is commented out in the workflow file on purpose, so normal
-releases do not ship the iOS build yet. When 3.3.0 is ready to go out,
-uncomment that block.
+The `build-ios` workflow attaches the IPA to every published release, next to
+the APK.

@@ -1,11 +1,10 @@
 name: Build iOS
 
-# The iOS build is ready to attach to a release, but the release trigger is
-# commented out on purpose: normal releases do not ship the iOS build yet.
-# To release it with 3.3.0, uncomment the release block below.
+# Builds the unsigned IPA and attaches it to every published release
+# (since 3.3.0). Run it by hand to get an artifact or re-upload to a tag.
 on:
-  # release:
-  #   types: [published]
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       tag:
