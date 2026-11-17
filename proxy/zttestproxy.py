@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v24
+# GRID0 proxy v25
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -1756,7 +1756,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v24", flush=True)
+    print("GRID0 proxy v25", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
