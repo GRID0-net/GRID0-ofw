@@ -77,7 +77,7 @@ import java.util.concurrent.TimeUnit;
 
 public class MainActivity extends Activity {
     private static final String ZEROTIER_PACKAGE = "com.zerotier.one";
-    private static final String GRID0_NETWORK_ID = "8bd5124fd68185ec";
+    private static final String GRID0_NETWORK_ID = "1c33c1ced084e9b3";
     private boolean zeroTierInstalled = false;
     private boolean proxyRunning = false;
     private String logText = "";

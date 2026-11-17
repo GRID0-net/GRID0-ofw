@@ -793,7 +793,7 @@ void Window::refreshInfo() {
     infoWifiStatus->setText(localAdapter.up ? "Connected" : "Not connected");
     infoZtStatus->setText(anyOverlayUp ? "Connected" : "Not connected");
     infoGrid0Status->setText(!ztIps.isEmpty() ? "Connected" : "Not connected");
-    infoNetworkId->setText("8bd5124fd68185ec");
+    infoNetworkId->setText("1c33c1ced084e9b3");
 }
 void Window::updateState() {
     auto a = preferences.overlay(adapters);

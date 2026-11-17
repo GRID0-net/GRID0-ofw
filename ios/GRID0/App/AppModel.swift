@@ -16,7 +16,7 @@ struct RoomEntry: Identifiable {
 }
 
 final class AppModel: ObservableObject {
-    static let networkId = "8bd5124fd68185ec"
+    static let networkId = "1c33c1ced084e9b3"
     static let appStoreZeroTier = "https://apps.apple.com/app/zerotier-one/id1241585323"
 
     @Published var currentTab = 0

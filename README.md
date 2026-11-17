@@ -21,7 +21,7 @@ Stock consoles cannot execute background custom modules. `GRID0-ofw` runs on a P
    <img src="img/relay-connection.gif" width="300" alt="Choosing the ZeroTier adapter in the relay Settings tab">
    </details></small>
 3. `GRID0-ofw` will automatically launch ZeroTier and connect to the GRID0 network.
-   <small><details><summary>For certainty:</summary>**Windows:** Click the Up arrow at the bottom right of your screen and right-click the ZeroTier tray icon, make sure the status is OK in `8bd5124fd68185ec` GRID0.<br>
+   <small><details><summary>For certainty:</summary>**Windows:** Click the Up arrow at the bottom right of your screen and right-click the ZeroTier tray icon, make sure the status is OK in `1c33c1ced084e9b3` GRID0.<br>
    <img src="img/tray-video.gif" width="300" alt="Windows tray ZeroTier config for the PC app and the relay">
    </details></small>
 4. `GRID0-ofw` will automatically select the correct ZeroTier adapter.

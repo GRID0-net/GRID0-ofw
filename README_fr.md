@@ -21,7 +21,7 @@ Les consoles non modifiées ne peuvent pas exécuter de modules personnalisés e
    <img src="img/relay-connection.gif" width="300" alt="Choix de l'adaptateur ZeroTier dans l'onglet des paramètres du relais">
    </details></small>
 3. `GRID0-ofw` lancera automatiquement ZeroTier et se connectera au réseau GRID0.
-   <small><details><summary>Pour en être sûr :</summary>**Windows :** Cliquez sur la flèche vers le haut en bas à droite de votre écran et faites un clic droit sur l'icône ZeroTier dans la barre des tâches, assurez-vous que le statut est OK dans `8bd5124fd68185ec` GRID0.<br>
+   <small><details><summary>Pour en être sûr :</summary>**Windows :** Cliquez sur la flèche vers le haut en bas à droite de votre écran et faites un clic droit sur l'icône ZeroTier dans la barre des tâches, assurez-vous que le statut est OK dans `1c33c1ced084e9b3` GRID0.<br>
    <img src="img/tray-video.gif" width="300" alt="Configuration ZeroTier dans la barre des tâches Windows pour l'app PC et le relais">
    </details></small>
 4. `GRID0-ofw` sélectionnera automatiquement le bon adaptateur ZeroTier.

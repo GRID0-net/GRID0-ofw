@@ -21,7 +21,7 @@
    <img src="img/relay-connection.gif" width="300" alt="ریلے کے Settings ٹیب میں ZeroTier اڈاپٹر کا انتخاب">
    </details></small>
 3. `GRID0-ofw` خودکار طور پر ZeroTier لانچ کرے گا اور GRID0 نیٹ ورک سے منسلک ہوگا۔
-   <small><details><summary>یقین کے لیے:</summary>**ونڈوز:** اسکرین کے نیچے دائیں جانب اوپر والے تیر پر کلک کریں اور ZeroTier ٹرے آئیکن پر رائٹ کلک کریں، یقینی بنائیں کہ `8bd5124fd68185ec` GRID0 میں اسٹیٹس OK ہے۔<br>
+   <small><details><summary>یقین کے لیے:</summary>**ونڈوز:** اسکرین کے نیچے دائیں جانب اوپر والے تیر پر کلک کریں اور ZeroTier ٹرے آئیکن پر رائٹ کلک کریں، یقینی بنائیں کہ `1c33c1ced084e9b3` GRID0 میں اسٹیٹس OK ہے۔<br>
    <img src="img/tray-video.gif" width="300" alt="PC ایپ اور ریلے کے لیے ونڈوز ٹرے میں ZeroTier کنفیگریشن">
    </details></small>
 4. `GRID0-ofw` خودکار طور پر درست ZeroTier اڈاپٹر منتخب کرے گا۔

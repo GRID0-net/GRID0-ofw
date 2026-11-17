@@ -21,7 +21,7 @@
    <img src="img/relay-connection.gif" width="300" alt="انتخاب آداپتور ZeroTier در تب تنظیمات رله">
    </details></small>
 3. `GRID0-ofw` به‌صورت خودکار ZeroTier را اجرا می‌کند و به شبکه GRID0 متصل می‌شود.
-   <small><details><summary>برای اطمینان:</summary>**ویندوز:** روی فلش بالا در پایین سمت راست صفحه کلیک کنید و روی آیکون ZeroTier در سینی سیستم راست‌کلیک کنید، مطمئن شوید وضعیت در `8bd5124fd68185ec` GRID0 روی OK است.<br>
+   <small><details><summary>برای اطمینان:</summary>**ویندوز:** روی فلش بالا در پایین سمت راست صفحه کلیک کنید و روی آیکون ZeroTier در سینی سیستم راست‌کلیک کنید، مطمئن شوید وضعیت در `1c33c1ced084e9b3` GRID0 روی OK است.<br>
    <img src="img/tray-video.gif" width="300" alt="تنظیمات ZeroTier در سینی ویندوز برای اپ PC و رله">
    </details></small>
 4. `GRID0-ofw` به‌صورت خودکار آداپتور درست ZeroTier را انتخاب می‌کند.

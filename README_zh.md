@@ -21,7 +21,7 @@
    <img src="img/relay-connection.gif" width="300" alt="在中继的 Settings 选项卡中选择 ZeroTier 适配器">
    </details></small>
 3. `GRID0-ofw` 会自动启动 ZeroTier 并连接到 GRID0 网络。
-   <small><details><summary>确认一下：</summary>**Windows：** 点击屏幕右下角的向上箭头，右键点击 ZeroTier 托盘图标，确保在 `8bd5124fd68185ec` GRID0 中的状态为 OK。<br>
+   <small><details><summary>确认一下：</summary>**Windows：** 点击屏幕右下角的向上箭头，右键点击 ZeroTier 托盘图标，确保在 `1c33c1ced084e9b3` GRID0 中的状态为 OK。<br>
    <img src="img/tray-video.gif" width="300" alt="PC 应用和中继的 Windows 托盘 ZeroTier 配置">
    </details></small>
 4. `GRID0-ofw` 会自动选择正确的 ZeroTier 适配器。
