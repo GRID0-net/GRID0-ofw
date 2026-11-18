@@ -1939,10 +1939,10 @@ public class MainActivity extends Activity {
         });
         box.addView(refreshAll);
 
-        final String[] games = {"splatoon3", "mk8d", "splatoon2"};
-        final int[] logos = {R.drawable.logo_splatoon3, R.drawable.logo_mk8d, R.drawable.logo_splatoon2};
+        final String[] games = {"splatoon3", "mk8d", "splatoon2", "mkw"};
+        final int[] logos = {R.drawable.logo_splatoon3, R.drawable.logo_mk8d, R.drawable.logo_splatoon2, R.drawable.logo_mkw};
         final java.util.Map<String, Integer> totals = readPlayersByGame();
-        Integer[] order = {0, 1, 2};
+        Integer[] order = {0, 1, 2, 3};
         java.util.Arrays.sort(order, new java.util.Comparator<Integer>() {
             @Override
             public int compare(Integer a, Integer b) {

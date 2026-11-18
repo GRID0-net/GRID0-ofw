@@ -764,6 +764,7 @@ void Window::showWhosOnline() {
         {":/branding/logo_splatoon3.png", "splatoon3"},
         {":/branding/logo_mk8d.png", "mk8d"},
         {":/branding/logo_splatoon2.png", "splatoon2"},
+        {":/branding/logo_mkw.png", "mkw"},
     };
     std::stable_sort(sections.begin(), sections.end(), [&totals](const QPair<QString, QString> &a, const QPair<QString, QString> &b) {
         return totals.value(a.second) > totals.value(b.second);

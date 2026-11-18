@@ -421,6 +421,7 @@ struct CurrentRoomsView: View {
             ("splatoon3", "logo_splatoon3"),
             ("mk8d", "logo_mk8d"),
             ("splatoon2", "logo_splatoon2"),
+            ("mkw", "logo_mkw"),
         ]
         return all.enumerated().sorted { a, b in
             let pa = model.playersFor(a.element.game)
