@@ -350,15 +350,23 @@ Window::Window(bool preview) : previewMode(preview) {
         if (previewMode) return;
         refreshAdapters();
         if (proxyMode->isChecked()) {
+            if (scanner.busy()) scanner.stop();
             log->clear(); switchStatus->setText("Looking for your Switch…"); proxy.start(preferences, adapters); return;
         }
         if (!preferences.validate(adapters).isEmpty()) return;
         log->clear(); switchStatus->setText("Looking for your Switch…"); relay.start(preferences, adapters);
+        scanner.startScanOnly(preferences, adapters);
     });
-    connect(stop, &QPushButton::clicked, this, [this] { if (proxy.busy()) proxy.stop(); else relay.stop(); });
+    connect(stop, &QPushButton::clicked, this, [this] {
+        if (proxy.busy()) proxy.stop();
+        if (scanner.busy()) scanner.stop();
+        if (relay.busy()) relay.stop();
+    });
     connect(&proxy, &ProxyController::lineReceived, log, &QPlainTextEdit::appendPlainText);
     connect(&proxy, &ProxyController::message, status, &QLabel::setText);
-    connect(&proxy, &ProxyController::stateChanged, this, [this] { updateState(); if (closing && !proxy.busy() && !relay.busy()) close(); });
+    connect(&proxy, &ProxyController::stateChanged, this, [this] { updateState(); if (closing && !proxy.busy() && !relay.busy() && !scanner.busy()) close(); });
+    connect(&scanner, &ProxyController::lineReceived, log, &QPlainTextEdit::appendPlainText);
+    connect(&scanner, &ProxyController::stateChanged, this, [this] { updateState(); if (closing && !proxy.busy() && !relay.busy() && !scanner.busy()) close(); });
     connect(&relay, &RelayController::lineReceived, log, &QPlainTextEdit::appendPlainText);
     // The relay's DHCP server reports "GRID0_DHCP <kind> <ip> <mac>" events in
     // its output. Surface them as the Switch connection status.
@@ -378,7 +386,7 @@ Window::Window(bool preview) : previewMode(preview) {
     });
     connect(&relay, &RelayController::message, status, &QLabel::setText);
     connect(&relay, &RelayController::switchDetected, this, [this](const QString &s) { switchStatus->setText("Local console detected: " + s); });
-    connect(&relay, &RelayController::stateChanged, this, [this] { updateState(); if (closing && !relay.busy() && !proxy.busy()) close(); });
+    connect(&relay, &RelayController::stateChanged, this, [this] { updateState(); if (closing && !relay.busy() && !proxy.busy() && !scanner.busy()) close(); });
     connect(exportButton, &QPushButton::clicked, this, &Window::exportReport);
     connect(openFolder, &QPushButton::clicked, this, [] {
         QString dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/reports";
@@ -999,7 +1007,7 @@ void Window::exportReport() {
     QDesktopServices::openUrl(QUrl::fromLocalFile(dest));
 }
 void Window::closeEvent(QCloseEvent *event) {
-    if (relay.busy() || proxy.busy()) {
-        closing = true; status->setText("Stopping the relay before closing…"); relay.stop(); proxy.stop(); event->ignore();
+    if (relay.busy() || proxy.busy() || scanner.busy()) {
+        closing = true; status->setText("Stopping the relay before closing…"); relay.stop(); proxy.stop(); scanner.stop(); event->ignore();
     } else event->accept();
 }

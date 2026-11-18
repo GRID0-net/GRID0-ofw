@@ -33,7 +33,8 @@ ProxyController::ProxyController(QObject *parent) : QObject(parent) {
         killTimer.stop();
         if (!pending.isEmpty()) { emit lineReceived(QString::fromUtf8(pending).trimmed()); pending.clear(); }
         emit stateChanged();
-        emit message(stopping || code == 0 ? "Proxy stopped." : "The proxy exited. See the log in Settings.");
+        emit message(stopping || code == 0 ? (scanOnlyMode ? "Room scanner stopped." : "Proxy stopped.")
+                                            : "The proxy exited. See the log in Settings.");
         stopping = false;
     });
     connect(&process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError e) {
@@ -44,7 +45,16 @@ ProxyController::ProxyController(QObject *parent) : QObject(parent) {
 }
 
 void ProxyController::start(const Preferences &p, const QList<Adapter> &adapters) {
+    startImpl(p, adapters, false);
+}
+
+void ProxyController::startScanOnly(const Preferences &p, const QList<Adapter> &adapters) {
+    startImpl(p, adapters, true);
+}
+
+void ProxyController::startImpl(const Preferences &p, const QList<Adapter> &adapters, bool scanOnly) {
     if (busy()) return;
+    scanOnlyMode = scanOnly;
     QString localIp;
     for (const auto &a : adapters) if (a.name == p.localInterface) localIp = a.ip;
     const QString ztIp = p.overlay(adapters).ip;
@@ -61,13 +71,14 @@ void ProxyController::start(const Preferences &p, const QList<Adapter> &adapters
     env.insert("ZT_IP", ztIp);
     env.insert("GAME_KEY_FILE", keyFile);
     env.insert("EVENTS", QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/proxy_events.jsonl");
+    if (scanOnly) env.insert("SCAN_ONLY", "1");
     process.setProcessEnvironment(env);
     process.setWorkingDirectory(QFileInfo(script).dir().path());
     stopping = false;
     pending.clear();
     process.start(python, {script});
     emit stateChanged();
-    emit message("Proxy starting…");
+    emit message(scanOnly ? "Room scanner starting…" : "Proxy starting…");
 }
 
 void ProxyController::stop() {
