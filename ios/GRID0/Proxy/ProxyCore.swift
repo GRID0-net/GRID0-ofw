@@ -11,9 +11,10 @@ let MK8D_PORT = 30000
 // player as its own station (phone IP + port).
 let SLOT_PORTS = (0..<8).map { 49152 + $0 }
 let MK8D_KEY: [UInt8] = Array("ABCDEFGHIJKLMNOP".utf8)
-let GAME_NAMES = ["splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe", "splatoon2": "Splatoon 2"]
-let CHAL_OFF = ["splatoon3": 27, "mk8d": 575, "splatoon2": 575]
-let PARAM_OFF = ["splatoon3": 105, "mk8d": 1270]
+let MKW_KEY: [UInt8] = [0x70, 0xEC, 0x0C, 0x26, 0x88, 0x38, 0x0C, 0xA5, 0xB7, 0x3F, 0xE4, 0x6A, 0x7C, 0x75, 0x97, 0xCF]
+let GAME_NAMES = ["splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe", "splatoon2": "Splatoon 2", "mkw": "Mario Kart World"]
+let CHAL_OFF = ["splatoon3": 27, "mk8d": 575, "splatoon2": 575, "mkw": 37]
+let PARAM_OFF = ["splatoon3": 105, "mk8d": 1270, "mkw": 105]
 let MAGIC: [UInt8] = [0x32, 0xAB, 0x98, 0x64]
 let ZSTD_MAGIC: [UInt8] = [0x28, 0xB5, 0x2F, 0xFD]
 
@@ -23,6 +24,9 @@ func detectGame(_ data: [UInt8]) -> String? {
     }
     if data.count == 873 && data[0] == 0 && be32(data, 1) == 0x23A {
         return "mk8d"
+    }
+    if data.count == 352 && data[0] == 0 && be32(data, 1) == 0x20 && data[37] == 5 {
+        return "mkw"
     }
     return nil
 }
@@ -480,6 +484,10 @@ func splatoon2HostName(_ rep: [UInt8]) -> String? {
 }
 
 func roomPlayers(_ game: String, _ rep: [UInt8]) -> Int? {
+    if game == "mkw" {
+        let n = rep.count > 543 ? Int(rep[543]) : 0
+        return (1...24).contains(n) ? n : nil
+    }
     let n: Int
     if game == "splatoon3" {
         n = rep.count > 35 ? Int(rep[35]) : 0
@@ -638,4 +646,118 @@ func resealReplyRekey(gameKey: [UInt8], rep: [UInt8], chalIn: [UInt8], chalOut: 
     return resealReplyBody(gameKey: gameKey, rep: rep, chalIn: chalIn, chalOut: chalOut,
                            oldBc: oldBc, newBc: newBc, oldHost: oldHost, newHost: newHost,
                            paramOff: paramOff, frag: frag)
+}
+
+let MKW_SETTING_PLAIN: [UInt8] = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                  0x00, 0x1A, 0x00, 0x18, 0x00, 0x0E, 0x04, 0x00,
+                                  0xC3, 0xF0, 0x00, 0x06, 0xE0, 0x00, 0x00, 0x00,
+                                  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+
+func mkwHostName(_ rep: [UInt8]) -> String? {
+    if rep.count > 105 {
+        let n = Int(rep[36]) | Int(rep[37]) << 8 | Int(rep[38]) << 16 | Int(rep[39]) << 24
+        if n >= 1 && n <= 64 && 41 + n <= rep.count {
+            let raw = Array(rep[41..<(41 + n)])
+            var name: String? = nil
+            if rep[40] == 2 {
+                var units: [UInt16] = []
+                var j = 0
+                while j + 1 < raw.count {
+                    let u = UInt16(raw[j]) | (UInt16(raw[j + 1]) << 8)
+                    if u == 0 { break }
+                    units.append(u)
+                    j += 2
+                }
+                name = String(utf16CodeUnits: units, count: units.count)
+            } else if let end = raw.firstIndex(of: 0) {
+                name = String(bytes: Array(raw[0..<end]), encoding: .utf8)
+            } else {
+                name = String(bytes: raw, encoding: .utf8)
+            }
+            if let nm = name?.trimmingCharacters(in: .whitespaces), !nm.isEmpty,
+               nm.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) }) {
+                return nm
+            }
+        }
+    }
+    return nil
+}
+
+func resealRequestMkw(gameKey: [UInt8], req: [UInt8], oldBc: [UInt8], newBc: [UInt8]) -> (out: [UInt8], chal: [UInt8])? {
+    if req.count != 352 || req[0] != 0 || req[37] != 5 { return nil }
+    let counter = Array(req[40..<48])
+    let chal = Array(req[48..<64])
+    let k = aesEncryptBlock(key: gameKey, block: chal)
+    guard let pt = aesGCMDecrypt(key: k, nonce: oldBc + counter, ciphertext: Array(req[96...]),
+                                 tag: Array(req[64..<80])),
+          let st = aesGCMDecrypt(key: k, nonce: oldBc + counter, ciphertext: Array(req[5..<37]),
+                                 tag: Array(req[80..<96])) else {
+        return nil
+    }
+    let (ct, tag) = aesGCMEncrypt(key: k, nonce: newBc + counter, plaintext: pt)
+    let (sct, stag) = aesGCMEncrypt(key: k, nonce: newBc + counter, plaintext: st)
+    return (Array(req[0..<5]) + sct + Array(req[37..<64]) + tag + stag + ct, chal)
+}
+
+func rekeyRequestMkw(gameKey: [UInt8], req: [UInt8], bc: [UInt8], counter: UInt64) -> (req: [UInt8], chal: [UInt8])? {
+    if req.count != 352 || req[0] != 0 || req[37] != 5 { return nil }
+    let oldCounter = Array(req[40..<48])
+    let oldChal = Array(req[48..<64])
+    let kOld = aesEncryptBlock(key: gameKey, block: oldChal)
+    guard let pt = aesGCMDecrypt(key: kOld, nonce: bc + oldCounter, ciphertext: Array(req[96...]),
+                                 tag: Array(req[64..<80])),
+          let st = aesGCMDecrypt(key: kOld, nonce: bc + oldCounter, ciphertext: Array(req[5..<37]),
+                                 tag: Array(req[80..<96])) else {
+        return nil
+    }
+    let chal = randomBytes(16)
+    let k = aesEncryptBlock(key: gameKey, block: chal)
+    let ctr = be64Bytes(counter)
+    let (ct, tag) = aesGCMEncrypt(key: k, nonce: bc + ctr, plaintext: pt)
+    let (sct, stag) = aesGCMEncrypt(key: k, nonce: bc + ctr, plaintext: st)
+    return (Array(req[0..<5]) + sct + Array(req[37..<40]) + ctr + chal + tag + stag + ct, chal)
+}
+
+func makeScanRequestMkw(gameKey: [UInt8], bc: [UInt8], counter: UInt64) -> (req: [UInt8], chal: [UInt8]) {
+    let chal = randomBytes(16)
+    let k = aesEncryptBlock(key: gameKey, block: chal)
+    let ctr = be64Bytes(counter)
+    let (sct, stag) = aesGCMEncrypt(key: k, nonce: bc + ctr, plaintext: MKW_SETTING_PLAIN)
+    let (ct, tag) = aesGCMEncrypt(key: k, nonce: bc + ctr, plaintext: randomBytes(256))
+    return ([0x00, 0x00, 0x00, 0x00, 0x20] + sct + [0x05, 0x01, 0x01] + ctr + chal + tag + stag + ct, chal)
+}
+
+func resealReplyMkw(gameKey: [UInt8], rep: [UInt8], reqChal: [UInt8], oldBc: [UInt8], newBc: [UInt8],
+                    oldHost: [UInt8], newHost: [UInt8]) -> [UInt8]? {
+    if rep.isEmpty || rep[0] != 1 { return nil }
+    let off = 5 + Int(be32(rep, 1))
+    if off + 75 > rep.count { return nil }
+    let counter = Array(rep[(off + 3)..<(off + 11)])
+    let rchal = Array(rep[(off + 11)..<(off + 27)])
+    let k = Array(hmacSHA256(key: gameKey, data: rchal + reqChal)[0..<16])
+    guard let pt = aesGCMDecrypt(key: k, nonce: oldBc + counter,
+                                 ciphertext: Array(rep[(off + 59)..<(off + 75)]),
+                                 tag: Array(rep[(off + 27)..<(off + 43)])) else {
+        return nil
+    }
+    let (nct, ntag) = aesGCMEncrypt(key: k, nonce: newBc + counter, plaintext: pt)
+    var out = rep
+    for p in [(oldHost, newHost), (Array(oldHost.reversed()), Array(newHost.reversed()))] {
+        var i = 0
+        while i + p.0.count <= out.count {
+            var match = true
+            for j in 0..<p.0.count where out[i + j] != p.0[j] { match = false; break }
+            if match {
+                if i < off {
+                    for j in 0..<p.0.count { out[i + j] = p.1[j] }
+                }
+                i += p.0.count
+            } else {
+                i += 1
+            }
+        }
+    }
+    out.replaceSubrange((off + 27)..<(off + 43), with: ntag)
+    out.replaceSubrange((off + 59)..<(off + 75), with: nct)
+    return out
 }

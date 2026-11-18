@@ -6,7 +6,7 @@ import Darwin
 extension Relay {
 
     func onGame(_ data: [UInt8], _ src: Addr, _ direction: String, _ localPort: Int? = nil) {
-        guard let tbl = tables, key != nil || keyMk8d != nil || keySplatoon2 != nil else {
+        guard let tbl = tables, key != nil || keyMk8d != nil || keySplatoon2 != nil || keyMkw != nil else {
             note([("ev", .s("drop_nokey")), ("dir", .s(direction)),
                   ("src", .s(src.ip)), ("len", .i(data.count))])
             return
@@ -70,11 +70,11 @@ extension Relay {
             udest = (dest!.ip, swGamePort ?? GAME_PORT)
             pknown = swGamePort != nil
         }
-        let order = (game == "mk8d" || game == "splatoon2") ? ["mk8d", "splatoon2", "splatoon3"] : ["splatoon3", "mk8d", "splatoon2"]
+        let order = (game == "mk8d" || game == "splatoon2") ? ["mk8d", "splatoon2", "splatoon3", "mkw"] : (game == "mkw" ? ["mkw", "splatoon3", "mk8d", "splatoon2"] : ["splatoon3", "mk8d", "splatoon2", "mkw"])
         var r: (out: [UInt8], label: String, changed: Bool)? = nil
         var used: String? = nil
         for g in order {
-            let k = g == "splatoon3" ? key : (g == "splatoon2" ? keySplatoon2 : keyMk8d)
+            let k = g == "splatoon3" ? key : (g == "splatoon2" ? keySplatoon2 : (g == "mkw" ? keyMkw : keyMk8d))
             if k == nil { continue }
             let rr: (out: [UInt8], label: String, changed: Bool)?
             if g == "mk8d" || g == "splatoon2" {
@@ -132,6 +132,7 @@ extension Relay {
                     key = entry.keys["splatoon3"]
                     keyMk8d = entry.keys["mk8d"]
                     keySplatoon2 = entry.keys["splatoon2"]
+                    keyMkw = entry.keys["mkw"]
                     tables = et
                     table = direction == "s2h" ? et.s2h : et.h2s
                     pairs = direction == "s2h" ? et.ipS2h : et.ipH2s
@@ -226,6 +227,7 @@ extension Relay {
         loadStash()
         loadStashMk8d()
         loadStashSplatoon2()
+        loadStashMkw()
         FileManager.default.createFile(atPath: cfg.eventsPath, contents: nil)
         eventsHandle = FileHandle(forWritingAtPath: cfg.eventsPath)
         note([("ev", .s("start")), ("sw", .s(swIp)), ("h", .s(hIp)),
@@ -283,6 +285,8 @@ extension Relay {
                 scanPollMk8d()
                 mark("scan splatoon2")
                 scanPollSplatoon2()
+                mark("scan mkw")
+                scanPollMkw()
             }
             if t - lastStat > 5 {
                 lastStat = t
