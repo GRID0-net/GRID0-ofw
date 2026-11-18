@@ -56,6 +56,7 @@ private:
     QLabel *ztUsers = nullptr;
     QTimer *ztUsersTimer = nullptr;
     QRadioButton *dnsUsFirst, *dnsFrFirst;
+    QCheckBox *dns90Toggle;
     QGroupBox *switchSettingsGroup;
     QGroupBox *autoSettingsGroup;
     QLabel *status, *switchStatus, *address, *mask, *gatewayValue, *dnsAmerica, *dnsEurope, *validation, *settingsHint;

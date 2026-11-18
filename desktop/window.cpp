@@ -158,7 +158,7 @@ Window::Window(bool preview) : previewMode(preview) {
     title(dnsHeader, 10);
     form->addWidget(dnsHeader, 0, 2, 1, 2);
     int dnsLine = 1;
-    for (auto pair : {qMakePair(QString("America"), dnsAmerica), qMakePair(QString("Europe"), dnsEurope)}) {
+    for (auto pair : {qMakePair(QString("Primary"), dnsAmerica), qMakePair(QString("Secondary"), dnsEurope)}) {
         auto *label = new QLabel(pair.first);
         pair.second->setWordWrap(false);
         pair.second->setMinimumHeight(pair.second->fontMetrics().height() + 4);
@@ -181,7 +181,7 @@ Window::Window(bool preview) : previewMode(preview) {
     addMacGlass(summary, QtLiquidGlass::Material::ClearGlass, 16.0);
 #endif
     connect(copy, &QPushButton::clicked, this, [this] {
-        QApplication::clipboard()->setText("IP address: " + address->text() + "\nSubnet mask: " + mask->text() + "\nGateway: " + gatewayValue->text() + "\nAmerica DNS: " + dnsAmerica->text() + "\nEurope DNS: " + dnsEurope->text());
+        QApplication::clipboard()->setText("IP address: " + address->text() + "\nSubnet mask: " + mask->text() + "\nGateway: " + gatewayValue->text() + "\nPrimary DNS: " + dnsAmerica->text() + "\nSecondary DNS: " + dnsEurope->text());
     });
     settingsHint = text("After changing network settings, reconnect your Switch and restart the game before entering LAN mode.");
     playLayout->addWidget(settingsHint);
@@ -228,8 +228,12 @@ Window::Window(bool preview) : previewMode(preview) {
     autoLayout->addWidget(hotspotSetup, 0, Qt::AlignLeft);
 #endif
     autoLayout->addSpacing(32);
+    dns90Toggle = new QCheckBox("On");
+    dns90Toggle->setToolTip("On: the Switch gets 90DNS, which blocks Nintendo's servers. Off: it gets regular Google DNS instead.");
+    { auto f = dns90Toggle->font(); f.setPointSize(14); f.setWeight(QFont::DemiBold); dns90Toggle->setFont(f); }
     auto *dnsBottomRow = new QHBoxLayout;
     dnsBottomRow->addWidget(dnsLabel);
+    dnsBottomRow->addWidget(dns90Toggle);
     dnsBottomRow->addWidget(dnsUsFirst);
     dnsBottomRow->addWidget(dnsFrFirst);
     dnsBottomRow->addStretch();
@@ -340,6 +344,19 @@ Window::Window(bool preview) : previewMode(preview) {
     });
     dnsUsFirst->setChecked(!preferences.dnsFranceFirst); dnsFrFirst->setChecked(preferences.dnsFranceFirst);
     for (auto *dns : {dnsUsFirst, dnsFrFirst}) connect(dns, &QRadioButton::toggled, this, [this] { save(); });
+    dns90Toggle->setChecked(preferences.dns90);
+    auto applyDns90 = [this, dnsHeader, dnsNotice] {
+        const bool on = dns90Toggle->isChecked();
+        dnsUsFirst->setEnabled(on); dnsFrFirst->setEnabled(on);
+        dnsAmerica->setText(on ? "207.246.121.77" : "8.8.8.8");
+        dnsEurope->setText(on ? "163.172.141.219" : "8.8.4.4");
+        dnsHeader->setText(on ? "DNS (<a href=\"https://gbatemp.net/threads/90dns-dns-server-for-blocking-all-nintendo-servers.516234/\">90dns</a>, for an easier setup use 8.8.8.8)"
+                              : "DNS (regular Google DNS, Nintendo servers are not blocked)");
+        dnsNotice->setText(on ? "Set the closest as Primary, other as Secondary"
+                              : "Set the first as Primary, the second as Secondary");
+    };
+    applyDns90();
+    connect(dns90Toggle, &QCheckBox::toggled, this, [this, applyDns90] { applyDns90(); save(); });
     connect(choose, &QPushButton::clicked, this, [this] {
         if (relay.busy()) return;
         auto path = QFileDialog::getOpenFileName(this, "Choose relay executable", executable->text());
@@ -663,6 +680,7 @@ void Window::save() {
     preferences.diagnostics = diagnostics->isChecked(); preferences.capture = capture->isChecked(); preferences.discover = discovery->isChecked();
     preferences.dhcp = autoMode->isChecked();
     preferences.dnsFranceFirst = dnsFrFirst->isChecked();
+    preferences.dns90 = dns90Toggle->isChecked();
     if (!previewMode) {
         auto stored = preferences;
         if (stored.relayPath == bundled) stored.relayPath.clear(); // Moving the app must not leave a stale path.
@@ -854,7 +872,8 @@ void Window::updateState() {
     start->setEnabled(!busy && error.isEmpty()); stop->setEnabled(busy && relay.state() != RelayController::Stopping);
     stop->setText(proxy.busy() ? "Stop proxy" : (relay.state() == RelayController::Authorizing ? "Cancel" : "Stop relay"));
     configuration->setEnabled(!busy);
-    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode, proxyMode, dnsUsFirst, dnsFrFirst}) w->setEnabled(!busy);
+    for (QWidget *w : std::initializer_list<QWidget *>{diagnostics, capture, discovery, executable, manualMode, autoMode, proxyMode, dnsUsFirst, dnsFrFirst, dns90Toggle}) w->setEnabled(!busy);
+    if (dns90Toggle && !dns90Toggle->isChecked()) { dnsUsFirst->setEnabled(false); dnsFrFirst->setEnabled(false); }
     refreshInfo();
 }
 void Window::checkDependencies() {

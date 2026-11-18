@@ -306,6 +306,8 @@ int parse_arguments(int argc, char **argv)
             options.dhcp_server = true;
         } else if (!strcmp(arg, "--dns-france-first")) {
             options.dns_france_first = true;
+        } else if (!strcmp(arg, "--no-90dns")) {
+            options.dns_open = true;
         } else if (!strcmp(arg, "--broadcast")) {
             options.broadcast = true;
             options.relay_server_addr = "255.255.255.255:11451";
@@ -391,6 +393,7 @@ void print_help(const char *name)
         "        [--no-discover-switch] disable automatic local Switch ARP discovery\n"
         "        [--dhcp] run a DHCP server for Automatic/DHCP Switches (Nintendo devices only)\n"
         "        [--dns-france-first] list the France 90DNS server before the US one\n"
+        "        [--no-90dns] offer regular Google DNS instead of 90DNS (Nintendo servers not blocked)\n"
         "        [--pmtu <pmtu>]\n"
         "        [--socks5-server-addr <addr>]\n"
         "        [--rpc <address>]\n"
