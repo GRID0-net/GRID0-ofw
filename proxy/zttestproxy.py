@@ -854,6 +854,7 @@ class Capture:
 
 class Relay:
     def __init__(self, a):
+        self.scan_only = bool(getattr(a, "scan_only", False))
         self.game_key = GAME_KEY
         self.game_key_mk8d = GAME_KEY_MK8D
         self.game_key_splatoon2 = GAME_KEY_SPLATOON2
@@ -1477,6 +1478,8 @@ class Relay:
     def on_disc_host(self, data, src):
         game = detect_game(data)
         if game is not None:
+            if getattr(self, "scan_only", False):
+                return
             return self.on_request_from_host(data, src, game)
         if len(data) >= 64 and data[0] == 1 and self.host is None:
             self.host = (src[0], GAME_PORT)
@@ -1885,7 +1888,61 @@ class Relay:
         leg = self.leg_of(src[0]) or bound_leg
         self.on_game(data, src, "s2h" if leg == "sw" else "h2s", local_port)
 
+    def run_scan_only(self, out_path):
+        self.load_stash()
+        self.load_stash_mk8d()
+        self.load_stash_splatoon2()
+        self.load_stash_mkw()
+        try:
+            self._evf = open(out_path, "w", buffering=1)
+        except Exception:
+            self._evf = None
+        self.note(ev="start", mode="scan", sw=self.sw_ip, h=self.h_ip)
+        print("scan only: watching for rooms, not forwarding", flush=True)
+        socks = {self.d_h: self.on_disc, self.d_h2: self.on_disc}
+        stop = [False]
+        signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
+        signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
+        while not stop[0]:
+            try:
+                ready, _, _ = select.select(list(socks), [], [], 0.5)
+            except InterruptedError:
+                continue
+            for s in ready:
+                while True:
+                    try:
+                        data, src = s.recvfrom(65535)
+                    except BlockingIOError:
+                        break
+                    except OSError:
+                        break
+                    try:
+                        socks[s](data, src)
+                    except Exception:
+                        pass
+            now = time.time()
+            while self.queue and self.queue[0][0] <= now:
+                _, _, sock, data, dest, direction, meta = heapq.heappop(self.queue)
+                self._tx(sock, data, dest, direction, meta)
+            if now - self.last_scan >= 15:
+                self.last_scan = now
+                for poll in (self.scan_poll, self.scan_poll_mk8d,
+                             self.scan_poll_splatoon2, self.scan_poll_mkw):
+                    try:
+                        poll()
+                    except Exception:
+                        pass
+        if getattr(self, "_evf", None) is not None:
+            try:
+                self._evf.close()
+            except Exception:
+                pass
+            self._evf = None
+        print("done: scan stopped", flush=True)
+
     def run(self, out_path):
+        if getattr(self, "scan_only", False):
+            return self.run_scan_only(out_path)
         self.load_stash()
         self.load_stash_mk8d()
         self.load_stash_splatoon2()
@@ -1984,6 +2041,7 @@ def main():
     a.delay_s2h = float(os.environ.get("DELAY_S2H_MS", "0"))
     a.delay_h2s = float(os.environ.get("DELAY_H2S_MS", "0"))
     a.capture = os.environ.get("CAPTURE", "").strip() or None
+    a.scan_only = os.environ.get("SCAN_ONLY", "").strip() not in ("", "0")
     if "--no-bit-rewrite" in sys.argv:
         global NO_BITS
         NO_BITS = True

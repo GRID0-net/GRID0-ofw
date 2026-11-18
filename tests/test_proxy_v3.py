@@ -1230,7 +1230,7 @@ class TestMainEnv(unittest.TestCase):
         m.Relay = FakeRelay
         sys.argv = argv
         for k in ("PHONE_IP", "ZT_IP", "SWITCH_PREFIX", "HOST_PREFIX", "SWITCH_IP", "HOST_ZT",
-                  "DELAY_S2H_MS", "DELAY_H2S_MS", "CAPTURE", "EVENTS"):
+                  "DELAY_S2H_MS", "DELAY_H2S_MS", "CAPTURE", "EVENTS", "SCAN_ONLY"):
             os.environ.pop(k, None)
         os.environ.update(env)
         try:
@@ -1274,6 +1274,64 @@ class TestMainEnv(unittest.TestCase):
         self.assertEqual(a.host_prefix, 24)
         self.assertTrue(cap["no_bits"])
         self.assertTrue(cap["events"].startswith("relay_events_"))
+
+    def test_scan_only_env(self):
+        m, cap = self.run_main({"SCAN_ONLY": "1"}, ["zttestproxy.py"])
+        self.assertTrue(cap["args"].scan_only)
+        m, cap = self.run_main({}, ["zttestproxy.py"])
+        self.assertFalse(cap["args"].scan_only)
+
+
+class TestScanOnly(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+
+    def setUp(self):
+        self.r = make_relay(self.m)
+        self.r.scan_only = True
+
+    def test_host_request_ignored(self):
+        r = self.r
+        req, chal, pt = make_browse_request(self.m, KEY_A, r.h_bc)
+        r.on_disc(req, (HOST, 35000))
+        self.assertIsNone(r.peer)
+        self.assertEqual(r.host_req_chals, [])
+        self.assertEqual(r.d_sw.sent, [])
+
+    def test_scan_reply_still_noted(self):
+        import hashlib
+        import hmac as hmac_mod
+        from Crypto.Cipher import AES
+        r = self.r
+        r.scan_poll()
+        self.assertTrue(r.scan_chals)
+        chal = r.scan_chals[-1]
+        rep = bytearray(620)
+        rep[0] = 1
+        rep[1:5] = (557).to_bytes(4, "big")
+        rep[9:13] = self.m.ip4(HOST)[::-1]
+        rep[35] = 1
+        name = b"ScanRoom"
+        rep[39] = len(name)
+        rep[40] = 1
+        rep[41:41 + len(name)] = name
+        rep[141:141 + 2 * len(name)] = name.decode().encode("utf-16-le")
+        rep[544:548] = self.m.ip4(HOST)
+        counter = (1).to_bytes(8, "big")
+        rchal = b"\x55" * 16
+        k = hmac_mod.new(KEY_A, rchal + chal, hashlib.sha256).digest()[:16]
+        ct, tag = AES.new(k, AES.MODE_GCM, nonce=r.h_bc + counter).encrypt_and_digest(b"\x33" * 16)
+        rep[562:564] = b"\x03\x01"
+        rep[564:572] = counter
+        rep[572:588] = rchal
+        rep[588:604] = tag
+        rep[604:620] = ct
+        r.on_disc(bytes(rep), (HOST, 35000))
+        rooms = [e for e in r.log if e.get("ev") == "room" and e.get("host") == HOST]
+        self.assertEqual(len(rooms), 1)
+        self.assertEqual(rooms[0].get("name"), "ScanRoom")
+        self.assertEqual(r.d_sw.sent, [])
 
 
 class TestRelayMore(unittest.TestCase):

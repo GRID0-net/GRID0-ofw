@@ -42,6 +42,7 @@ private:
     QList<Adapter> adapters;
     RelayController relay;
     ProxyController proxy;
+    ProxyController scanner;
     DependencyInstaller dependencies;
     QSettings settings;
     QTabWidget *tabs, *settingsTabs;
