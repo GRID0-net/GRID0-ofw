@@ -104,6 +104,15 @@ private slots:
         auto args = restored.arguments(adapters, "/tmp/test with spaces");
         QVERIFY(args.contains("10.42.9.0/24")); QVERIFY(args.contains("--status-events"));
         QCOMPARE(args.last(), "/tmp/test with spaces");
+        QCOMPARE(restored.dns90, true);
+        restored.dhcp = true; restored.dns90 = false;
+        QVERIFY(restored.arguments(adapters, "/tmp/x").contains("--no-90dns"));
+        restored.dns90 = true; restored.dnsFranceFirst = true;
+        auto args90 = restored.arguments(adapters, "/tmp/x");
+        QVERIFY(args90.contains("--dns-france-first")); QVERIFY(!args90.contains("--no-90dns"));
+        restored.dns90 = false; restored.save(store);
+        Preferences reloaded; reloaded.load(store); QCOMPARE(reloaded.dns90, false);
+        restored.dhcp = false; restored.dnsFranceFirst = false; restored.dns90 = true;
         restored.localInterface = "missing"; QVERIFY(!restored.validate(adapters).isEmpty());
         restored = p; restored.gateway = "10.42.9.123"; QVERIFY(!restored.validate(adapters).isEmpty());
         restored = p; restored.gateway = "10.42.9.255"; QVERIFY(!restored.validate(adapters).isEmpty());

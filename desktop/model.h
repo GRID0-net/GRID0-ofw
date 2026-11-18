@@ -32,6 +32,7 @@ struct Preferences {
     bool diagnostics = false, capture = false, discover = true, dhcp = false;
     int theme = 0;
     bool dnsFranceFirst = false;
+    bool dns90 = true;
     void load(QSettings &settings);
     void save(QSettings &settings) const;
     QString validate(const QList<Adapter> &adapters) const;
