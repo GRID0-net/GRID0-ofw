@@ -209,7 +209,7 @@ struct ContentView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("v3.3.5")
+                    Text("v3.3.6")
                         .font(.system(size: 12))
                         .foregroundColor(Color(red: 0xAA / 255, green: 0xAA / 255, blue: 0xAA / 255))
                     Spacer()
@@ -421,6 +421,7 @@ struct CurrentRoomsView: View {
             ("splatoon3", "logo_splatoon3"),
             ("mk8d", "logo_mk8d"),
             ("splatoon2", "logo_splatoon2"),
+            ("mkw", "logo_mkw"),
         ]
         return all.enumerated().sorted { a, b in
             let pa = model.playersFor(a.element.game)
@@ -436,7 +437,7 @@ struct CurrentRoomsView: View {
                 Image(logo)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 150)
+                    .frame(width: game == "mkw" ? 180 : 150)
                 Spacer()
                 Button(action: { model.refreshFromFiles() }) {
                     Text("↻")

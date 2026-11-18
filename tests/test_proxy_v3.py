@@ -17,6 +17,7 @@ KEY_A = bytes.fromhex("00112233445566778899aabbccddeeff")
 KEY_B = bytes.fromhex("ffeeddccbbaa99887766554433221100")
 MK8D_KEY = b"ABCDEFGHIJKLMNOP"
 SPLATOON2_KEY = bytes.fromhex("ee182a63e216cdb1f51ad4bed8cf6508")
+MKW_KEY = bytes.fromhex("70ec0c2688380ca5b73fe46a7c7597cf")
 WIKI_KEY = bytes.fromhex("78deee82d86875782c40b15278f37815")
 
 WIKI_PAGE = """In LDN and LAN mode, Pia derives encryption keys using a game-specific key.
@@ -129,6 +130,7 @@ def make_relay(m):
     r.game_key = KEY_A
     r.game_key_mk8d = getattr(m, "GAME_KEY_MK8D", None) or getattr(m, "MK8D_KEY", None)
     r.game_key_splatoon2 = getattr(m, "GAME_KEY_SPLATOON2", None) or SPLATOON2_KEY
+    r.game_key_mkw = getattr(m, "GAME_KEY_MKW", None) or MKW_KEY
     r.sw_ip, r.h_ip = SW_PHONE, ZT_PHONE
     r.sw_prefix = r.h_prefix = 24
     r.sw_me, r.h_me = m.ip4(SW_PHONE), m.ip4(ZT_PHONE)
@@ -148,6 +150,8 @@ def make_relay(m):
     r.mk8d_host_req_chals = []
     r.splatoon2_req_chals = []
     r.splatoon2_host_req_chals = []
+    r.mkw_req_chals = []
+    r.mkw_host_req_chals = []
     r.pin_s2h = b"\x99" * 16
     r.pin_h2s = b"\x88" * 16
     r.host_side = None
@@ -162,14 +166,18 @@ def make_relay(m):
     r.scan_chals_mk8d = []
     r.stash_splatoon2 = None
     r.scan_chals_splatoon2 = []
+    r.stash_mkw = None
+    r.scan_chals_mkw = []
     r.room_noted = {}
     r.room_names = {}
     r.room_counts = {}
     r.key = None
     r.key_mk8d = None
     r.key_splatoon2 = None
+    r.key_mkw = None
     r.mk8d_state = False
     r.splatoon2_state = False
+    r.mkw_state = False
     r.game = None
     r.tables = None
     r.ip_pairs = None
@@ -2313,3 +2321,83 @@ if __name__ == "__main__":
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestMKW(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.m = load_copy(PC_COPIES[0])
+        with open(os.path.join(FIXTURES, "mkw_browse_request.bin"), "rb") as fh:
+            cls.req = fh.read()
+        cls.key = cls.m.GAME_KEY_MKW
+        cls.bc = bytes([192, 168, 2, 255])
+
+    def test_key_is_verified_key(self):
+        self.assertEqual(self.key, bytes.fromhex("70ec0c2688380ca5b73fe46a7c7597cf"))
+
+    def test_detect(self):
+        self.assertEqual(self.m.detect_game(self.req), "mkw")
+        self.assertEqual(len(self.req), 352)
+
+    def test_real_request_opens(self):
+        out, chal = self.m.reseal_request_mkw(self.key, self.req, self.bc, self.bc)
+        self.assertEqual(out, self.req)
+        self.assertEqual(chal, self.req[48:64])
+
+    def test_reseal_roundtrip(self):
+        bc2 = bytes([10, 147, 17, 255])
+        out, chal = self.m.reseal_request_mkw(self.key, self.req, self.bc, bc2)
+        self.assertNotEqual(out, self.req)
+        back, chal2 = self.m.reseal_request_mkw(self.key, out, bc2, self.bc)
+        self.assertEqual(back, self.req)
+        self.assertEqual(chal2, chal)
+
+    def test_scan_request_roundtrip(self):
+        bc = bytes([10, 147, 17, 255])
+        req, chal = self.m.make_scan_request_mkw(self.key, bc, 7)
+        self.assertEqual(len(req), 352)
+        self.assertEqual(self.m.detect_game(req), "mkw")
+        out, chal2 = self.m.reseal_request_mkw(self.key, req, bc, self.bc)
+        self.assertEqual(chal2, chal)
+        back, _ = self.m.reseal_request_mkw(self.key, out, self.bc, bc)
+        self.assertEqual(back, req)
+
+    def test_rekey_roundtrip(self):
+        req, chal = self.m.make_scan_request_mkw(self.key, self.bc, 1)
+        out, chal2 = self.m.rekey_request_mkw(self.key, req, self.bc, 2)
+        self.assertNotEqual(chal2, chal)
+        back, chal3 = self.m.reseal_request_mkw(self.key, out, self.bc, self.bc)
+        self.assertEqual(back, out)
+        self.assertEqual(chal3, chal2)
+
+    def test_reply_reseal(self):
+        import hashlib
+        import hmac as hmac_mod
+        from Crypto.Cipher import AES
+        req_chal = bytes(range(16))
+        rchal = bytes(range(16, 32))
+        prop = bytearray(0x230)
+        prop[105 - 5:121 - 5] = rchal
+        prop[121 - 5:137 - 5] = req_chal
+        prop[31:35] = (5).to_bytes(4, "little")
+        prop[35] = 1
+        prop[36:41] = b"Host1"
+        host = bytes([10, 147, 17, 113])
+        prop[200:204] = host
+        prop[543 - 5] = 3
+        k = hmac_mod.new(self.key, rchal + req_chal, hashlib.sha256).digest()[:16]
+        counter = (9).to_bytes(8, "big")
+        bc1 = bytes([10, 147, 17, 255])
+        bc2 = bytes([192, 168, 2, 255])
+        resp = bytes(range(32, 48))
+        ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc1 + counter).encrypt_and_digest(resp)
+        rep = bytes([1]) + (0x230).to_bytes(4, "big") + bytes(prop) + bytes([5, 1, 1]) + counter + rchal + tag + bytes(16) + ct
+        self.assertEqual(len(rep), 640)
+        self.assertEqual(self.m.room_players("mkw", rep), 3)
+        self.assertEqual(self.m.mkw_host_name(rep), "Host1")
+        new_host = bytes([192, 168, 2, 136])
+        out = self.m.reseal_reply_mkw(self.key, rep, req_chal, bc1, bc2, host, new_host)
+        pt = AES.new(k, AES.MODE_GCM, nonce=bc2 + counter).decrypt_and_verify(out[624:], out[592:608])
+        self.assertEqual(pt, resp)
+        self.assertIn(new_host, out[:565])
+        self.assertNotIn(host, out[:565])

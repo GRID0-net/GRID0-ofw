@@ -200,6 +200,7 @@ final class Relay {
     let cfg: ProxyConfig
     let gameKey: [UInt8]
     let gameKeyMk8d: [UInt8] = MK8D_KEY
+    let gameKeyMkw: [UInt8] = MKW_KEY
     var gameKeySplatoon2: [UInt8] = []
     let swIp: String
     let hIp: String
@@ -223,6 +224,8 @@ final class Relay {
     var mk8dHostReqChals: [[UInt8]] = []
     var splatoon2ReqChals: [[UInt8]] = []
     var splatoon2HostReqChals: [[UInt8]] = []
+    var mkwReqChals: [[UInt8]] = []
+    var mkwHostReqChals: [[UInt8]] = []
     let pinS2h: [UInt8] = randomBytes(16)
     let pinH2s: [UInt8] = randomBytes(16)
     var hostSide: String? = nil
@@ -236,14 +239,18 @@ final class Relay {
     var scanChalsMk8d: [[UInt8]] = []
     var stashSplatoon2: [UInt8]? = nil
     var scanChalsSplatoon2: [[UInt8]] = []
+    var stashMkw: [UInt8]? = nil
+    var scanChalsMkw: [[UInt8]] = []
     var roomNoted: [String: Double] = [:]
     var roomNames: [String: String] = [:]
     var roomCounts: [String: Int] = [:]
     var key: [UInt8]? = nil
     var keyMk8d: [UInt8]? = nil
     var keySplatoon2: [UInt8]? = nil
+    var keyMkw: [UInt8]? = nil
     var mk8dState = false
     var splatoon2State = false
+    var mkwState = false
     var game: String? = nil
     var lastSwGame = "splatoon3"
     var tables: SessionTables? = nil
@@ -534,6 +541,7 @@ final class Relay {
     func keyFor(_ game: String) -> [UInt8] {
         if game == "splatoon3" { return gameKey }
         if game == "splatoon2" { return gameKeySplatoon2 }
+        if game == "mkw" { return gameKeyMkw }
         return gameKeyMk8d
     }
 
@@ -541,10 +549,12 @@ final class Relay {
         if direction == "s2h" {
             if game == "splatoon3" { return reqChals }
             if game == "splatoon2" { return splatoon2ReqChals }
+            if game == "mkw" { return mkwReqChals }
             return mk8dReqChals
         }
         if game == "splatoon3" { return hostReqChals }
         if game == "splatoon2" { return splatoon2HostReqChals }
+        if game == "mkw" { return mkwHostReqChals }
         return mk8dHostReqChals
     }
 
@@ -555,10 +565,12 @@ final class Relay {
         if direction == "s2h" {
             if game == "splatoon3" { reqChals = lst }
             else if game == "splatoon2" { splatoon2ReqChals = lst }
+            else if game == "mkw" { mkwReqChals = lst }
             else { mk8dReqChals = lst }
         } else {
             if game == "splatoon3" { hostReqChals = lst }
             else if game == "splatoon2" { splatoon2HostReqChals = lst }
+            else if game == "mkw" { mkwHostReqChals = lst }
             else { mk8dHostReqChals = lst }
         }
     }
@@ -594,6 +606,12 @@ final class Relay {
             if k != keySplatoon2 {
                 keySplatoon2 = k
                 splatoon2State = false
+                cfg.log("session started")
+            }
+        } else if game == "mkw" {
+            if k != keyMkw {
+                keyMkw = k
+                mkwState = false
                 cfg.log("session started")
             }
         } else if k != key {

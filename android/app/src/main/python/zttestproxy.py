@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v25
+# GRID0 proxy v26
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -66,9 +66,9 @@ SLOT_PORTS = tuple(49152 + i for i in range(8))
 MK8D_PORT = 30000
 DISCOVERY_PORTS = (DISCOVERY_PORT, MK8D_PORT)
 MK8D_KEY = b"ABCDEFGHIJKLMNOP"
-GAME_NAMES = {"splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe", "splatoon2": "Splatoon 2"}
-CHAL_OFF = {"splatoon3": 27, "mk8d": 575, "splatoon2": 575}
-PARAM_OFF = {"splatoon3": 105, "mk8d": 1270}
+GAME_NAMES = {"splatoon3": "Splatoon 3", "mk8d": "Mario Kart 8 Deluxe", "splatoon2": "Splatoon 2", "mkw": "Mario Kart World"}
+CHAL_OFF = {"splatoon3": 27, "mk8d": 575, "splatoon2": 575, "mkw": 37}
+PARAM_OFF = {"splatoon3": 105, "mk8d": 1270, "mkw": 105}
 MAGIC = bytes.fromhex("32ab9864")
 
 def detect_game(data):
@@ -76,6 +76,8 @@ def detect_game(data):
         return "splatoon3"
     if len(data) == 873 and data[0] == 0 and int.from_bytes(data[1:5], "big") == 0x23A:
         return "mk8d"
+    if len(data) == 352 and data[0] == 0 and int.from_bytes(data[1:5], "big") == 0x20 and data[37] == 5:
+        return "mkw"
     return None
 ZSTD_MAGIC = bytes.fromhex("28b52ffd")
 
@@ -119,6 +121,26 @@ def load_game_key_splatoon2():
     return None
 
 GAME_KEY_SPLATOON2 = None
+
+def load_game_key_mkw():
+    paths = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "game_key_mkw.txt"),
+             os.path.expanduser("~/game_key_mkw.txt")]
+    env_path = os.environ.get("GAME_KEY_MKW_FILE")
+    if env_path:
+        paths.insert(0, env_path)
+    for p in paths:
+        try:
+            with open(p) as fh:
+                raw = fh.read().strip()
+            if len(raw) == 32:
+                return bytes.fromhex(raw)
+            if len(raw) == 16:
+                return raw.encode()
+        except Exception:
+            continue
+    return bytes.fromhex("70ec0c2688380ca5b73fe46a7c7597cf")
+
+GAME_KEY_MKW = load_game_key_mkw()
 
 def get_wifi_ip():
     import subprocess
@@ -524,6 +546,9 @@ def splatoon2_host_name(rep):
 
 def room_players(game, rep):
     try:
+        if game == "mkw":
+            n = rep[543] if len(rep) > 543 else 0
+            return n if 1 <= n <= 24 else None
         if game == "splatoon3":
             n = rep[35] if len(rep) > 35 else 0
         elif len(rep) >= 39:
@@ -644,6 +669,80 @@ def reseal_reply_rekey(game_key, rep, chal_in, chal_out, old_bc, new_bc, old_hos
     out[off + 42:off + 58] = nct
     return bytes(out)
 
+MKW_SETTING_PLAIN = bytes.fromhex("0000000000000000001a0018000e0400c3f00006e00000000000000000000000")
+
+def mkw_host_name(rep):
+    try:
+        if len(rep) > 105:
+            n = int.from_bytes(rep[36:40], "little")
+            if 1 <= n <= 64 and 41 + n <= len(rep):
+                enc = rep[40]
+                raw = bytes(rep[41:41 + n])
+                name = raw.decode("utf-16-le", "ignore") if enc == 2 else raw.decode("utf-8", "ignore")
+                name = name.split("\x00")[0].strip()
+                if name and all(c.isprintable() for c in name):
+                    return name
+    except Exception:
+        pass
+    return None
+
+def reseal_request_mkw(game_key, req, old_bc, new_bc):
+    if len(req) != 352 or req[0] != 0 or req[37] != 5:
+        raise ValueError("not an mkw browse request")
+    counter, chal = req[40:48], req[48:64]
+    k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
+    pt = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(req[96:], req[64:80])
+    st = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(req[5:37], req[80:96])
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
+    sct, stag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(st)
+    return req[:5] + sct + req[37:64] + tag + stag + ct, chal
+
+def rekey_request_mkw(game_key, req, bc, counter):
+    if len(req) != 352 or req[0] != 0 or req[37] != 5:
+        raise ValueError("not an mkw browse request")
+    old_counter, old_chal = req[40:48], req[48:64]
+    k_old = AES.new(game_key, AES.MODE_ECB).encrypt(old_chal)
+    pt = AES.new(k_old, AES.MODE_GCM, nonce=bc + old_counter).decrypt_and_verify(req[96:], req[64:80])
+    st = AES.new(k_old, AES.MODE_GCM, nonce=bc + old_counter).decrypt_and_verify(req[5:37], req[80:96])
+    chal = os.urandom(16)
+    k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
+    ctr = counter.to_bytes(8, "big")
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + ctr).encrypt_and_digest(pt)
+    sct, stag = AES.new(k, AES.MODE_GCM, nonce=bc + ctr).encrypt_and_digest(st)
+    return req[:5] + sct + req[37:40] + ctr + chal + tag + stag + ct, chal
+
+def make_scan_request_mkw(game_key, bc, counter):
+    chal = os.urandom(16)
+    k = AES.new(game_key, AES.MODE_ECB).encrypt(chal)
+    ctr = counter.to_bytes(8, "big")
+    sct, stag = AES.new(k, AES.MODE_GCM, nonce=bc + ctr).encrypt_and_digest(MKW_SETTING_PLAIN)
+    ct, tag = AES.new(k, AES.MODE_GCM, nonce=bc + ctr).encrypt_and_digest(os.urandom(256))
+    return b"\x00\x00\x00\x00\x20" + sct + b"\x05\x01\x01" + ctr + chal + tag + stag + ct, chal
+
+def reseal_reply_mkw(game_key, rep, req_chal, old_bc, new_bc, old_host, new_host):
+    if rep[0] != 1:
+        raise ValueError("not a browse reply")
+    off = 5 + int.from_bytes(rep[1:5], "big")
+    if off + 75 > len(rep):
+        raise ValueError("not an mkw browse reply")
+    counter, rchal = rep[off + 3:off + 11], rep[off + 11:off + 27]
+    k = hmac.new(game_key, rchal + req_chal, hashlib.sha256).digest()[:16]
+    pt = AES.new(k, AES.MODE_GCM, nonce=old_bc + counter).decrypt_and_verify(rep[off + 59:off + 75], rep[off + 27:off + 43])
+    nct, ntag = AES.new(k, AES.MODE_GCM, nonce=new_bc + counter).encrypt_and_digest(pt)
+    out = bytearray(rep)
+    for o, n in [(old_host, new_host), (old_host[::-1], new_host[::-1])]:
+        i = 0
+        while True:
+            i = bytes(out).find(o, i)
+            if i < 0:
+                break
+            if i < off:
+                out[i:i + len(o)] = n
+            i += len(o)
+    out[off + 27:off + 43] = ntag
+    out[off + 59:off + 75] = nct
+    return bytes(out)
+
 def udp_bind(ip, port, broadcast=False, bind_devices=None):
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -704,6 +803,7 @@ class Relay:
         self.game_key = GAME_KEY or load_game_key()
         self.game_key_mk8d = MK8D_KEY
         self.game_key_splatoon2 = GAME_KEY_SPLATOON2 or load_game_key_splatoon2()
+        self.game_key_mkw = GAME_KEY_MKW or load_game_key_mkw()
         self.sw_ip = a.switch_ip or get_wifi_ip()
         self.h_ip = a.host_ip or detect_zerotier_ip(a.host_peer)
         self.sw_prefix = a.switch_prefix
@@ -725,6 +825,8 @@ class Relay:
         self.mk8d_host_req_chals = []
         self.splatoon2_req_chals = []
         self.splatoon2_host_req_chals = []
+        self.mkw_req_chals = []
+        self.mkw_host_req_chals = []
         self.pin_s2h = os.urandom(16)
         self.pin_h2s = os.urandom(16)
         self.host_side = None
@@ -738,14 +840,18 @@ class Relay:
         self.scan_chals_mk8d = []
         self.stash_splatoon2 = None
         self.scan_chals_splatoon2 = []
+        self.stash_mkw = None
+        self.scan_chals_mkw = []
         self.room_noted = {}
         self.room_names = {}
         self.room_counts = {}
         self.key = None
         self.key_mk8d = None
         self.key_splatoon2 = None
+        self.key_mkw = None
         self.mk8d_state = False
         self.splatoon2_state = False
+        self.mkw_state = False
         self.game = None
         self.last_sw_game = "splatoon3"
         self.tables = None
@@ -952,6 +1058,8 @@ class Relay:
             return self.game_key
         if game == "splatoon2":
             return self.game_key_splatoon2
+        if game == "mkw":
+            return self.game_key_mkw
         return self.game_key_mk8d
 
     def chals_for(self, direction, game):
@@ -960,11 +1068,15 @@ class Relay:
                 return self.req_chals
             if game == "splatoon2":
                 return self.splatoon2_req_chals
+            if game == "mkw":
+                return self.mkw_req_chals
             return self.mk8d_req_chals
         if game == "splatoon3":
             return self.host_req_chals
         if game == "splatoon2":
             return self.splatoon2_host_req_chals
+        if game == "mkw":
+            return self.mkw_host_req_chals
         return self.mk8d_host_req_chals
 
     def add_chal(self, direction, game, chal):
@@ -997,6 +1109,11 @@ class Relay:
                 self.key_splatoon2 = k
                 self.splatoon2_state = False
                 print("session started", flush=True)
+        elif game == "mkw":
+            if k != self.key_mkw:
+                self.key_mkw = k
+                self.mkw_state = False
+                print("session started", flush=True)
         elif k != self.key:
             self.key = k
             print("session started", flush=True)
@@ -1027,6 +1144,8 @@ class Relay:
             try:
                 if g == "splatoon3":
                     out, chal = reseal_request(self.key_for(g), data, self.sw_bc, self.h_bc, CHAL_OFF[g])
+                elif g == "mkw":
+                    out, chal = reseal_request_mkw(self.key_for(g), data, self.sw_bc, self.h_bc)
                 else:
                     out, chal = reseal_request_pinned(self.key_for(g), data, self.sw_bc, self.h_bc, CHAL_OFF[g], self.pin_s2h)
                 game = g
@@ -1061,6 +1180,9 @@ class Relay:
         elif game == "splatoon2":
             self.stash_splatoon2 = out
             self.save_stash_splatoon2()
+        elif game == "mkw":
+            self.stash_mkw = out
+            self.save_stash_mkw()
         self.last_sw_game = game
         self.send(sock, out, (socket.inet_ntoa(self.h_bc), port), "s2h", kind="browse_req")
         now = time.time()
@@ -1192,6 +1314,67 @@ class Relay:
         except Exception:
             pass
 
+    def stash_path_mkw(self):
+        ev = os.environ.get("EVENTS")
+        if ev:
+            return os.path.join(os.path.dirname(ev), "last_browse_request_mkw.bin")
+        return None
+
+    def save_stash_mkw(self):
+        path = self.stash_path_mkw()
+        if not path or not self.stash_mkw:
+            return
+        try:
+            with open(path, "wb") as fh:
+                fh.write(self.stash_mkw)
+        except Exception:
+            pass
+
+    def load_stash_mkw(self):
+        path = self.stash_path_mkw()
+        if not path:
+            return
+        try:
+            with open(path, "rb") as fh:
+                data = fh.read()
+            if len(data) == 352 and data[0] == 0:
+                self.stash_mkw = data
+        except Exception:
+            pass
+
+    def scan_poll_mkw(self):
+        if self.key_mkw:
+            return
+        self.scan_counter += 1
+        req = None
+        if self.stash_mkw:
+            try:
+                req, chal = rekey_request_mkw(self.key_for("mkw"), self.stash_mkw, self.h_bc, self.scan_counter)
+            except Exception:
+                req = None
+        if req is None:
+            req, chal = make_scan_request_mkw(self.key_for("mkw"), self.h_bc, self.scan_counter)
+        self.scan_chals_mkw.append(chal)
+        del self.scan_chals_mkw[:-4]
+        sock = self.sock_for("h", "mkw")
+        port = self.port_for("mkw")
+        self.send(sock, req, (socket.inet_ntoa(self.h_bc), port), "scan", kind="browse_req_scan", probe=1)
+        now = time.time()
+        self.rooms = {k: v for k, v in self.rooms.items() if now - v < 60}
+        targets = {ip for (g, ip) in self.rooms if g == "mkw"}
+        if self.host:
+            targets.add(self.host[0])
+        targets.discard(self.h_ip)
+        if targets:
+            for ip in sorted(targets):
+                self.send(sock, req, (ip, port), "scan", kind="browse_req_scan_uni", probe=1)
+        elif self.h_net is not None:
+            for addr in self.h_net.hosts():
+                ip = str(addr)
+                if ip == self.h_ip:
+                    continue
+                self.send(sock, req, (ip, port), "scan", kind="browse_req_scan_uni", probe=1)
+
     def scan_poll_splatoon2(self):
         if self.key_splatoon2 or not self.stash_splatoon2:
             return
@@ -1319,6 +1502,23 @@ class Relay:
             self.disc_note(f"note: a reply from {src} did not open with a scan challenge")
             if self.cap:
                 self.cap.save("disc", data, src[0], self.h_ip, src[1], src[1])
+        if len(data) >= 64 and data[0] == 1 and self.scan_chals_mkw:
+            opened = False
+            for chal in self.scan_chals_mkw:
+                try:
+                    reseal_reply_mkw(self.key_for("mkw"), data, chal, self.h_bc, self.h_bc,
+                                     ip4(src[0]), ip4(src[0]))
+                    opened = True
+                    break
+                except Exception:
+                    continue
+            if opened:
+                self.rooms[("mkw", src[0])] = time.time()
+                self.note_room("mkw", src[0], mkw_host_name(data), room_players("mkw", data))
+                return
+            self.disc_note(f"note: a reply from {src} did not open with a scan challenge")
+            if self.cap:
+                self.cap.save("disc", data, src[0], self.h_ip, src[1], src[1])
         if len(data) < 64 or data[0] != 1 or not self.switch:
             return
         out, game = None, None
@@ -1336,6 +1536,13 @@ class Relay:
                                          self.h_bc, self.sw_bc, ip4(src[0]), self.sw_me,
                                          mk8d_param_off(data))
                 game = "splatoon2"
+            except Exception:
+                out = None
+        if out is None and self.mkw_req_chals:
+            try:
+                out = reseal_reply_mkw(self.key_for("mkw"), data, self.mkw_req_chals[0],
+                                       self.h_bc, self.sw_bc, ip4(src[0]), self.sw_me)
+                game = "mkw"
             except Exception:
                 out = None
         if out is None:
@@ -1374,8 +1581,10 @@ class Relay:
             self.note_room("mk8d", src[0], mk8d_host_name(data), room_players("mk8d", data))
         elif game == "splatoon2":
             self.note_room("splatoon2", src[0], splatoon2_host_name(data), room_players("splatoon2", data))
+        elif game == "mkw":
+            self.note_room("mkw", src[0], mkw_host_name(data), room_players("mkw", data))
         entry = self.sessions.setdefault(src[0], {"keys": {}, "tables": None})
-        entry["keys"][game] = self.key_mk8d if game == "mk8d" else (self.key_splatoon2 if game == "splatoon2" else self.key)
+        entry["keys"][game] = self.key_mk8d if game == "mk8d" else (self.key_splatoon2 if game == "splatoon2" else (self.key_mkw if game == "mkw" else self.key))
         entry["tables"] = self.tables_for(src[0])
         self.note(ev="rx", dir="h2s", kind="browse_reply", src=src[0], len=len(data))
         port = self.port_for(game)
@@ -1391,6 +1600,8 @@ class Relay:
             try:
                 if g == "splatoon3":
                     out, chal = reseal_request(self.key_for(g), data, self.h_bc, self.sw_bc, CHAL_OFF[g])
+                elif g == "mkw":
+                    out, chal = reseal_request_mkw(self.key_for(g), data, self.h_bc, self.sw_bc)
                 else:
                     out, chal = reseal_request_pinned(self.key_for(g), data, self.h_bc, self.sw_bc, CHAL_OFF[g], self.pin_h2s)
                 game = g
@@ -1433,6 +1644,13 @@ class Relay:
                                          self.sw_bc, self.h_bc, ip4(src[0]), self.h_me,
                                          mk8d_param_off(data))
                 game = "splatoon2"
+            except Exception:
+                out = None
+        if out is None and self.mkw_host_req_chals:
+            try:
+                out = reseal_reply_mkw(self.key_for("mkw"), data, self.mkw_host_req_chals[0],
+                                       self.sw_bc, self.h_bc, ip4(src[0]), self.h_me)
+                game = "mkw"
             except Exception:
                 out = None
         if out is None:
@@ -1490,7 +1708,7 @@ class Relay:
         self.note_room(game, host)
 
     def on_game(self, data, src, direction, local_port=None):
-        if not self.tables or (not self.key and not self.key_mk8d and not self.key_splatoon2):
+        if not self.tables or (not self.key and not self.key_mk8d and not self.key_splatoon2 and not self.key_mkw):
             self.note(ev="drop_nokey", dir=direction, src=src[0], len=len(data))
             return
         if self.game in ("mk8d", "splatoon2"):
@@ -1631,6 +1849,7 @@ class Relay:
         self.load_stash()
         self.load_stash_mk8d()
         self.load_stash_splatoon2()
+        self.load_stash_mkw()
         try:
             self._evf = open(out_path, "w", buffering=1)
         except Exception:
@@ -1690,6 +1909,10 @@ class Relay:
                     self.scan_poll_splatoon2()
                 except Exception:
                     pass
+                try:
+                    self.scan_poll_mkw()
+                except Exception:
+                    pass
             if now - last_stat > 5:
                 last_stat = now
                 n = {k: sum(1 for e in self.log if e.get("ev") == "tx" and e.get("dir") == k and not e.get("probe")) for k in ("s2h", "h2s")}
@@ -1747,7 +1970,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v25", flush=True)
+    print("GRID0 proxy v26", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":

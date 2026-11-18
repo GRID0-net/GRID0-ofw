@@ -30,6 +30,8 @@ extension Relay {
             if g == "splatoon3" {
                 sealed = resealRequest(gameKey: keyFor(g), req: data, oldBc: swBc, newBc: hBc,
                                        chalOff: CHAL_OFF[g]!)
+            } else if g == "mkw" {
+                sealed = resealRequestMkw(gameKey: keyFor(g), req: data, oldBc: swBc, newBc: hBc)
             } else {
                 sealed = resealRequestPinned(gameKey: keyFor(g), req: data, oldBc: swBc, newBc: hBc,
                                              chalOff: CHAL_OFF[g]!, pin: pinS2h)
@@ -70,6 +72,9 @@ extension Relay {
         } else if game == "splatoon2" {
             stashSplatoon2 = out
             saveStashSplatoon2()
+        } else if game == "mkw" {
+            stashMkw = out
+            saveStashMkw()
         }
         lastSwGame = game
         send(sock, out, ipString(hBc), port, "s2h", meta: [("kind", .s("browse_req"))])
@@ -144,6 +149,22 @@ extension Relay {
         if let data = try? Data(contentsOf: URL(fileURLWithPath: stashPathSplatoon2())),
            data.count == 873 && data[0] == 0 {
             stashSplatoon2 = Array(data)
+        }
+    }
+
+    func stashPathMkw() -> String {
+        return cfg.filesDir + "/last_browse_request_mkw.bin"
+    }
+
+    func saveStashMkw() {
+        guard let data = stashMkw else { return }
+        try? Data(data).write(to: URL(fileURLWithPath: stashPathMkw()))
+    }
+
+    func loadStashMkw() {
+        if let data = try? Data(contentsOf: URL(fileURLWithPath: stashPathMkw())),
+           data.count == 352 && data[0] == 0 {
+            stashMkw = Array(data)
         }
     }
 
@@ -223,6 +244,56 @@ extension Relay {
                 let ip = uint32ToIp(v)
                 if ip != hIp {
                     send(sock, req, ip, port, "scan",
+                         meta: [("kind", .s("browse_req_scan_uni")), ("probe", .i(1))])
+                }
+                v += 1
+            }
+        }
+    }
+
+    func scanPollMkw() {
+        if keyMkw != nil { return }
+        scanCounter += 1
+        var req: [UInt8]? = nil
+        var chal: [UInt8]? = nil
+        if let stash = stashMkw {
+            if let r = rekeyRequestMkw(gameKey: keyFor("mkw"), req: stash, bc: hBc, counter: scanCounter) {
+                req = r.req
+                chal = r.chal
+            }
+        }
+        if req == nil {
+            let made = makeScanRequestMkw(gameKey: keyFor("mkw"), bc: hBc, counter: scanCounter)
+            req = made.req
+            chal = made.chal
+        }
+        guard let request = req, let challenge = chal else { return }
+        scanChalsMkw.append(challenge)
+        scanChalsMkw = Array(scanChalsMkw.suffix(4))
+        let sock = sockFor("h", "mkw")
+        let port = portFor("mkw")
+        send(sock, request, ipString(hBc), port, "scan",
+             meta: [("kind", .s("browse_req_scan")), ("probe", .i(1))])
+        let t = now()
+        rooms = rooms.filter { t - $0.value < 60 }
+        var targets = roomTargets("mkw")
+        if let h = hostAddr {
+            targets.insert(h.ip)
+        }
+        targets.remove(hIp)
+        if !targets.isEmpty {
+            for ip in targets.sorted() {
+                send(sock, request, ip, port, "scan",
+                     meta: [("kind", .s("browse_req_scan_uni")), ("probe", .i(1))])
+            }
+        } else {
+            let base = ipToUInt32(hIp) & prefixMask(hPrefix)
+            let bc = base | ~prefixMask(hPrefix)
+            var v = base + 1
+            while v < bc {
+                let ip = uint32ToIp(v)
+                if ip != hIp {
+                    send(sock, request, ip, port, "scan",
                          meta: [("kind", .s("browse_req_scan_uni")), ("probe", .i(1))])
                 }
                 v += 1
@@ -351,6 +422,23 @@ extension Relay {
             discNote("note: a reply from \(src.ip):\(src.port) did not open with a scan challenge")
             cap?.save(kind: "disc", data: data, src: src.ip, dst: hIp, sport: src.port, dport: src.port)
         }
+        if data.count >= 64 && data[0] == 1 && !scanChalsMkw.isEmpty {
+            var opened = false
+            for chal in scanChalsMkw {
+                if resealReplyMkw(gameKey: keyFor("mkw"), rep: data, reqChal: chal,
+                                  oldBc: hBc, newBc: hBc, oldHost: ip4(src.ip), newHost: ip4(src.ip)) != nil {
+                    opened = true
+                    break
+                }
+            }
+            if opened {
+                rooms["mkw|\(src.ip)"] = now()
+                noteRoom("mkw", src.ip, mkwHostName(data), roomPlayers("mkw", data))
+                return
+            }
+            discNote("note: a reply from \(src.ip):\(src.port) did not open with a scan challenge")
+            cap?.save(kind: "disc", data: data, src: src.ip, dst: hIp, sport: src.port, dport: src.port)
+        }
         if data.count < 64 || data[0] != 1 || switchAddr == nil {
             return
         }
@@ -369,6 +457,11 @@ extension Relay {
                                    oldHost: ip4(src.ip), newHost: swMe,
                                    paramOff: mk8dParamOff(data))
             if out != nil { game = "splatoon2" }
+        }
+        if out == nil && !mkwReqChals.isEmpty {
+            out = resealReplyMkw(gameKey: keyFor("mkw"), rep: data, reqChal: mkwReqChals[0],
+                                 oldBc: hBc, newBc: swBc, oldHost: ip4(src.ip), newHost: swMe)
+            if out != nil { game = "mkw" }
         }
         if out == nil {
             for g in ["splatoon3", "mk8d", "splatoon2"] {
@@ -410,9 +503,11 @@ extension Relay {
             noteRoom("mk8d", src.ip, mk8dHostName(data), roomPlayers("mk8d", data))
         } else if g == "splatoon2" {
             noteRoom("splatoon2", src.ip, splatoon2HostName(data), roomPlayers("splatoon2", data))
+        } else if g == "mkw" {
+            noteRoom("mkw", src.ip, mkwHostName(data), roomPlayers("mkw", data))
         }
         var entry = sessions[src.ip] ?? SessionEntry()
-        if let k = (g == "mk8d" ? keyMk8d : (g == "splatoon2" ? keySplatoon2 : key)) {
+        if let k = (g == "mk8d" ? keyMk8d : (g == "splatoon2" ? keySplatoon2 : (g == "mkw" ? keyMkw : key))) {
             entry.keys[g] = k
         }
         entry.tables = tablesFor(src.ip)
@@ -432,6 +527,8 @@ extension Relay {
             if g == "splatoon3" {
                 sealed = resealRequest(gameKey: keyFor(g), req: data, oldBc: hBc, newBc: swBc,
                                        chalOff: CHAL_OFF[g]!)
+            } else if g == "mkw" {
+                sealed = resealRequestMkw(gameKey: keyFor(g), req: data, oldBc: hBc, newBc: swBc)
             } else {
                 sealed = resealRequestPinned(gameKey: keyFor(g), req: data, oldBc: hBc, newBc: swBc,
                                              chalOff: CHAL_OFF[g]!, pin: pinH2s)
@@ -478,6 +575,11 @@ extension Relay {
                                    oldHost: ip4(src.ip), newHost: hMe,
                                    paramOff: mk8dParamOff(data))
             if out != nil { game = "splatoon2" }
+        }
+        if out == nil && !mkwHostReqChals.isEmpty {
+            out = resealReplyMkw(gameKey: keyFor("mkw"), rep: data, reqChal: mkwHostReqChals[0],
+                                 oldBc: swBc, newBc: hBc, oldHost: ip4(src.ip), newHost: hMe)
+            if out != nil { game = "mkw" }
         }
         if out == nil {
             for g in ["splatoon3", "mk8d", "splatoon2"] {
