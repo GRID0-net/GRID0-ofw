@@ -437,7 +437,7 @@ struct CurrentRoomsView: View {
                 Image(logo)
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 150)
+                    .frame(width: game == "mkw" ? 180 : 150)
                 Spacer()
                 Button(action: { model.refreshFromFiles() }) {
                     Text("↻")

@@ -1987,7 +1987,7 @@ public class MainActivity extends Activity {
         logo.setImageResource(logoRes);
         logo.setAdjustViewBounds(true);
         LinearLayout.LayoutParams logoParams = new LinearLayout.LayoutParams(
-                (int) (150 * getResources().getDisplayMetrics().density),
+                (int) ((game.equals("mkw") ? 180 : 150) * getResources().getDisplayMetrics().density),
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         logoParams.gravity = Gravity.CENTER_HORIZONTAL;
         logo.setLayoutParams(logoParams);
