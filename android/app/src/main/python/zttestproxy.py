@@ -1817,6 +1817,18 @@ class Relay:
                 self.cap.save("sw-game", data, src[0], self.h_ip, src[1], GAME_PORT)
             else:
                 self.cap.save("hs-game", data, self.sw_ip, src[0], GAME_PORT, src[1])
+        if used == "splatoon2" and direction == "h2s" and label == "09001000":
+            plain = open_game_mk8d(keys[used], ip4(src[0]), data)
+            ph = hashlib.sha256(plain).digest() if plain is not None else None
+            fan = self.__dict__.setdefault("_s2_probe_fan", {})
+            now = time.time()
+            if ph is not None and now - fan.get(ph, 0.0) < 1.5:
+                return
+            if ph is not None:
+                fan[ph] = now
+            for p in GAME_PORTS:
+                self.send(sock, out, (bdest[0], p), direction, label=label, nonce=nonce.hex(), changed=changed)
+            return
         if used in ("mk8d", "splatoon2"):
             if not pknown:
                 self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
