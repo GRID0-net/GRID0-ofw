@@ -98,15 +98,16 @@ public class MainActivity extends Activity {
     private TextView statusText;
     private TextView switchDetectedView;
     private boolean switchBannerShown = false;
-    private final Runnable hideSwitchDetectedRunnable = new Runnable() {
+    private boolean switchBannerCollapsed = false;
+    private final Runnable collapseSwitchDetectedRunnable = new Runnable() {
         @Override
         public void run() {
-            switchBannerShown = false;
-            if (switchDetectedView != null) {
-                switchDetectedView.setVisibility(View.GONE);
+            if (switchBannerShown && !switchBannerCollapsed) {
+                setSwitchBannerCollapsed(true);
             }
         }
     };
+    private View topSpacer;
     private TextView step1Label;
     private Button step1Button;
     private ImageView step1Check;
@@ -498,13 +499,25 @@ public class MainActivity extends Activity {
         int pillPadX = (int) (14 * getResources().getDisplayMetrics().density);
         int pillPadY = (int) (6 * getResources().getDisplayMetrics().density);
         switchDetectedView.setPadding(pillPadX, pillPadY, pillPadX, pillPadY);
-        LinearLayout.LayoutParams sdParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        sdParams.gravity = Gravity.CENTER_HORIZONTAL;
-        sdParams.topMargin = (int) (8 * getResources().getDisplayMetrics().density);
+        FrameLayout.LayoutParams sdParams = new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
+        sdParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
+        sdParams.topMargin = (int) (100 * getResources().getDisplayMetrics().density);
         switchDetectedView.setLayoutParams(sdParams);
         switchDetectedView.setVisibility(View.GONE);
-        main.addView(switchDetectedView, 1);
+        switchDetectedView.setElevation(6 * getResources().getDisplayMetrics().density);
+        switchDetectedView.setClickable(true);
+        switchDetectedView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (switchBannerShown && switchBannerCollapsed) {
+                    setSwitchBannerCollapsed(false);
+                    logRefreshHandler.removeCallbacks(collapseSwitchDetectedRunnable);
+                    logRefreshHandler.postDelayed(collapseSwitchDetectedRunnable, 5000);
+                }
+            }
+        });
+        root.addView(switchDetectedView);
 
         View spacer = new View(this);
         LinearLayout.LayoutParams spacerParams = new LinearLayout.LayoutParams(
@@ -512,6 +525,7 @@ public class MainActivity extends Activity {
                 (int) (20 * getResources().getDisplayMetrics().density));
         spacer.setLayoutParams(spacerParams);
         homeContent.addView(spacer);
+        topSpacer = spacer;
 
         if (!zeroTierInstalled) {
             TextView msg = new TextView(this);
@@ -538,7 +552,7 @@ public class MainActivity extends Activity {
         step1Check = addCheckToRow((FrameLayout) step1Row);
         homeContent.addView(step1Row);
 
-        step2Label = makeStepLabel("Step 2", 16);
+        step2Label = makeStepLabel("Step 2", 12);
         homeContent.addView(step2Label);
 
         step2Button = makeButton("Connect to GRID0", 245);
@@ -552,7 +566,7 @@ public class MainActivity extends Activity {
         step2Check = addCheckToRow((FrameLayout) step2Row);
         homeContent.addView(step2Row);
 
-        step3Label = makeStepLabel("Step 3", 16);
+        step3Label = makeStepLabel("Step 3", 12);
         homeContent.addView(step3Label);
 
         step3Button = makeButton("Start Proxy", 245);
@@ -951,9 +965,9 @@ public class MainActivity extends Activity {
 
         if (proxyRunning) {
             logView.setText(logText);
-            refreshProxyLog();
             startLogRefresh();
         }
+        refreshProxyLog();
 
         showTab();
 
@@ -965,6 +979,12 @@ public class MainActivity extends Activity {
     private void updateTutorialUI() {
         boolean tutorial = tutorialSwitch == null || tutorialSwitch.isChecked();
         int vis = tutorial ? View.VISIBLE : View.GONE;
+        if (topSpacer != null) {
+            float density = getResources().getDisplayMetrics().density;
+            LinearLayout.LayoutParams sp = (LinearLayout.LayoutParams) topSpacer.getLayoutParams();
+            sp.height = (int) ((tutorial ? 16 : 20) * density);
+            topSpacer.setLayoutParams(sp);
+        }
         if (installMsgView != null) installMsgView.setVisibility(vis);
         if (step1Label != null) step1Label.setVisibility(vis);
         if (step1Row != null) step1Row.setVisibility(vis);
@@ -1252,6 +1272,28 @@ public class MainActivity extends Activity {
         updateSwitchBanner();
     }
 
+    private void setSwitchBannerCollapsed(boolean collapsed) {
+        if (switchDetectedView == null) return;
+        switchBannerCollapsed = collapsed;
+        float density = getResources().getDisplayMetrics().density;
+        FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) switchDetectedView.getLayoutParams();
+        if (collapsed) {
+            switchDetectedView.setText("");
+            int dot = (int) (18 * density);
+            p.width = dot;
+            p.height = dot;
+            switchDetectedView.setPadding(0, 0, 0, 0);
+        } else {
+            switchDetectedView.setText("Switch detected: " + lastSwitchId);
+            p.width = FrameLayout.LayoutParams.WRAP_CONTENT;
+            p.height = FrameLayout.LayoutParams.WRAP_CONTENT;
+            int px = (int) (14 * density);
+            int py = (int) (6 * density);
+            switchDetectedView.setPadding(px, py, px, py);
+        }
+        switchDetectedView.setLayoutParams(p);
+    }
+
     private void updateSwitchBanner() {
         if (switchDetectedView == null) return;
         runOnUiThread(new Runnable() {
@@ -1260,16 +1302,19 @@ public class MainActivity extends Activity {
                 if (switchDetectedView == null) return;
                 if (currentTab != 0 || lastSwitchId == null) {
                     switchBannerShown = false;
-                    logRefreshHandler.removeCallbacks(hideSwitchDetectedRunnable);
+                    switchBannerCollapsed = false;
+                    logRefreshHandler.removeCallbacks(collapseSwitchDetectedRunnable);
                     switchDetectedView.setVisibility(View.GONE);
                     return;
                 }
-                switchDetectedView.setText("Switch detected: " + lastSwitchId);
-                switchDetectedView.setVisibility(View.VISIBLE);
                 if (!switchBannerShown) {
                     switchBannerShown = true;
-                    logRefreshHandler.removeCallbacks(hideSwitchDetectedRunnable);
-                    logRefreshHandler.postDelayed(hideSwitchDetectedRunnable, 5000);
+                    setSwitchBannerCollapsed(false);
+                    switchDetectedView.setVisibility(View.VISIBLE);
+                    logRefreshHandler.removeCallbacks(collapseSwitchDetectedRunnable);
+                    logRefreshHandler.postDelayed(collapseSwitchDetectedRunnable, 5000);
+                } else if (!switchBannerCollapsed) {
+                    switchDetectedView.setText("Switch detected: " + lastSwitchId);
                 }
             }
         });
@@ -2514,7 +2559,8 @@ public class MainActivity extends Activity {
         updateZtButton();
 
         if (consoleBox != null) {
-            consoleBox.setVisibility(proxyRunning ? View.VISIBLE : View.GONE);
+            boolean hasLog = logView != null && logView.getText().length() > 0;
+            consoleBox.setVisibility(proxyRunning || hasLog ? View.VISIBLE : View.GONE);
         }
 
         if (socialRow != null && discordBtn != null && supportBtn != null) {
