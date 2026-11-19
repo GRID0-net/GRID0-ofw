@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v34
+# GRID0 proxy v35
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -1034,7 +1034,7 @@ class Relay:
 
     def learn_stations_mk8d(self, src_ip, plain, game):
         changed = self.add_station(src_ip)
-        if game == "splatoon2" and len(plain) >= 0x33 and plain[0x29:0x2d] == ip4(src_ip) \
+        if game in ("splatoon2", "mk8d") and len(plain) >= 0x33 and plain[0x29:0x2d] == ip4(src_ip) \
                 and plain[0x2f:0x33] == ip4(src_ip):
             claims = self.__dict__.setdefault("claim_ports", {})
             cp = (plain[0x2d] << 8) | plain[0x2e]
@@ -2095,7 +2095,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v34", flush=True)
+    print("GRID0 proxy v35", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
