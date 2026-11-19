@@ -70,6 +70,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -99,8 +100,12 @@ public class MainActivity extends Activity {
     private ValueAnimator borderAnimator;
     private TextView statusText;
     private LinearLayout switchDetectedView;
-    private ImageView switchDetectedLogo;
-    private TextView switchDetectedText;
+    private final List<LinearLayout> switchRows = new ArrayList<>();
+    private final List<TextView> switchRowTexts = new ArrayList<>();
+    private final List<String> switchIdList = new ArrayList<>();
+    private String switchRowsSignature = "";
+    private List<String> proxySwitchIps = new ArrayList<>();
+    private final Map<String, String> lanSwitchNames = new LinkedHashMap<>();
     private boolean switchBannerShown = false;
     private boolean switchBannerCollapsed = false;
     private ValueAnimator switchBannerAnimator;
@@ -162,6 +167,7 @@ public class MainActivity extends Activity {
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setTheme(R.style.AppTheme);
         getWindow().setStatusBarColor(Color.BLACK);
         getWindow().setNavigationBarColor(Color.BLACK);
         getWindow().getDecorView().setSystemUiVisibility(0);
@@ -494,7 +500,7 @@ public class MainActivity extends Activity {
         homeContent.addView(statusText);
 
         switchDetectedView = new LinearLayout(this);
-        switchDetectedView.setOrientation(LinearLayout.HORIZONTAL);
+        switchDetectedView.setOrientation(LinearLayout.VERTICAL);
         switchDetectedView.setGravity(Gravity.CENTER);
         GradientDrawable detectedPillBg = new GradientDrawable();
         detectedPillBg.setColor(0xFF2E7D32);
@@ -503,21 +509,6 @@ public class MainActivity extends Activity {
         int pillPadX = (int) (14 * getResources().getDisplayMetrics().density);
         int pillPadY = (int) (6 * getResources().getDisplayMetrics().density);
         switchDetectedView.setPadding(pillPadX, pillPadY, pillPadX, pillPadY);
-        switchDetectedLogo = new ImageView(this);
-        switchDetectedLogo.setImageResource(R.drawable.ic_switch_logo);
-        int logoW = (int) (26 * getResources().getDisplayMetrics().density);
-        int logoH = (int) (24 * getResources().getDisplayMetrics().density);
-        switchDetectedLogo.setLayoutParams(new LinearLayout.LayoutParams(logoW, logoH));
-        switchDetectedView.addView(switchDetectedLogo);
-        switchDetectedText = new TextView(this);
-        switchDetectedText.setTextSize(14);
-        switchDetectedText.setTextColor(Color.WHITE);
-        switchDetectedText.setGravity(Gravity.CENTER);
-        LinearLayout.LayoutParams sdtParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        sdtParams.leftMargin = (int) (8 * getResources().getDisplayMetrics().density);
-        switchDetectedText.setLayoutParams(sdtParams);
-        switchDetectedView.addView(switchDetectedText);
         FrameLayout.LayoutParams sdParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         sdParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
@@ -1157,7 +1148,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private String readProxySwitchIp(String phoneIp, int prefix) {
+    private List<String> readProxySwitchIps(String phoneIp, int prefix) {
         try {
             File f = new File(getFilesDir(), "proxy_events.jsonl");
 
@@ -1174,7 +1165,7 @@ public class MainActivity extends Activity {
             raf.close();
             String text = new String(buf, "UTF-8");
 
-            return V3Util.lastSwitchIpFromEvents(text, phoneIp, prefix);
+            return V3Util.allSwitchIpsFromEvents(text, phoneIp, prefix);
         } catch (Exception e) {
             return null;
         }
@@ -1188,25 +1179,112 @@ public class MainActivity extends Activity {
         }
 
         int prefix = switchPrefixFor(phone);
-        String ip = readProxySwitchIp(phone, prefix);
+        List<String> ips = readProxySwitchIps(phone, prefix);
 
-        if (ip == null) {
-            ip = getPreferences(MODE_PRIVATE).getString("switch_ip_known", null);
+        if (ips == null || ips.isEmpty()) {
+            String saved = getPreferences(MODE_PRIVATE).getString("switch_ip_known", null);
 
-            if (ip != null && !V3Util.ipInSubnet(ip, phone, prefix)) {
-                getPreferences(MODE_PRIVATE).edit().remove("switch_ip_known").apply();
-                ip = null;
+            if (saved != null && V3Util.ipInSubnet(saved, phone, prefix)) {
+                ips = new ArrayList<>();
+                ips.add(saved);
+            } else {
+                if (saved != null) {
+                    getPreferences(MODE_PRIVATE).edit().remove("switch_ip_known").apply();
+                }
+                return;
             }
         }
 
-        if (ip == null || !ip.contains(".")) {
+        getPreferences(MODE_PRIVATE).edit().putString("switch_ip_known", ips.get(ips.size() - 1)).apply();
+        proxySwitchIps = ips;
+        recomputeSwitchIds();
+    }
+
+    private void recomputeSwitchIds() {
+        List<String> displays = new ArrayList<>();
+        List<String> allIps = new ArrayList<>();
+
+        for (String ip : proxySwitchIps) {
+            String name = lanSwitchNames.get(ip);
+            displays.add(name != null ? name : ip);
+            allIps.add(ip);
+        }
+
+        for (Map.Entry<String, String> e : lanSwitchNames.entrySet()) {
+            if (!allIps.contains(e.getKey())) {
+                displays.add(e.getValue());
+                allIps.add(e.getKey());
+            }
+        }
+
+        if (!allIps.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+
+            for (String ip : allIps) {
+                if (sb.length() > 0) sb.append(", ");
+                sb.append(ip);
+            }
+
+            switchIpResult = sb.toString();
+        }
+
+        lastSwitchId = displays.isEmpty() ? null : displays.get(0);
+        refreshSwitchRows(displays);
+        updateSwitchBanner();
+    }
+
+    private void refreshSwitchRows(final List<String> displays) {
+        StringBuilder sig = new StringBuilder();
+
+        for (String d : displays) {
+            sig.append(d).append('\n');
+        }
+
+        if (sig.toString().equals(switchRowsSignature)) {
             return;
         }
 
-        getPreferences(MODE_PRIVATE).edit().putString("switch_ip_known", ip).apply();
-        switchIpResult = ip;
-        lastSwitchId = ip;
-        updateSwitchBanner();
+        switchRowsSignature = sig.toString();
+        switchIdList.clear();
+        switchIdList.addAll(displays);
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                if (switchDetectedView == null) return;
+                switchDetectedView.removeAllViews();
+                switchRows.clear();
+                switchRowTexts.clear();
+                float density = getResources().getDisplayMetrics().density;
+
+                for (String id : switchIdList) {
+                    LinearLayout row = new LinearLayout(MainActivity.this);
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.setGravity(Gravity.CENTER);
+                    ImageView logo = new ImageView(MainActivity.this);
+                    logo.setImageResource(R.drawable.ic_switch_logo);
+                    logo.setLayoutParams(new LinearLayout.LayoutParams(
+                            (int) (26 * density), (int) (24 * density)));
+                    row.addView(logo);
+                    TextView tv = new TextView(MainActivity.this);
+                    tv.setText(id);
+                    tv.setTextSize(14);
+                    tv.setTextColor(switchBannerCollapsed ? 0x00FFFFFF : 0xFFFFFFFF);
+                    tv.setGravity(Gravity.CENTER);
+                    LinearLayout.LayoutParams tvParams = new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                    tvParams.leftMargin = (int) (8 * density);
+                    tv.setLayoutParams(tvParams);
+                    if (switchBannerCollapsed) {
+                        tv.setVisibility(View.GONE);
+                        if (!switchRows.isEmpty()) row.setVisibility(View.GONE);
+                    }
+                    row.addView(tv);
+                    switchDetectedView.addView(row);
+                    switchRows.add(row);
+                    switchRowTexts.add(tv);
+                }
+            }
+        });
     }
 
     private void refreshMoreTab() {
@@ -1311,8 +1389,8 @@ public class MainActivity extends Activity {
             targetW = dot;
             targetH = dot;
         } else {
-            switchDetectedText.setText(lastSwitchId);
-            switchDetectedText.setVisibility(View.VISIBLE);
+            for (LinearLayout r : switchRows) r.setVisibility(View.VISIBLE);
+            for (TextView t : switchRowTexts) t.setVisibility(View.VISIBLE);
             int px = (int) (14 * density);
             int py = (int) (6 * density);
             switchDetectedView.setPadding(px, py, px, py);
@@ -1328,7 +1406,9 @@ public class MainActivity extends Activity {
         p.width = startW;
         p.height = startH;
         switchDetectedView.setLayoutParams(p);
-        if (!collapsed) switchDetectedText.setTextColor(0x00FFFFFF);
+        if (!collapsed) {
+            for (TextView t : switchRowTexts) t.setTextColor(0x00FFFFFF);
+        }
         ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
         anim.setDuration(280);
         anim.setInterpolator(new DecelerateInterpolator());
@@ -1346,7 +1426,7 @@ public class MainActivity extends Activity {
                 } else {
                     alpha = (int) (255 * Math.min(1f, Math.max(0f, (f - 0.4f) / 0.6f)));
                 }
-                switchDetectedText.setTextColor(0x00FFFFFF | (alpha << 24));
+                for (TextView t : switchRowTexts) t.setTextColor(0x00FFFFFF | (alpha << 24));
             }
         });
         anim.addListener(new AnimatorListenerAdapter() {
@@ -1367,21 +1447,22 @@ public class MainActivity extends Activity {
         float density = getResources().getDisplayMetrics().density;
         FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) switchDetectedView.getLayoutParams();
         if (collapsed) {
-            switchDetectedText.setVisibility(View.GONE);
+            for (TextView t : switchRowTexts) t.setVisibility(View.GONE);
+            for (int i = 1; i < switchRows.size(); i++) switchRows.get(i).setVisibility(View.GONE);
             int dot = (int) (36 * density);
             p.width = dot;
             p.height = dot;
             switchDetectedView.setPadding(0, 0, 0, 0);
         } else {
-            switchDetectedText.setText(lastSwitchId);
-            switchDetectedText.setVisibility(View.VISIBLE);
+            for (LinearLayout r : switchRows) r.setVisibility(View.VISIBLE);
+            for (TextView t : switchRowTexts) t.setVisibility(View.VISIBLE);
             p.width = FrameLayout.LayoutParams.WRAP_CONTENT;
             p.height = FrameLayout.LayoutParams.WRAP_CONTENT;
             int px = (int) (14 * density);
             int py = (int) (6 * density);
             switchDetectedView.setPadding(px, py, px, py);
         }
-        switchDetectedText.setTextColor(0xFFFFFFFF);
+        for (TextView t : switchRowTexts) t.setTextColor(0xFFFFFFFF);
         switchDetectedView.setLayoutParams(p);
     }
 
@@ -1391,7 +1472,7 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 if (switchDetectedView == null) return;
-                if (currentTab != 0 || lastSwitchId == null) {
+                if (currentTab != 0 || switchIdList.isEmpty()) {
                     switchBannerShown = false;
                     switchBannerCollapsed = false;
                     logRefreshHandler.removeCallbacks(collapseSwitchDetectedRunnable);
@@ -1405,7 +1486,7 @@ public class MainActivity extends Activity {
                     logRefreshHandler.removeCallbacks(collapseSwitchDetectedRunnable);
                     logRefreshHandler.postDelayed(collapseSwitchDetectedRunnable, 5000);
                 } else if (!switchBannerCollapsed) {
-                    switchDetectedText.setText(lastSwitchId);
+                    refreshSwitchRows(switchIdList);
                 }
             }
         });
@@ -1642,58 +1723,64 @@ public class MainActivity extends Activity {
             alive.addAll(arp.keySet());
             alive.addAll(discoverySenders);
 
-            String foundSwitchIp = null;
-            String foundSwitchId = null;
+            Map<String, String> found = new LinkedHashMap<>();
 
             for (Map.Entry<Integer, String> entry : arp.entrySet()) {
                 for (String oui : NINTENDO_OUIS) {
                     if (entry.getValue().startsWith(oui)) {
-                        foundSwitchIp = intToIpString(entry.getKey());
-                        String name = tryResolveName(foundSwitchIp);
-                        foundSwitchId = name != null ? name : entry.getValue();
+                        String ip = intToIpString(entry.getKey());
+                        String name = tryResolveName(ip);
+                        found.put(ip, name != null ? name : entry.getValue());
                         break;
                     }
                 }
-
-                if (foundSwitchIp != null) break;
             }
 
-            if (foundSwitchIp == null && !discoverySenders.isEmpty()) {
-                Integer sender = discoverySenders.iterator().next();
-                foundSwitchIp = intToIpString(sender);
-                String name = tryResolveName(foundSwitchIp);
-                foundSwitchId = name != null ? name : foundSwitchIp;
+            if (found.isEmpty()) {
+                int resolved = 0;
+
+                for (Integer sender : discoverySenders) {
+                    String ip = intToIpString(sender);
+                    String name = resolved < 4 ? tryResolveName(ip) : null;
+                    resolved++;
+                    found.put(ip, name != null ? name : ip);
+                }
             }
 
-            if (foundSwitchIp == null) {
+            if (found.isEmpty()) {
                 int checked = 0;
 
                 for (Integer ip : alive) {
                     if (checked >= 16) break;
                     checked++;
-                    String name = tryResolveName(intToIpString(ip));
+                    String ipStr = intToIpString(ip);
+                    String name = tryResolveName(ipStr);
 
                     if (name != null) {
                         String lower = name.toLowerCase();
 
                         if (lower.contains("nintendo") || lower.contains("switch")) {
-                            foundSwitchIp = intToIpString(ip);
-                            foundSwitchId = name;
-                            break;
+                            found.put(ipStr, name);
                         }
                     }
                 }
             }
 
-            if (foundSwitchIp != null) {
-                switchIpResult = foundSwitchIp;
-                lastSwitchId = foundSwitchId;
+            if (!found.isEmpty()) {
+                lanSwitchNames.clear();
+                lanSwitchNames.putAll(found);
                 switchSubnet = network;
+                recomputeSwitchIds();
             } else if (switchSubnet != network) {
+                lanSwitchNames.clear();
                 switchIpResult = "Not detected";
-                lastSwitchId = null;
                 switchSubnet = network;
+                proxySwitchIps = new ArrayList<>();
                 applyLearnedSwitchIp();
+
+                if (proxySwitchIps.isEmpty()) {
+                    recomputeSwitchIds();
+                }
             }
 
             int dns1 = 0;

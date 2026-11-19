@@ -9,16 +9,20 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 tabBar
                 if model.switchPillVisible {
-                    HStack(spacing: 6) {
-                        SwitchLogoView()
-                            .frame(width: 20, height: 18)
-                        Text(model.switchIp ?? "")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white)
+                    VStack(spacing: 4) {
+                        ForEach(model.switchIps.isEmpty ? [model.switchIp ?? ""] : model.switchIps, id: \.self) { ip in
+                            HStack(spacing: 6) {
+                                SwitchLogoView()
+                                    .frame(width: 20, height: 18)
+                                Text(ip)
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.green))
+                    .background(RoundedRectangle(cornerRadius: 16).fill(Color.green))
                     .padding(.top, 8)
                 }
                 if model.currentTab == 0 {
@@ -496,23 +500,25 @@ enum SharePresenter {
 
 struct SwitchLogoView: View {
     var body: some View {
-        HStack(spacing: 3) {
+        HStack(spacing: 2) {
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                UnevenRoundedRectangle(topLeadingRadius: 6, bottomLeadingRadius: 6, bottomTrailingRadius: 0, topTrailingRadius: 0)
                     .stroke(Color.white, lineWidth: 2)
                 Circle()
                     .fill(Color.white)
                     .frame(width: 5, height: 5)
                     .offset(y: -4)
             }
+            .frame(width: 8)
             ZStack {
-                RoundedRectangle(cornerRadius: 6)
+                UnevenRoundedRectangle(topLeadingRadius: 0, bottomLeadingRadius: 0, bottomTrailingRadius: 6, topTrailingRadius: 6)
                     .fill(Color.white)
                 Circle()
                     .fill(Color.green)
                     .frame(width: 5, height: 5)
                     .offset(y: 4)
             }
+            .frame(width: 10)
         }
     }
 }

@@ -27,6 +27,7 @@ final class AppModel: ObservableObject {
     @Published var phonePrefix = 24
     @Published var proxyRunning = false
     @Published var switchIp: String? = nil
+    @Published var switchIps: [String] = []
     @Published var switchPillVisible = false
     @Published var logText = ""
     @Published var rooms: [RoomEntry] = []
@@ -331,6 +332,7 @@ final class AppModel: ObservableObject {
         }
         var latest: [String: RoomEntry] = [:]
         var lastSwitch: String? = nil
+        var switchSrcs: [String] = []
         let cutoff = Date().timeIntervalSince1970 - 90
         for line in text.split(separator: "\n") {
             guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else {
@@ -347,11 +349,17 @@ final class AppModel: ObservableObject {
             if obj["kind"] as? String == "browse_req", obj["dir"] as? String == "s2h",
                let src = obj["src"] as? String {
                 lastSwitch = src
+                if !switchSrcs.contains(src) {
+                    switchSrcs.append(src)
+                }
             }
         }
         let newRooms = latest.values.sorted { $0.game + $0.host < $1.game + $1.host }
         if newRooms.map({ $0.id + ($0.name ?? "") + String($0.players ?? 0) }) != rooms.map({ $0.id + ($0.name ?? "") + String($0.players ?? 0) }) {
             rooms = newRooms
+        }
+        if !switchSrcs.isEmpty && switchIps != switchSrcs {
+            switchIps = switchSrcs
         }
         if let sw = lastSwitch {
             if switchIp != sw {

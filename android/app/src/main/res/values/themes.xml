@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar" />
+    <style name="SplashTheme" parent="AppTheme">
+        <item name="android:windowBackground">@color/ic_launcher_bg</item>
+    </style>
+</resources>

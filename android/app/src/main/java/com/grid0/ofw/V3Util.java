@@ -1,5 +1,9 @@
 package com.grid0.ofw;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+
 // Pure helpers split out of MainActivity so they can be unit tested.
 public final class V3Util {
 
@@ -66,6 +70,45 @@ public final class V3Util {
         }
 
         return found;
+    }
+
+    // Every distinct Switch source in the events, in the order first seen,
+    // with the same subnet filter as lastSwitchIpFromEvents. The pill lists
+    // one row per entry when more than one console is on the network.
+    public static List<String> allSwitchIpsFromEvents(String text, String phoneIp, int prefix) {
+        LinkedHashSet<String> found = new LinkedHashSet<>();
+        int idx = 0;
+        boolean filter = phoneIp != null && prefix >= 0;
+
+        while (true) {
+            int d = text.indexOf("\"dir\": \"s2h\"", idx);
+
+            if (d < 0) {
+                break;
+            }
+
+            int lineStart = text.lastIndexOf("\n", d) + 1;
+            int lineEnd = text.indexOf("\n", d);
+            String line = text.substring(lineStart, lineEnd < 0 ? text.length() : lineEnd);
+            int s = line.indexOf("\"src\": \"");
+
+            if (s >= 0) {
+                int from = s + 8;
+                int to = line.indexOf("\"", from);
+
+                if (to > from) {
+                    String candidate = line.substring(from, to);
+
+                    if (!filter || ipInSubnet(candidate, phoneIp, prefix)) {
+                        found.add(candidate);
+                    }
+                }
+            }
+
+            idx = d + 10;
+        }
+
+        return new ArrayList<>(found);
     }
 
     // Names of the Splatoon 3 rooms the proxy has seen in the last 90

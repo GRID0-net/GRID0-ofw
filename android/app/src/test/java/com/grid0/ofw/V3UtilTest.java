@@ -85,6 +85,31 @@ public class V3UtilTest {
     }
 
     @Test
+    public void allSwitchIpsCollectsDistinctInOrder() {
+        String text = event("s2h", "192.168.1.150") + "\n"
+                + event("h2s", "10.147.17.99") + "\n"
+                + event("s2h", "192.168.1.151") + "\n"
+                + event("s2h", "192.168.1.150") + "\n";
+        assertEquals(java.util.Arrays.asList("192.168.1.150", "192.168.1.151"),
+                V3Util.allSwitchIpsFromEvents(text, null, -1));
+    }
+
+    @Test
+    public void allSwitchIpsRespectsSubnetFilter() {
+        String text = event("s2h", "192.168.1.150") + "\n"
+                + event("s2h", "10.147.17.190") + "\n"
+                + event("s2h", "192.168.1.151") + "\n";
+        assertEquals(java.util.Arrays.asList("192.168.1.150", "192.168.1.151"),
+                V3Util.allSwitchIpsFromEvents(text, "192.168.1.134", 24));
+    }
+
+    @Test
+    public void allSwitchIpsEmptyWithoutS2h() {
+        assertTrue(V3Util.allSwitchIpsFromEvents("", null, -1).isEmpty());
+        assertTrue(V3Util.allSwitchIpsFromEvents(event("h2s", "10.147.17.99") + "\n", null, -1).isEmpty());
+    }
+
+    @Test
     public void versionLeadingZerosCompareEqual() {
         assertFalse(V3Util.isNewerVersion("3.00.1", "3.0.1"));
         assertFalse(V3Util.isNewerVersion("3.0.01", "3.0.1"));
