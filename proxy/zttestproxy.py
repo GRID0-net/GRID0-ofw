@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v31
+# GRID0 proxy v32
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -439,10 +439,9 @@ def slot_tables_mk8d(slots, ports, host_ip, sw, sw_me, h_me):
     h2s, s2h = [], []
     for r, slot in slots.items():
         mine = station_forms_mk8d(sw_me, slot)
-        for rp in ports.get(r) or {GAME_PORT}:
-            theirs = station_forms_mk8d(r, rp)
-            h2s += list(zip(theirs, mine))
-            s2h += list(zip(mine, theirs))
+        theirs = station_forms_mk8d(r, ports.get(r) or GAME_PORT)
+        h2s += list(zip(theirs, mine))
+        s2h += list(zip(mine, theirs))
         h2s += [(r, sw_me), (r[::-1], sw_me[::-1])]
     if host_ip:
         s2h += [(sw_me, host_ip), (sw_me[::-1], host_ip[::-1])]
@@ -1066,14 +1065,9 @@ class Relay:
         slots = {ip4(ip): p for ip, p in raw_slots.items()}
         ports = {}
         for ip in raw_slots:
-            ps = {GAME_PORT}
-            sp = getattr(self, "station_ports", {}).get(ip)
-            if sp:
-                ps.add(sp)
             cp = self.__dict__.get("claim_ports", {}).get(ip)
-            if cp:
-                ps.add(cp)
-            ports[ip4(ip)] = ps
+            sp = getattr(self, "station_ports", {}).get(ip)
+            ports[ip4(ip)] = cp or sp or GAME_PORT
         self.tables_mk8d = slot_tables_mk8d(slots, ports, ip4(peer[0]),
                                              ip4(self.switch[0]), self.sw_me, self.h_me)
 
@@ -2159,7 +2153,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v31", flush=True)
+    print("GRID0 proxy v32", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
