@@ -1552,7 +1552,7 @@ class Relay:
                         out = reseal_reply(self.key_for(g), data, chal, self.h_bc, self.sw_bc,
                                            ip4(src[0]), self.sw_me,
                                            mk8d_param_off(data) if g in ("mk8d", "splatoon2") else PARAM_OFF[g],
-                                           frag=(g == "mk8d"))
+                                           frag=(g in ("mk8d", "splatoon2")))
                         game = g
                         break
                     except Exception:
@@ -1660,7 +1660,7 @@ class Relay:
                         out = reseal_reply(self.key_for(g), data, chal, self.sw_bc, self.h_bc,
                                            ip4(src[0]), self.h_me,
                                            mk8d_param_off(data) if g in ("mk8d", "splatoon2") else PARAM_OFF[g],
-                                           frag=(g == "mk8d"))
+                                           frag=(g in ("mk8d", "splatoon2")))
                         game = g
                         break
                     except Exception:
