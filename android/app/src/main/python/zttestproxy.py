@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v29
+# GRID0 proxy v30
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -893,6 +893,10 @@ class Relay:
                 s = udp_bind(self.sw_ip, p, broadcast=True)
                 self.sw_slot_socks[p] = s
                 self.gx.append((s, "sw"))
+        self.h_slot_socks = {GAME_PORT: self.g_h}
+        for s, leg in self.gx:
+            if leg == "h" and s.getsockname()[0] == self.h_ip:
+                self.h_slot_socks[s.getsockname()[1]] = s
         self.slots = {}
         self.station_ports = {}
         self.cap = Capture(a.capture) if a.capture else None
@@ -1830,9 +1834,20 @@ class Relay:
                 self.send(sock, out, (bdest[0], p), direction, label=label, nonce=nonce.hex(), changed=changed)
             return
         if used in ("mk8d", "splatoon2"):
+            send_sock = sock
+            if used == "splatoon2":
+                claims = self.__dict__.setdefault("claim_ports", {})
+                if label == "01005b00":
+                    plain = open_game_mk8d(keys[used], ip4(src[0]), data)
+                    if plain is not None and len(plain) >= 0x33 and plain[0x29:0x2d] == ip4(src[0]) and plain[0x2f:0x33] == ip4(src[0]):
+                        claims[src[0]] = (plain[0x2d] << 8) | plain[0x2e]
+                cport = claims.get(src[0])
+                if cport:
+                    socks = self.sw_slot_socks if direction == "h2s" else getattr(self, "h_slot_socks", {})
+                    send_sock = socks.get(cport, sock)
             if not pknown:
-                self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
-            self.send(sock, out, udest, direction, label=label, nonce=nonce.hex(), changed=changed)
+                self.send(send_sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
+            self.send(send_sock, out, udest, direction, label=label, nonce=nonce.hex(), changed=changed)
             if used != "splatoon2" and not (self.mk8d_state if used == "mk8d" else self.splatoon2_state):
                 self.send_extra_ports(sock, out, udest[0], udest[1])
             if label == "01004600":
@@ -1982,7 +1997,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v29", flush=True)
+    print("GRID0 proxy v30", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
