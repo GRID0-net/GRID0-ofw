@@ -332,9 +332,9 @@ struct RippleRings: View {
     var body: some View {
         ZStack {
             ForEach(0..<3, id: \.self) { i in
-                Capsule()
+                Circle()
                     .stroke(Color.black.opacity(0.35), lineWidth: 2)
-                    .frame(width: 250, height: 190)
+                    .frame(width: 190, height: 190)
                     .scaleEffect(phase ? 1.25 + CGFloat(i) * 0.12 : 1.0 + CGFloat(i) * 0.12)
                     .opacity(phase ? 0.0 : 0.5)
                     .animation(
