@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v27
+# GRID0 proxy v28
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -1577,7 +1577,7 @@ class Relay:
             try:
                 out = reseal_reply_rekey(self.key_for("splatoon2"), data, self.pin_s2h, self.splatoon2_req_chals[0],
                                          self.h_bc, self.sw_bc, ip4(src[0]), self.sw_me,
-                                         mk8d_param_off(data))
+                                         mk8d_param_off(data), frag=True)
                 game = "splatoon2"
             except Exception:
                 out = None
@@ -1595,7 +1595,7 @@ class Relay:
                         out = reseal_reply(self.key_for(g), data, chal, self.h_bc, self.sw_bc,
                                            ip4(src[0]), self.sw_me,
                                            mk8d_param_off(data) if g in ("mk8d", "splatoon2") else PARAM_OFF[g],
-                                           frag=(g == "mk8d"))
+                                           frag=(g in ("mk8d", "splatoon2")))
                         game = g
                         break
                     except Exception:
@@ -1685,7 +1685,7 @@ class Relay:
             try:
                 out = reseal_reply_rekey(self.key_for("splatoon2"), data, self.pin_h2s, self.splatoon2_host_req_chals[0],
                                          self.sw_bc, self.h_bc, ip4(src[0]), self.h_me,
-                                         mk8d_param_off(data))
+                                         mk8d_param_off(data), frag=True)
                 game = "splatoon2"
             except Exception:
                 out = None
@@ -1703,7 +1703,7 @@ class Relay:
                         out = reseal_reply(self.key_for(g), data, chal, self.sw_bc, self.h_bc,
                                            ip4(src[0]), self.h_me,
                                            mk8d_param_off(data) if g in ("mk8d", "splatoon2") else PARAM_OFF[g],
-                                           frag=(g == "mk8d"))
+                                           frag=(g in ("mk8d", "splatoon2")))
                         game = g
                         break
                     except Exception:
@@ -2059,7 +2059,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v27", flush=True)
+    print("GRID0 proxy v28", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
