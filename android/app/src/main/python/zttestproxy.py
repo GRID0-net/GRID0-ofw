@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v28
+# GRID0 proxy v29
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -1795,7 +1795,7 @@ class Relay:
                 if not pknown:
                     self.send(sock, data, bdest, direction, label="plain")
                 self.send(sock, data, udest, direction, label="plain")
-                if not (self.mk8d_state if self.game == "mk8d" else self.splatoon2_state):
+                if self.game != "splatoon2" and not (self.mk8d_state if self.game == "mk8d" else self.splatoon2_state):
                     self.send_extra_ports(sock, data, udest[0], udest[1])
                 return
             self.note(ev="rx_unauth", dir=direction, src=src[0], len=len(data))
@@ -1833,7 +1833,7 @@ class Relay:
             if not pknown:
                 self.send(sock, out, bdest, direction, label=label, nonce=nonce.hex(), changed=changed)
             self.send(sock, out, udest, direction, label=label, nonce=nonce.hex(), changed=changed)
-            if not (self.mk8d_state if used == "mk8d" else self.splatoon2_state):
+            if used != "splatoon2" and not (self.mk8d_state if used == "mk8d" else self.splatoon2_state):
                 self.send_extra_ports(sock, out, udest[0], udest[1])
             if label == "01004600":
                 if used == "mk8d":
@@ -1982,7 +1982,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v28", flush=True)
+    print("GRID0 proxy v29", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
