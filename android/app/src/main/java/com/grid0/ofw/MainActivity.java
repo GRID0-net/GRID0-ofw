@@ -17,6 +17,7 @@ import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -2595,6 +2596,7 @@ public class MainActivity extends Activity {
         private static final float[] RIPPLE_RADII_DP = {97f, 107f, 117f, 126f, 133f, 136f};
         private static final int[] RIPPLE_COLORS = {0xFFFF0000, 0xFFE60000, 0xFFCC0000, 0xFFB30000, 0xFF990000, 0xFF800000};
         private static final float LOGO_EDGE_DP = 80f;
+        private static final float PILL_EXTRA_DP = 30f;
         private static final float RIPPLE_STAGGER_MS = 150f;
         private static final float EXPAND_MS = 600f;
         private static final float FIZZLE_START_MS = 8000f;
@@ -2667,7 +2669,9 @@ public class MainActivity extends Activity {
             strokePaint.setColor(ringColor);
             strokePaint.setAntiAlias(true);
             float edgeR = (tutorialMode ? 92f : 118f) * density;
-            canvas.drawCircle(cx, cy, edgeR, strokePaint);
+            float pillExtra = PILL_EXTRA_DP * density;
+            canvas.drawRoundRect(new RectF(cx - edgeR - pillExtra, cy - edgeR,
+                    cx + edgeR + pillExtra, cy + edgeR), edgeR, edgeR, strokePaint);
             if (rippleStartMs < 0L) return;
             long rippleT = SystemClock.uptimeMillis() - rippleStartMs;
             float logoEdge = tutorialMode ? 92f : 118f;
@@ -2712,14 +2716,55 @@ public class MainActivity extends Activity {
             float density = getResources().getDisplayMetrics().density;
             float sq = sqDp * density;
             paint.setAntiAlias(true);
-            int n = Math.max(48, (int) Math.round((2 * Math.PI * targetR) / 6f));
+            float targetPerimeterDp = 4f * PILL_EXTRA_DP + 2f * (float) Math.PI * targetR;
+            int n = Math.max(48, (int) Math.round(targetPerimeterDp / 6f));
+            float extra = PILL_EXTRA_DP * density;
+            float perimeter = 4f * extra + 2f * (float) Math.PI * r;
+            float phase = (float) (spinAngle / (2 * Math.PI)) * perimeter;
+            float[] pt = new float[4];
             for (int j = 0; j < n; j++) {
-                double a = (j / (double) n) * 2 * Math.PI - Math.PI / 2 + spinAngle;
-                float wobble = 1f + 0.03f * (float) Math.sin(2 * Math.PI * (j / (float) n * 4f + wavePhase));
-                float rr = r * wobble;
-                float x = cx + rr * (float) Math.cos(a);
-                float y = cy + rr * (float) Math.sin(a);
+                float frac = j / (float) n;
+                float dist = frac * perimeter + phase;
+                dist = ((dist % perimeter) + perimeter) % perimeter;
+                pillPoint(dist, cx, cy, r, extra, pt);
+                float wobble = 0.03f * (float) Math.sin(2 * Math.PI * (frac * 4f + wavePhase));
+                float x = pt[0] + pt[2] * wobble * r;
+                float y = pt[1] + pt[3] * wobble * r;
                 canvas.drawCircle(x, y, sq / 2f, paint);
+            }
+        }
+
+        private void pillPoint(float dist, float cx, float cy, float r, float extra, float[] out) {
+            float arcLen = (float) Math.PI * r;
+            if (dist < extra) {
+                out[0] = cx + dist;
+                out[1] = cy - r;
+                out[2] = 0f;
+                out[3] = -1f;
+            } else if (dist < extra + arcLen) {
+                double th = -Math.PI / 2 + (dist - extra) / r;
+                out[0] = cx + extra + r * (float) Math.cos(th);
+                out[1] = cy + r * (float) Math.sin(th);
+                out[2] = (float) Math.cos(th);
+                out[3] = (float) Math.sin(th);
+            } else if (dist < 3 * extra + arcLen) {
+                float d = dist - extra - arcLen;
+                out[0] = cx + extra - d;
+                out[1] = cy + r;
+                out[2] = 0f;
+                out[3] = 1f;
+            } else if (dist < 3 * extra + 2 * arcLen) {
+                double th = Math.PI / 2 + (dist - 3 * extra - arcLen) / r;
+                out[0] = cx - extra + r * (float) Math.cos(th);
+                out[1] = cy + r * (float) Math.sin(th);
+                out[2] = (float) Math.cos(th);
+                out[3] = (float) Math.sin(th);
+            } else {
+                float d = dist - 3 * extra - 2 * arcLen;
+                out[0] = cx - extra + d;
+                out[1] = cy - r;
+                out[2] = 0f;
+                out[3] = -1f;
             }
         }
 
