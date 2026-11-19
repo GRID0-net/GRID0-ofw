@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v33
+# GRID0 proxy v34
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -433,12 +433,12 @@ def station_forms_mk8d(ip, port):
     p_le, p_be = port.to_bytes(2, "little"), port.to_bytes(2, "big")
     return [ip + p_be, tail + p_le, p_be + tail, ip[2:4] + p_be]
 
-def slot_tables_mk8d(slots, ports, host_ip, sw, sw_me, h_me):
+def slot_tables_mk8d(slots, ports, host_ip, sw, sw_me, h_me, host_packed=None):
     # slots: remote station IP (packed) -> local port on the Switch leg.
     # ports: remote station IP (packed) -> the real ports it uses.
     h2s, s2h = [], []
     for r, slot in slots.items():
-        mine = station_forms_mk8d(sw_me, slot)
+        mine = station_forms_mk8d(sw_me, ports.get(r) or slot) if r == host_packed else station_forms_mk8d(sw_me, slot)
         theirs = station_forms_mk8d(r, ports.get(r) or GAME_PORT)
         h2s += list(zip(theirs, mine))
         s2h += list(zip(mine, theirs))
@@ -1068,8 +1068,10 @@ class Relay:
             cp = self.__dict__.get("claim_ports", {}).get(ip)
             sp = getattr(self, "station_ports", {}).get(ip)
             ports[ip4(ip)] = cp or sp or GAME_PORT
+        host_packed = ip4(self.host[0]) if getattr(self, "host_side", None) == "h" and self.host else None
         self.tables_mk8d = slot_tables_mk8d(slots, ports, ip4(peer[0]),
-                                             ip4(self.switch[0]), self.sw_me, self.h_me)
+                                             ip4(self.switch[0]), self.sw_me, self.h_me,
+                                             host_packed=host_packed)
 
     def learn_stations_mk8d(self, src_ip, plain, game):
         changed = self.add_station(src_ip)
@@ -1090,6 +1092,19 @@ class Relay:
             self.rebuild_mk8d_tables()
             return self.tables_mk8d["h2s"]
         return None
+
+    def note_reply_port(self, game, data, src_ip):
+        if game not in ("mk8d", "splatoon2") or len(data) < 13:
+            return
+        if data[9:11] != ip4(src_ip)[2:4]:
+            return
+        port = int.from_bytes(data[11:13], "big")
+        if port not in GAME_PORTS:
+            return
+        ports = self.__dict__.setdefault("station_ports", {})
+        if ports.get(src_ip) != port:
+            ports[src_ip] = port
+            self.rebuild_mk8d_tables()
 
     def build_tables(self):
         peer = self.session_peer()
@@ -1694,6 +1709,7 @@ class Relay:
             self.note_room("splatoon2", src[0], splatoon2_host_name(data), room_players("splatoon2", data))
         elif game == "mkw":
             self.note_room("mkw", src[0], mkw_host_name(data), room_players("mkw", data))
+        self.note_reply_port(game, data, src[0])
         entry = self.sessions.setdefault(src[0], {"keys": {}, "tables": None})
         entry["keys"][game] = self.key_mk8d if game == "mk8d" else (self.key_splatoon2 if game == "splatoon2" else (self.key_mkw if game == "mkw" else self.key))
         entry["tables"] = self.tables_for(src[0])
@@ -1791,6 +1807,7 @@ class Relay:
             self.build_tables()
         elif self.tables is None:
             self.build_tables()
+        self.note_reply_port(game, data, src[0])
         self.note(ev="rx", dir="s2h", kind="browse_reply", src=src[0], len=len(data))
         port = self.port_for(game)
         if self.cap:
@@ -2155,7 +2172,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v33", flush=True)
+    print("GRID0 proxy v34", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
