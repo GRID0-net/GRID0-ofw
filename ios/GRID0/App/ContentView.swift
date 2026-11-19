@@ -9,13 +9,17 @@ struct ContentView: View {
             VStack(spacing: 0) {
                 tabBar
                 if model.switchPillVisible {
-                    Text("Switch detected")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(Color.green))
-                        .padding(.top, 8)
+                    HStack(spacing: 6) {
+                        SwitchLogoView()
+                            .frame(width: 20, height: 18)
+                        Text(model.switchIp ?? "")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(Color.green))
+                    .padding(.top, 8)
                 }
                 if model.currentTab == 0 {
                     playView
@@ -487,5 +491,28 @@ enum SharePresenter {
             pop.sourceRect = CGRect(x: top.view.bounds.midX, y: top.view.bounds.midY, width: 1, height: 1)
         }
         top.present(vc, animated: true)
+    }
+}
+
+struct SwitchLogoView: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.white, lineWidth: 2)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 5, height: 5)
+                    .offset(y: -4)
+            }
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white)
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 5, height: 5)
+                    .offset(y: 4)
+            }
+        }
     }
 }

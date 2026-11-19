@@ -98,7 +98,9 @@ public class MainActivity extends Activity {
     private ValueAnimator saturationAnimator;
     private ValueAnimator borderAnimator;
     private TextView statusText;
-    private TextView switchDetectedView;
+    private LinearLayout switchDetectedView;
+    private ImageView switchDetectedLogo;
+    private TextView switchDetectedText;
     private boolean switchBannerShown = false;
     private boolean switchBannerCollapsed = false;
     private ValueAnimator switchBannerAnimator;
@@ -491,9 +493,8 @@ public class MainActivity extends Activity {
         statusText.setLayoutParams(statusParams);
         homeContent.addView(statusText);
 
-        switchDetectedView = new TextView(this);
-        switchDetectedView.setTextSize(14);
-        switchDetectedView.setTextColor(Color.WHITE);
+        switchDetectedView = new LinearLayout(this);
+        switchDetectedView.setOrientation(LinearLayout.HORIZONTAL);
         switchDetectedView.setGravity(Gravity.CENTER);
         GradientDrawable detectedPillBg = new GradientDrawable();
         detectedPillBg.setColor(0xFF2E7D32);
@@ -502,6 +503,21 @@ public class MainActivity extends Activity {
         int pillPadX = (int) (14 * getResources().getDisplayMetrics().density);
         int pillPadY = (int) (6 * getResources().getDisplayMetrics().density);
         switchDetectedView.setPadding(pillPadX, pillPadY, pillPadX, pillPadY);
+        switchDetectedLogo = new ImageView(this);
+        switchDetectedLogo.setImageResource(R.drawable.ic_switch_logo);
+        int logoW = (int) (26 * getResources().getDisplayMetrics().density);
+        int logoH = (int) (24 * getResources().getDisplayMetrics().density);
+        switchDetectedLogo.setLayoutParams(new LinearLayout.LayoutParams(logoW, logoH));
+        switchDetectedView.addView(switchDetectedLogo);
+        switchDetectedText = new TextView(this);
+        switchDetectedText.setTextSize(14);
+        switchDetectedText.setTextColor(Color.WHITE);
+        switchDetectedText.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams sdtParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sdtParams.leftMargin = (int) (8 * getResources().getDisplayMetrics().density);
+        switchDetectedText.setLayoutParams(sdtParams);
+        switchDetectedView.addView(switchDetectedText);
         FrameLayout.LayoutParams sdParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
         sdParams.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
@@ -1286,7 +1302,7 @@ public class MainActivity extends Activity {
             switchBannerAnimator = null;
         }
         final FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) switchDetectedView.getLayoutParams();
-        final int dot = (int) (18 * density);
+        final int dot = (int) (36 * density);
         final int startW = p.width > 0 ? p.width : switchDetectedView.getWidth();
         final int startH = p.height > 0 ? p.height : switchDetectedView.getHeight();
         final int targetW;
@@ -1295,7 +1311,8 @@ public class MainActivity extends Activity {
             targetW = dot;
             targetH = dot;
         } else {
-            switchDetectedView.setText("Switch detected: " + lastSwitchId);
+            switchDetectedText.setText(lastSwitchId);
+            switchDetectedText.setVisibility(View.VISIBLE);
             int px = (int) (14 * density);
             int py = (int) (6 * density);
             switchDetectedView.setPadding(px, py, px, py);
@@ -1311,7 +1328,7 @@ public class MainActivity extends Activity {
         p.width = startW;
         p.height = startH;
         switchDetectedView.setLayoutParams(p);
-        if (!collapsed) switchDetectedView.setTextColor(0x00FFFFFF);
+        if (!collapsed) switchDetectedText.setTextColor(0x00FFFFFF);
         ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
         anim.setDuration(280);
         anim.setInterpolator(new DecelerateInterpolator());
@@ -1329,7 +1346,7 @@ public class MainActivity extends Activity {
                 } else {
                     alpha = (int) (255 * Math.min(1f, Math.max(0f, (f - 0.4f) / 0.6f)));
                 }
-                switchDetectedView.setTextColor(0x00FFFFFF | (alpha << 24));
+                switchDetectedText.setTextColor(0x00FFFFFF | (alpha << 24));
             }
         });
         anim.addListener(new AnimatorListenerAdapter() {
@@ -1350,20 +1367,21 @@ public class MainActivity extends Activity {
         float density = getResources().getDisplayMetrics().density;
         FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) switchDetectedView.getLayoutParams();
         if (collapsed) {
-            switchDetectedView.setText("");
-            int dot = (int) (18 * density);
+            switchDetectedText.setVisibility(View.GONE);
+            int dot = (int) (36 * density);
             p.width = dot;
             p.height = dot;
             switchDetectedView.setPadding(0, 0, 0, 0);
         } else {
-            switchDetectedView.setText("Switch detected: " + lastSwitchId);
+            switchDetectedText.setText(lastSwitchId);
+            switchDetectedText.setVisibility(View.VISIBLE);
             p.width = FrameLayout.LayoutParams.WRAP_CONTENT;
             p.height = FrameLayout.LayoutParams.WRAP_CONTENT;
             int px = (int) (14 * density);
             int py = (int) (6 * density);
             switchDetectedView.setPadding(px, py, px, py);
         }
-        switchDetectedView.setTextColor(0xFFFFFFFF);
+        switchDetectedText.setTextColor(0xFFFFFFFF);
         switchDetectedView.setLayoutParams(p);
     }
 
@@ -1387,7 +1405,7 @@ public class MainActivity extends Activity {
                     logRefreshHandler.removeCallbacks(collapseSwitchDetectedRunnable);
                     logRefreshHandler.postDelayed(collapseSwitchDetectedRunnable, 5000);
                 } else if (!switchBannerCollapsed) {
-                    switchDetectedView.setText("Switch detected: " + lastSwitchId);
+                    switchDetectedText.setText(lastSwitchId);
                 }
             }
         });

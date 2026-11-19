@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GRID0 proxy v35
+# GRID0 proxy v36
 # Relays Switch LAN play over ZeroTier through this device.
 import errno, hashlib, heapq, hmac, ipaddress, json, os, select, signal, socket, subprocess, sys, time
 
@@ -1649,8 +1649,9 @@ class Relay:
             return
         self.note_game(game)
         self.take_session_key(game, data)
+        flip = self.host_side != "h"
         self.host_side = "h"
-        if self.host is None or self.host[0] != src[0]:
+        if flip or self.host is None or self.host[0] != src[0]:
             self.host = (src[0], GAME_PORT)
             self.build_tables()
         elif self.tables is None:
@@ -1758,8 +1759,9 @@ class Relay:
             return
         self.note_game(game)
         self.take_session_key(game, data)
+        flip = self.host_side != "sw"
         self.host_side = "sw"
-        if self.switch is None or self.switch[0] != src[0]:
+        if flip or self.switch is None or self.switch[0] != src[0]:
             self.switch = (src[0], GAME_PORT)
             self.build_tables()
         elif self.tables is None:
@@ -2095,7 +2097,7 @@ def main():
         NO_BITS = True
         print("bit rewrite off", flush=True)
     events = os.environ.get("EVENTS", f"relay_events_{time.strftime('%Y%m%d_%H%M%S')}.jsonl")
-    print("GRID0 proxy v35", flush=True)
+    print("GRID0 proxy v36", flush=True)
     Relay(a).run(events)
 
 if __name__ == "__main__":
