@@ -1,6 +1,8 @@
 package com.grid0.ofw;
 
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
+import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.app.Activity;
 import android.content.ClipData;
@@ -99,6 +101,7 @@ public class MainActivity extends Activity {
     private TextView switchDetectedView;
     private boolean switchBannerShown = false;
     private boolean switchBannerCollapsed = false;
+    private ValueAnimator switchBannerAnimator;
     private final Runnable collapseSwitchDetectedRunnable = new Runnable() {
         @Override
         public void run() {
@@ -1272,9 +1275,78 @@ public class MainActivity extends Activity {
         updateSwitchBanner();
     }
 
-    private void setSwitchBannerCollapsed(boolean collapsed) {
+    private void setSwitchBannerCollapsed(final boolean collapsed) {
         if (switchDetectedView == null) return;
         switchBannerCollapsed = collapsed;
+        final float density = getResources().getDisplayMetrics().density;
+        if (switchBannerAnimator != null) {
+            switchBannerAnimator.removeAllListeners();
+            switchBannerAnimator.removeAllUpdateListeners();
+            switchBannerAnimator.cancel();
+            switchBannerAnimator = null;
+        }
+        final FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) switchDetectedView.getLayoutParams();
+        final int dot = (int) (18 * density);
+        final int startW = p.width > 0 ? p.width : switchDetectedView.getWidth();
+        final int startH = p.height > 0 ? p.height : switchDetectedView.getHeight();
+        final int targetW;
+        final int targetH;
+        if (collapsed) {
+            targetW = dot;
+            targetH = dot;
+        } else {
+            switchDetectedView.setText("Switch detected: " + lastSwitchId);
+            int px = (int) (14 * density);
+            int py = (int) (6 * density);
+            switchDetectedView.setPadding(px, py, px, py);
+            int spec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+            switchDetectedView.measure(spec, spec);
+            targetW = switchDetectedView.getMeasuredWidth();
+            targetH = switchDetectedView.getMeasuredHeight();
+        }
+        if (startW <= 0 || startH <= 0) {
+            applySwitchBannerEndState(collapsed);
+            return;
+        }
+        p.width = startW;
+        p.height = startH;
+        switchDetectedView.setLayoutParams(p);
+        if (!collapsed) switchDetectedView.setTextColor(0x00FFFFFF);
+        ValueAnimator anim = ValueAnimator.ofFloat(0f, 1f);
+        anim.setDuration(280);
+        anim.setInterpolator(new DecelerateInterpolator());
+        anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float f = (Float) animation.getAnimatedValue();
+                FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) switchDetectedView.getLayoutParams();
+                lp.width = (int) (startW + (targetW - startW) * f);
+                lp.height = (int) (startH + (targetH - startH) * f);
+                switchDetectedView.setLayoutParams(lp);
+                int alpha;
+                if (collapsed) {
+                    alpha = (int) (255 * Math.max(0f, 1f - f * 2f));
+                } else {
+                    alpha = (int) (255 * Math.min(1f, Math.max(0f, (f - 0.4f) / 0.6f)));
+                }
+                switchDetectedView.setTextColor(0x00FFFFFF | (alpha << 24));
+            }
+        });
+        anim.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator animation) {
+                if (switchBannerAnimator == animation) {
+                    switchBannerAnimator = null;
+                    applySwitchBannerEndState(collapsed);
+                }
+            }
+        });
+        switchBannerAnimator = anim;
+        anim.start();
+    }
+
+    private void applySwitchBannerEndState(boolean collapsed) {
+        if (switchDetectedView == null) return;
         float density = getResources().getDisplayMetrics().density;
         FrameLayout.LayoutParams p = (FrameLayout.LayoutParams) switchDetectedView.getLayoutParams();
         if (collapsed) {
@@ -1291,6 +1363,7 @@ public class MainActivity extends Activity {
             int py = (int) (6 * density);
             switchDetectedView.setPadding(px, py, px, py);
         }
+        switchDetectedView.setTextColor(0xFFFFFFFF);
         switchDetectedView.setLayoutParams(p);
     }
 
